@@ -15,6 +15,8 @@
   <a class="brand" href="/">🐼 {{t "app.name"}}</a>
   {{with .User}}<nav class="nav">
     <span class="nav-user">{{.Username}}</span>
+    <a href="/collections">{{t "nav.collections"}}</a>
+    <a href="/tags">{{t "nav.tags"}}</a>
     <a href="/password">{{t "nav.password"}}</a>
     <form method="post" action="/logout" class="inline-form">{{template "csrf-field" $}}<button type="submit" class="link-button">{{t "nav.logout"}}</button></form>
   </nav>{{end}}
@@ -26,3 +28,9 @@
 </html>
 {{end}}
 {{define "csrf-field"}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+{{define "group-name"}}{{if .Reserved}}{{t "groups.default"}}{{else}}{{.Name}}{{end}}{{end}}
+{{define "swatch"}}<svg class="swatch" viewBox="0 0 16 16" aria-hidden="true">{{if .}}<circle cx="8" cy="8" r="7" fill="{{.}}"/>{{else}}<circle class="swatch-none" cx="8" cy="8" r="6"/>{{end}}</svg>{{end}}
+{{define "group-color-fields"}}<div class="color-row">
+  <label class="color-label">{{t "groups.color"}} <input type="color" name="color" value="{{.Color}}"></label>
+  <label class="check"><input type="checkbox" name="no_color" value="1"{{if .NoColor}} checked{{end}}> {{t "groups.no_color"}}</label>
+</div>{{end}}

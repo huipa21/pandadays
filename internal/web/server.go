@@ -17,6 +17,7 @@ import (
 
 	"pandadays/internal/auth"
 	"pandadays/internal/config"
+	"pandadays/internal/days"
 	"pandadays/internal/i18n"
 	assets "pandadays/web"
 )
@@ -32,6 +33,9 @@ type Server struct {
 	static  fs.FS
 	auth    *auth.Service
 	csrfKey [32]byte
+
+	collections *days.Groups
+	tags        *days.Groups
 }
 
 // New builds a Server. database may be nil (e.g. in tests that need no storage).
@@ -53,6 +57,8 @@ func New(cfg config.Config, logger *slog.Logger, database *sql.DB) (*Server, err
 		if err != nil {
 			return nil, err
 		}
+		s.collections = days.NewCollections(database)
+		s.tags = days.NewTags(database)
 	}
 	return s, nil
 }
@@ -95,6 +101,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /password", RequireLogin(http.HandlerFunc(s.handlePasswordForm)))
 	mux.Handle("POST /password", RequireLogin(http.HandlerFunc(s.handlePassword)))
 	mux.Handle("POST /settings/timezone", RequireLogin(http.HandlerFunc(s.handleTimezone)))
+	if s.db != nil {
+		s.registerGroupRoutes(mux, s.collections, "collections")
+		s.registerGroupRoutes(mux, s.tags, "tags")
+	}
 
 	return chain(mux,
 		recoverPanics(s.log),

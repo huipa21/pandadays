@@ -70,11 +70,12 @@ Status legend: `[ ]` todo, `[x]` done.
 - Parallelizable with T04–T07.
 - Integration: `days.Calculate(Schedule{Date, Time, Repeat}, now, loc)` returns original/effective targets, classification, localized list-message key/args, calendar breakdown, repeat ordinal (original = 0), and optional time since original. Render labels via `bundle.T(lang, result.ListLabel.Key, result.ListLabel.Args...)`. Empty time means all-day; empty repeat means none; invalid inputs return `ErrInvalidSchedule`. See SPEC §3.4 for recurrence, rounding, and DST conventions. No persistence or authorization surface is introduced.
 
-### [ ] T09 Collections & tags CRUD
+### [x] T09 Collections & tags CRUD
 - Repos + handlers + pages: list, create, rename, recolor, delete.
 - Reserved Default cannot be renamed/deleted; names unique per user (case-insensitive); reserved name blocked.
 - Delete collection → move days to Default (transaction). Delete tag → ensure orphaned days get Default tag.
 - **Done when**: tests for reserved protection, move-to-default, cross-user access returns 404.
+- Integration: `days.Groups` (`days.NewCollections` / `days.NewTags`, held as `Server.collections` / `Server.tags`) is one owner-scoped repo for both kinds: `List`, `Get` (→ `days.ErrNotFound` for missing or foreign rows), `Create`, `Update` (reserved may only be recolored), `Delete`, `DefaultID` (use for T10 form defaults). Names are trimmed, 1–100 runes, unique per owner with Unicode case folding; "Default"/"默认" are blocked. Colors are `#rrggbb` or empty (NULL). Collection delete also removes shares targeting it (T14). Routes: `GET/POST /collections`, `GET /collections/{id}`, `POST /collections/{id}/edit`, `POST /collections/{id}/delete` (same under `/tags`); `{id}` detail is where T12 adds the day list. Shared templates `groups.html` / `group.html`; layout defines `group-name` (localized reserved name), `swatch` (SVG `fill`, since CSP forbids inline styles), and `group-color-fields`. Delete uses `hx-confirm`; handlers answer htmx with `HX-Redirect` via `authRedirect`.
 
 ### [ ] T10 Days CRUD
 - Repo + handlers + form: title, date, optional time, repeat (default none), collection (default Default), tags multi-select (default Default), comment, style (color, icon/emoji; bg chosen later in T13).

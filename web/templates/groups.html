@@ -1,0 +1,26 @@
+{{define "title"}}{{t (printf "%s.title" .Section.Key)}} · {{t "app.name"}}{{end}}
+{{define "content"}}
+<section class="stack">
+  <h1>{{t (printf "%s.title" .Section.Key)}}</h1>
+  {{with .Error}}<p class="alert" role="alert">{{t .}}</p>{{end}}
+  <ul class="group-list">
+    {{range .Groups}}<li>
+      <a class="group-item" href="{{$.Section.Base}}/{{.ID}}">
+        {{template "swatch" .Color}}
+        <span class="group-name">{{template "group-name" .}}</span>
+        {{if .Reserved}}<span class="badge">{{t "groups.reserved"}}</span>{{end}}
+        <span class="group-count">{{if eq .DayCount 1}}{{t "groups.days.one" .DayCount}}{{else}}{{t "groups.days.other" .DayCount}}{{end}}</span>
+      </a>
+    </li>{{end}}
+  </ul>
+  <form method="post" action="{{.Section.Base}}" class="card form">
+    {{template "csrf-field" .}}
+    <h2>{{t (printf "%s.new" .Section.Key)}}</h2>
+    <label>{{t "groups.name"}}
+      <input type="text" name="name" value="{{.Form.Name}}" maxlength="100" required>
+    </label>
+    {{template "group-color-fields" .Form}}
+    <button type="submit" class="btn">{{t "groups.create"}}</button>
+  </form>
+</section>
+{{end}}
