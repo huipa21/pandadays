@@ -145,11 +145,12 @@ Status legend: `[ ]` todo, `[x]` done.
 
 ## Phase 7 — Data Portability & Backup
 
-### [ ] T17 User export / import
+### [x] T17 User export / import
 - `internal/portability`: export zip (CSV + media) per SPEC §6.1 with formula-injection escaping and UTF-8 BOM.
 - Import: upload → preview (counts, errors, quota check) → confirm; merge skipping duplicates; create missing collections/tags; transactional with temp files.
 - Guards: zip-slip, symlinks, max entries, max uncompressed size, limits.
 - **Done when**: round-trip test (export user A → import into user B → equal data & media), duplicate skip test, malicious zip test, CSV injection test.
+- Integration: `portability.Service` (`portability.New(db, <data>/media, <data>/tmp)`, held as `Server.portability`) is owner-scoped: `Export(ctx, owner, now, w)` streams the zip (`days.csv` with BOM/CRLF, cells starting with `= + - @ \t \r` prefixed by `'`, lists `|`-separated with `\` escaping, collection/tag names exported verbatim with reserved = "Default", `archived` RFC 3339 UTC, `style_bg` = media path; media as `media/<uuid>_<filename>`); `ExportFilename(username, date)`. Import is two-step: `Stage(owner, r, limit, now)` copies the upload to `<data>/tmp/import-<owner>-<token>` (TTL `StagedTTL` = 1h, stale files swept; `UploadLimit` = remaining byte quota + CSV cap), `Preview`/`Import(ctx, owner, token, now)` re-validate the archive (zip or bare CSV; rejects traversal, absolute/backslash/colon names, symlinks, non-regular and duplicate entries, too many entries, oversize declared sizes → `ErrUnsafeArchive`/`ErrTooManyEntries`/`ErrArchiveTooLarge`). Rows reuse `days.NormalizeDayInput`; duplicates = exact title + date + collection (case-insensitive name), also within the file; per-row problems are `RowError`s, quotas → `ErrQuota`. `Import` extracts media to `.import-*` temp files, then inserts groups/days/tags/attachments and bumps `used_bytes` in one transaction, renaming files only before commit. Routes: `GET /settings/export`, `POST /settings/import` (multipart; CSRF middleware now parses this form like attachment uploads, so the plain form's `csrf_token` field works), `POST /settings/import/confirm` (`import.html` renders preview and result). New helpers: `media.Sniff`/`SafeFilename`/`NewUUID`, `days.IsReservedName`/`ValidateGroupName`. T18/T19 can reuse the archive-guard approach and the `<data>/tmp` staging directory.
 
 ### [ ] T18 Backup engine + CLI
 - `internal/backup`: create (VACUUM INTO + media + manifest with SHA-256) streamed to a writer; validate archive; restore with atomic swap and rollback.

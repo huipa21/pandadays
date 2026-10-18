@@ -177,6 +177,20 @@ func normalizeInput(in GroupInput) (GroupInput, error) {
 	return in, nil
 }
 
+// IsReservedName reports whether name is a (localized) name of the reserved default.
+func IsReservedName(name string) bool {
+	name = strings.TrimSpace(name)
+	for _, r := range reservedNames {
+		if strings.EqualFold(name, r) {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidateGroupName applies the collection/tag name rules to a trimmed name.
+func ValidateGroupName(name string) error { return validateName(name) }
+
 func validateName(name string) error {
 	switch {
 	case name == "":

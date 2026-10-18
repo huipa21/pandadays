@@ -1,0 +1,40 @@
+{{define "title"}}{{t "import.title"}} · {{t "app.name"}}{{end}}
+{{define "content"}}
+<section class="card settings-card">
+  <h1>{{t "import.title"}}</h1>
+  {{with .Result}}
+  <p class="notice" role="status">{{t "import.done" .Imported .Skipped .Errors}}</p>
+  <p><a class="btn" href="/">{{t "import.home"}}</a> <a href="/settings">{{t "settings.title"}}</a></p>
+  {{end}}
+  {{with .Preview}}
+  <dl class="day-facts">
+    <dt>{{t "import.new"}}</dt><dd>{{.New}}</dd>
+    <dt>{{t "import.skipped"}}</dt><dd>{{.Skipped}}</dd>
+    <dt>{{t "import.errors"}}</dt><dd>{{len .Errors}}</dd>
+    {{if not .BareCSV}}<dt>{{t "import.attachments"}}</dt><dd>{{.Attachments}} · {{bytes .Bytes}}</dd>{{end}}
+    {{with .NewCollections}}<dt>{{t "import.new_collections"}}</dt><dd>{{range $i, $n := .}}{{if $i}}, {{end}}{{$n}}{{end}}</dd>{{end}}
+    {{with .NewTags}}<dt>{{t "import.new_tags"}}</dt><dd>{{range $i, $n := .}}{{if $i}}, {{end}}{{$n}}{{end}}</dd>{{end}}
+  </dl>
+  {{if .BareCSV}}<p class="hint">{{t "import.bare_csv"}}</p>{{end}}
+  {{if .DaysExceeded}}<p class="alert" role="alert">{{t "import.quota_days" .DaysUsed .New .DaysQuota}}</p>{{end}}
+  {{if .BytesExceeded}}<p class="alert" role="alert">{{t "import.quota_bytes" (bytes .BytesUsed) (bytes .Bytes) (bytes .BytesQuota)}}</p>{{end}}
+  {{end}}
+  {{if .Errors}}
+  <h2>{{t "import.errors"}}</h2>
+  <ul class="import-errors">
+    {{range .Errors}}<li>{{t "import.line" .Line}} {{t .Key}}</li>{{end}}
+    {{if .MoreErrors}}<li>{{t "import.more_errors" .MoreErrors}}</li>{{end}}
+  </ul>
+  {{end}}
+  {{if .Preview}}
+  {{if .Preview.CanImport}}
+  <form method="post" action="/settings/import/confirm" class="form">
+    {{template "csrf-field" .}}
+    <input type="hidden" name="token" value="{{.Token}}">
+    <button type="submit" class="btn">{{t "import.confirm" .Preview.New}}</button>
+  </form>
+  {{else if not (or .Preview.DaysExceeded .Preview.BytesExceeded)}}<p class="hint">{{t "import.nothing"}}</p>{{end}}
+  <p><a href="/settings">{{t "import.cancel"}}</a></p>
+  {{end}}
+</section>
+{{end}}

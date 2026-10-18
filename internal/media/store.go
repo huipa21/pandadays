@@ -210,6 +210,19 @@ func (s *Store) Upload(ctx context.Context, ownerID, dayID int64, filename strin
 		OwnerID: ownerID, Filename: safeFilename(filename), MIME: contentType, Size: size, CreatedAt: now}, nil
 }
 
+// Sniff returns the sniffed content type and attachment kind for the first
+// bytes (up to 512) of a file.
+func Sniff(prefix []byte) (contentType, kind string) {
+	contentType = http.DetectContentType(prefix)
+	return contentType, detectedKind(contentType)
+}
+
+// SafeFilename strips directories and control characters from a display filename.
+func SafeFilename(name string) string { return safeFilename(name) }
+
+// NewUUID returns a random storage name for an attachment file.
+func NewUUID() (string, error) { return newUUID() }
+
 func detectedKind(contentType string) string {
 	mediaType, _, err := mime.ParseMediaType(contentType)
 	if err != nil {

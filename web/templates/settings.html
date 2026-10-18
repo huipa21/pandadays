@@ -24,5 +24,14 @@
   <p class="hint">{{t "attachments.user_usage" (bytes .UsedBytes) (bytes .Quota)}}</p>
   <progress aria-label="{{t "attachments.user_usage" (bytes .UsedBytes) (bytes .Quota)}}" max="{{if gt .Quota 0}}{{.Quota}}{{else}}1{{end}}" value="{{.UsedBytes}}"></progress>
   <p><a href="/password">{{t "settings.password_link"}}</a></p>
+  <h2>{{t "import.title"}}</h2>
+  <p><a class="btn" href="/settings/export" download>{{t "export.download"}}</a></p>
+  <p class="hint">{{t "export.hint"}}</p>
+  <form method="post" action="/settings/import" enctype="multipart/form-data" class="form">
+    {{template "csrf-field" .}}
+    <label>{{t "import.file"}}<input type="file" name="file" accept=".zip,.csv,application/zip,text/csv" required></label>
+    <p class="hint">{{t "import.hint"}}</p>
+    <button type="submit" class="btn">{{t "import.preview"}}</button>
+  </form>
 </section>
 {{end}}

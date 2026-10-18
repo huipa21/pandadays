@@ -56,19 +56,26 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 		if !safe {
 			provided := r.Header.Get("X-CSRF-Token")
 			if provided == "" {
-				if isAttachmentUpload(r) {
+				multipartForm := isAttachmentUpload(r) || isImportUpload(r)
+				if multipartForm {
 					if CurrentUser(r.Context()) == nil {
 						authRedirect(w, r, "/login")
 						return
 					}
-					if !s.limitAttachmentForm(w, r) {
+					var limited bool
+					if isImportUpload(r) {
+						limited = s.limitImportForm(w, r)
+					} else {
+						limited = s.limitAttachmentForm(w, r)
+					}
+					if !limited {
 						return
 					}
 				}
 				// ParseForm does not accept query parameters as CSRF proof.
 				// Multipart handlers can send the header to preserve streaming.
 				var parseErr error
-				if isAttachmentUpload(r) {
+				if multipartForm {
 					parseErr = r.ParseMultipartForm(32 << 20)
 				} else {
 					parseErr = r.ParseForm()
@@ -115,6 +122,25 @@ func isAttachmentUpload(r *http.Request) bool {
 	}
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	return len(parts) == 3 && parts[0] == "days" && parts[2] == "attachments"
+}
+
+func isImportUpload(r *http.Request) bool {
+	if r.Method != http.MethodPost || r.URL.Path != "/settings/import" {
+		return false
+	}
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	return err == nil && strings.EqualFold(mediaType, "multipart/form-data")
+}
+
+func (s *Server) limitImportForm(w http.ResponseWriter, r *http.Request) bool {
+	limit, err := s.portability.UploadLimit(r.Context(), CurrentUser(r.Context()).ID)
+	if err != nil {
+		s.log.Error("check import form allowance", "err", err)
+		s.authError(w, r, "error.internal", http.StatusInternalServerError)
+		return false
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, multipartBodyLimit(limit))
+	return true
 }
 
 func (s *Server) limitAttachmentForm(w http.ResponseWriter, r *http.Request) bool {
