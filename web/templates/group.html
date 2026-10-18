@@ -5,6 +5,7 @@
   <h1 class="group-heading">{{template "swatch" .Group.Color}} {{template "group-name" .Group}}
     {{if .Group.Reserved}}<span class="badge">{{t "groups.reserved"}}</span>{{end}}</h1>
   <p class="hint">{{if eq .Group.DayCount 1}}{{t "groups.days.one" .Group.DayCount}}{{else}}{{t "groups.days.other" .Group.DayCount}}{{end}}</p>
+  {{template "group-days" .}}
   {{with .Error}}<p class="alert" role="alert">{{t .}}</p>{{end}}
   <form method="post" action="{{.Section.Base}}/{{.Group.ID}}/edit" class="card form">
     {{template "csrf-field" .}}
@@ -26,3 +27,9 @@
   {{end}}
 </section>
 {{end}}
+{{define "group-days"}}<div id="group-days" class="stack">
+  {{$url := printf "%s/%d" .Section.Base .Group.ID}}{{if not .HideArchived}}{{$url = printf "%s?hide_archived=1" $url}}{{end}}
+  <p><a class="btn" href="{{$url}}" hx-get="{{$url}}" hx-target="#group-days" hx-swap="outerHTML" hx-push-url="true">{{if .HideArchived}}{{t "groups.show_archived"}}{{else}}{{t "groups.hide_archived"}}{{end}}</a></p>
+  {{if .Items}}<ul class="day-list">{{range .Items}}{{template "day-item" .}}{{end}}</ul>
+  {{else}}<p class="empty-list">{{t "groups.empty_days"}}</p>{{end}}
+</div>{{end}}

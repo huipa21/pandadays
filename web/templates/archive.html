@@ -1,0 +1,8 @@
+{{define "title"}}{{t "archive.title"}} · {{t "app.name"}}{{end}}
+{{define "content"}}
+<section class="stack">
+  <h1>{{t "archive.title"}}</h1>
+  {{if .Items}}<ul class="day-list">{{range .Items}}{{template "day-item" .}}{{end}}</ul>
+  {{else}}<p class="empty-list">{{t "archive.empty"}}</p>{{end}}
+</section>
+{{end}}

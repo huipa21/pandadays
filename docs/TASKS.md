@@ -96,12 +96,13 @@ Status legend: `[ ]` todo, `[x]` done.
 
 ## Phase 4 — Archive, Filters, Attachments
 
-### [ ] T12 Archive & filter views
+### [x] T12 Archive & filter views
 - Archive/unarchive actions; `/archive` page.
 - Collection detail and tag detail include archived days (with "hide archived" toggle) and correct visual state.
 - Home excludes archived.
 - **Done when**: tests for visibility rules per page.
 - Parallelizable with T13.
+- Integration: `Days.SetArchived(ctx, owner, id, archived, now)` updates only archive state and `updated_at`; repeated archive requests preserve the original timestamp, and missing/foreign days return `ErrNotFound`. `ListArchived`, `ListCollection`, and `ListTag` return owner-scoped days with tags; group lists include archived by default and take `hideArchived` (missing/foreign groups return `ErrNotFound`). `POST /days/{id}/archive` and `/unarchive` are CSRF-protected owner actions on the card, redirecting back to it (including `HX-Redirect`). `/archive` is linked in the navigation. Collection/tag details toggle `?hide_archived=1` via the `group-days` htmx partial, with full-page history restoration and non-JS links. Archive/group lists keep both date halves: upcoming ascending, then past descending, reusing Home's date labels, chips, styles, and always-visible archive badges.
 
 ### [ ] T13 Attachments
 - Upload endpoint (multipart streaming), kind detection by sniffing, storage under `/data/media/{user_id}/{uuid}`, `MaxBytesReader` sized to remaining per-card allowance.

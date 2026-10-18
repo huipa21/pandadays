@@ -63,8 +63,44 @@ func HomeList(list []Day, when When, now time.Time, loc *time.Location) []Entry 
 
 // ListActive returns the owner's non-archived days with their tag IDs.
 func (s *Days) ListActive(ctx context.Context, ownerID int64) ([]Day, error) {
+	return s.list(ctx, ownerID, "archived_at IS NULL")
+}
+
+// ListArchived returns only the owner's archived days.
+func (s *Days) ListArchived(ctx context.Context, ownerID int64) ([]Day, error) {
+	return s.list(ctx, ownerID, "archived_at IS NOT NULL")
+}
+
+// ListCollection includes archived days unless hideArchived is set.
+func (s *Days) ListCollection(ctx context.Context, ownerID, collectionID int64, hideArchived bool) ([]Day, error) {
+	if _, err := s.collections.Get(ctx, ownerID, collectionID); err != nil {
+		return nil, err
+	}
+	filter := "collection_id = ?"
+	if hideArchived {
+		filter += " AND archived_at IS NULL"
+	}
+	return s.list(ctx, ownerID, filter, collectionID)
+}
+
+// ListTag includes archived days unless hideArchived is set.
+func (s *Days) ListTag(ctx context.Context, ownerID, tagID int64, hideArchived bool) ([]Day, error) {
+	if _, err := s.tags.Get(ctx, ownerID, tagID); err != nil {
+		return nil, err
+	}
+	filter := "EXISTS (SELECT 1 FROM day_tags WHERE day_id = days.id AND tag_id = ?)"
+	if hideArchived {
+		filter += " AND archived_at IS NULL"
+	}
+	return s.list(ctx, ownerID, filter, tagID)
+}
+
+// list accepts only predicates supplied by the repository, never user input.
+func (s *Days) list(ctx context.Context, ownerID int64, filter string, args ...any) ([]Day, error) {
+	args = append([]any{ownerID}, args...)
+	where := " WHERE owner_id = ? AND " + filter
 	rows, err := s.db.QueryContext(ctx, `SELECT `+dayColumns+` FROM days
-		WHERE owner_id = ? AND archived_at IS NULL ORDER BY id`, ownerID)
+		`+where+` ORDER BY id`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list days: %w", err)
 	}
@@ -86,8 +122,8 @@ func (s *Days) ListActive(ctx context.Context, ownerID int64) ([]Day, error) {
 		return list, nil
 	}
 	tagRows, err := s.db.QueryContext(ctx, `SELECT dt.day_id, dt.tag_id FROM day_tags dt
-		JOIN days d ON d.id = dt.day_id
-		WHERE d.owner_id = ? AND d.archived_at IS NULL ORDER BY dt.day_id, dt.tag_id`, ownerID)
+		JOIN days ON days.id = dt.day_id
+		`+where+` ORDER BY dt.day_id, dt.tag_id`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list day tags: %w", err)
 	}

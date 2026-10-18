@@ -379,6 +379,23 @@ func (s *Days) Update(ctx context.Context, ownerID, id int64, in DayInput, now t
 	return d, nil
 }
 
+// SetArchived changes archive state without changing the day's content.
+// Repeated archive requests preserve the original archive timestamp.
+func (s *Days) SetArchived(ctx context.Context, ownerID, id int64, archived bool, now time.Time) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE days
+		SET archived_at = CASE WHEN ? THEN COALESCE(archived_at, ?) ELSE NULL END, updated_at = ?
+		WHERE owner_id = ? AND id = ?`, archived, now.Unix(), now.Unix(), ownerID, id)
+	if err != nil {
+		return fmt.Errorf("archive day: %w", err)
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return fmt.Errorf("archive day: %w", err)
+	} else if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // Delete removes the day and shares targeting it. Tags, attachment rows and
 // recipient hide markers cascade; attachment files are removed by T13.
 func (s *Days) Delete(ctx context.Context, ownerID, id int64) error {

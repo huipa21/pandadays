@@ -24,7 +24,14 @@
       <dt>{{t "days.field.tags"}}</dt><dd class="chips">{{range .Tags}}<a class="chip" href="/tags/{{.ID}}">{{template "swatch" .Color}} {{template "group-name" .}}</a>{{end}}</dd>
     </dl>
     {{with .Day.Comment}}<p class="day-comment">{{.}}</p>{{end}}
-    <p><a class="btn" href="/days/{{.Day.ID}}/edit">{{t "days.edit"}}</a></p>
+    <div class="chips">
+      <a class="btn" href="/days/{{.Day.ID}}/edit">{{t "days.edit"}}</a>
+      <form method="post" action="/days/{{.Day.ID}}/{{if .Day.ArchivedAt}}unarchive{{else}}archive{{end}}" class="inline-form"
+            hx-post="/days/{{.Day.ID}}/{{if .Day.ArchivedAt}}unarchive{{else}}archive{{end}}">
+        {{template "csrf-field" .}}
+        <button type="submit" class="btn">{{if .Day.ArchivedAt}}{{t "days.unarchive"}}{{else}}{{t "days.archive"}}{{end}}</button>
+      </form>
+    </div>
   </article>
   <section class="card day-attachments" id="attachments">
     <h2>{{t "days.attachments"}}</h2>

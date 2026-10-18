@@ -10,7 +10,7 @@ import (
 	"pandadays/internal/i18n"
 )
 
-// dayItem is one row of a day list (Home now; archive and group pages in T12).
+// dayItem is one row of a day list.
 type dayItem struct {
 	Day    days.Day
 	State  days.Classification
@@ -77,22 +77,57 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		s.dayFail(w, r, "list groups for", err)
 		return
 	}
-	lang := i18n.LangFrom(r.Context())
-	page := homePage{pageData: newPageData(r), When: when}
-	for _, e := range days.HomeList(list, when, s.now(), userLocation(u)) {
-		item := dayItem{Day: e.Day, State: e.Calc.Classification, Target: e.Calc.Target,
-			Label: s.i18n.T(lang, e.Calc.ListLabel.Key, e.Calc.ListLabel.Args...), Tags: groups.dayTags(e.Day)}
-		if c, ok := groups.collections[e.Day.CollectionID]; ok {
-			item.Collection = &c
-		}
-		page.Items = append(page.Items, item)
-	}
+	page := homePage{pageData: newPageData(r), When: when,
+		Items: s.dayItems(r, days.HomeList(list, when, s.now(), userLocation(u)), groups)}
 	w.Header().Add("Vary", "HX-Request")
 	if isHTMX(r) && r.Header.Get("HX-History-Restore-Request") == "" {
 		s.renderPartial(w, r, "home.html", "home-days", page)
 		return
 	}
 	s.render(w, r, "home.html", page)
+}
+
+func (s *Server) dayItems(r *http.Request, entries []days.Entry, groups groupIndex) []dayItem {
+	lang := i18n.LangFrom(r.Context())
+	items := make([]dayItem, 0, len(entries))
+	for _, e := range entries {
+		item := dayItem{Day: e.Day, State: e.Calc.Classification, Target: e.Calc.Target,
+			Label: s.i18n.T(lang, e.Calc.ListLabel.Key, e.Calc.ListLabel.Args...), Tags: groups.dayTags(e.Day)}
+		if c, ok := groups.collections[e.Day.CollectionID]; ok {
+			item.Collection = &c
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
+// allDayItems keeps both halves, upcoming first, using Home's ordering within each.
+func (s *Server) allDayItems(r *http.Request, list []days.Day) ([]dayItem, error) {
+	u := CurrentUser(r.Context())
+	groups, err := s.loadGroupIndex(r, u.ID)
+	if err != nil {
+		return nil, err
+	}
+	now, loc := s.now(), userLocation(u)
+	entries := append(days.HomeList(list, days.WhenFuture, now, loc), days.HomeList(list, days.WhenPast, now, loc)...)
+	return s.dayItems(r, entries, groups), nil
+}
+
+func (s *Server) handleArchive(w http.ResponseWriter, r *http.Request) {
+	list, err := s.days.ListArchived(r.Context(), CurrentUser(r.Context()).ID)
+	if err != nil {
+		s.dayFail(w, r, "list archived", err)
+		return
+	}
+	items, err := s.allDayItems(r, list)
+	if err != nil {
+		s.dayFail(w, r, "list groups for archived", err)
+		return
+	}
+	s.render(w, r, "archive.html", struct {
+		pageData
+		Items []dayItem
+	}{newPageData(r), items})
 }
 
 func isHTMX(r *http.Request) bool { return r.Header.Get("HX-Request") == "true" }

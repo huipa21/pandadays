@@ -62,6 +62,29 @@ func (s *Server) registerDayRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /days/{id}/edit", RequireLogin(http.HandlerFunc(s.handleDayEditForm)))
 	mux.Handle("POST /days/{id}/edit", RequireLogin(http.HandlerFunc(s.handleDayUpdate)))
 	mux.Handle("POST /days/{id}/delete", RequireLogin(http.HandlerFunc(s.handleDayDelete)))
+	mux.Handle("POST /days/{id}/archive", RequireLogin(http.HandlerFunc(s.handleDayArchive)))
+	mux.Handle("POST /days/{id}/unarchive", RequireLogin(http.HandlerFunc(s.handleDayUnarchive)))
+	mux.Handle("GET /archive", RequireLogin(http.HandlerFunc(s.handleArchive)))
+}
+
+func (s *Server) handleDayArchive(w http.ResponseWriter, r *http.Request) {
+	s.setDayArchived(w, r, true)
+}
+
+func (s *Server) handleDayUnarchive(w http.ResponseWriter, r *http.Request) {
+	s.setDayArchived(w, r, false)
+}
+
+func (s *Server) setDayArchived(w http.ResponseWriter, r *http.Request, archived bool) {
+	id, ok := s.dayID(w, r)
+	if !ok {
+		return
+	}
+	if err := s.days.SetArchived(r.Context(), CurrentUser(r.Context()).ID, id, archived, s.now()); err != nil {
+		s.dayFail(w, r, "archive", err)
+		return
+	}
+	authRedirect(w, r, dayPath(id))
 }
 
 func dayErrorKey(err error) (string, bool) {

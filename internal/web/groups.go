@@ -32,10 +32,12 @@ type groupsPage struct {
 
 type groupPage struct {
 	pageData
-	Section groupSection
-	Group   days.Group
-	Form    groupForm
-	Error   string
+	Section      groupSection
+	Group        days.Group
+	Form         groupForm
+	Error        string
+	HideArchived bool
+	Items        []dayItem
 }
 
 const defaultGroupColor = "#2f855a"
@@ -137,8 +139,32 @@ func (h *groupHandlers) create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *groupHandlers) renderDetail(w http.ResponseWriter, r *http.Request, status int, g days.Group, form groupForm, errKey string) {
-	h.s.renderStatus(w, r, "group.html", status, groupPage{pageData: newPageData(r), Section: h.section,
-		Group: g, Form: form, Error: errKey})
+	hideArchived := r.URL.Query().Get("hide_archived") == "1"
+	owner := CurrentUser(r.Context()).ID
+	var list []days.Day
+	var err error
+	if h.section.Key == "collections" {
+		list, err = h.s.days.ListCollection(r.Context(), owner, g.ID, hideArchived)
+	} else {
+		list, err = h.s.days.ListTag(r.Context(), owner, g.ID, hideArchived)
+	}
+	if err != nil {
+		h.fail(w, r, "list days in", err)
+		return
+	}
+	items, err := h.s.allDayItems(r, list)
+	if err != nil {
+		h.fail(w, r, "list day groups in", err)
+		return
+	}
+	page := groupPage{pageData: newPageData(r), Section: h.section,
+		Group: g, Form: form, Error: errKey, HideArchived: hideArchived, Items: items}
+	w.Header().Add("Vary", "HX-Request")
+	if r.Method == http.MethodGet && isHTMX(r) && r.Header.Get("HX-History-Restore-Request") == "" {
+		h.s.renderPartial(w, r, "group.html", "group-days", page)
+		return
+	}
+	h.s.renderStatus(w, r, "group.html", status, page)
 }
 
 func formFromGroup(g days.Group) groupForm {
