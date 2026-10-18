@@ -48,10 +48,11 @@ Status legend: `[ ]` todo, `[x]` done.
 - **Done when**: handler tests for login success/failure, inactive user rejected, forced-change flow.
 - Integration: `GET /` now requires login. Handlers live in `internal/web/account.go`; `auth.Service.ChangePassword` (shares login backoff per user) and `SetTimezoneIfEmpty` / `ValidateTimezone` (reuse in T15 for explicit timezone changes). Pages build data via `newPageData(r)`, which exposes `.User` for the header nav and sets `CaptureTimezone` (loads `static/timezone.js`) only for logged-in users with no timezone who are not forced to change their password. Use `renderStatus` to render forms with validation errors.
 
-### [ ] T06 Setup token flow
+### [x] T06 Setup token flow
 - On `serve` start: if no admin and no unexpired token → generate, store hash + expiry (1h), print token to stdout with clear banner.
 - `/setup` GET/POST: validates token (constant-time compare of hashes), creates admin (via `CreateUser`), deletes token. 404 once an admin exists.
 - **Done when**: tests for valid, expired, reused, and post-admin 404.
+- Integration: `auth.EnsureSetupToken` (called from `cmdServe` via `issueSetupToken`) and `auth.Service.CompleteSetup` (token check + admin insert + token delete in one transaction; failures share login backoff per IP). `CreateUser` now delegates to the internal `insertUser(tx, …)` so other flows can create users inside their own transaction. `Service.HasAdmin` gates `/setup`; `GET /login` redirects to `/setup` while no admin exists. Setup signs the new admin in.
 
 ### [ ] T07 CLI `reset-admin-password`
 - `panda reset-admin-password --username <name>`: opens DB, verifies user is admin, sets random password, `must_change_password=1`, deletes sessions, prints password.

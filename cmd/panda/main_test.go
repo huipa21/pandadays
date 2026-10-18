@@ -3,10 +3,12 @@ package main
 import (
 	"bytes"
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func noenv(string) string { return "" }
@@ -79,5 +81,39 @@ func TestRunServeRejectsArgs(t *testing.T) {
 	var out, errOut bytes.Buffer
 	if code := run([]string{"serve", "extra"}, noenv, &out, &errOut); code != 2 {
 		t.Fatalf("exit = %d, want 2", code)
+	}
+}
+
+func TestIssueSetupTokenPrintsBannerOnce(t *testing.T) {
+	conn, err := openDatabase(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	now := time.Now()
+
+	var first bytes.Buffer
+	if err := issueSetupToken(context.Background(), conn, &first, logger, now); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(first.String(), "/setup") || !strings.Contains(first.String(), "Expires at") {
+		t.Fatalf("banner = %q", first.String())
+	}
+	var hash string
+	if err := conn.QueryRow(`SELECT value FROM settings WHERE key = 'setup_token_hash'`).Scan(&hash); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(first.String(), hash) {
+		t.Fatal("banner must print the raw token, not the stored hash")
+	}
+
+	var second bytes.Buffer
+	if err := issueSetupToken(context.Background(), conn, &second, logger, now.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if second.Len() != 0 || !strings.Contains(logs.String(), "setup pending") {
+		t.Fatalf("unexpired token reissued: stdout=%q", second.String())
 	}
 }

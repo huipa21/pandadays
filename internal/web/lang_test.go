@@ -79,10 +79,11 @@ func TestLangResolution(t *testing.T) {
 		if _, err := database.Exec(`INSERT INTO settings (key, value) VALUES ('site_lang', 'en')`); err != nil {
 			t.Fatal(err)
 		}
-		assertLang(t, getPage(t, newTestServerWith(t, zhEnv, database), "/login", "zh"), "en")
+		// Without an admin, /login redirects; /setup is the public page here.
+		assertLang(t, getPage(t, newTestServerWith(t, zhEnv, database), "/setup", "zh"), "en")
 	})
 	t.Run("no site_lang row falls through to accept-language", func(t *testing.T) {
-		assertLang(t, getPage(t, newTestServerWith(t, noenv, dbtest.Open(t)), "/login", "zh"), "zh")
+		assertLang(t, getPage(t, newTestServerWith(t, noenv, dbtest.Open(t)), "/setup", "zh"), "zh")
 	})
 	t.Run("query override beats site setting", func(t *testing.T) {
 		assertLang(t, getPage(t, newTestServerWith(t, zhEnv, nil), "/login?lang=en", "zh"), "en")

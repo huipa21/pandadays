@@ -14,6 +14,7 @@ import (
 	"time"
 	_ "time/tzdata"
 
+	"pandadays/internal/auth"
 	"pandadays/internal/config"
 	"pandadays/internal/db"
 	"pandadays/internal/web"
@@ -79,6 +80,11 @@ func cmdServe(args []string, getenv func(string) string, stdout, stderr io.Write
 	}
 	defer database.Close()
 
+	if err := issueSetupToken(ctx, database, stdout, logger, time.Now()); err != nil {
+		logger.Error("issue setup token", "err", err)
+		return 1
+	}
+
 	srv, err := web.New(cfg, logger, database)
 	if err != nil {
 		logger.Error("init server", "err", err)
@@ -91,6 +97,35 @@ func cmdServe(args []string, getenv func(string) string, stdout, stderr io.Write
 		return 1
 	}
 	return 0
+}
+
+// issueSetupToken prints a new one-time setup token while no admin exists
+// (SPEC §4.1). The raw token goes only to stdout, never to the structured log.
+func issueSetupToken(ctx context.Context, database *sql.DB, stdout io.Writer, logger *slog.Logger, now time.Time) error {
+	token, expires, err := auth.EnsureSetupToken(ctx, database, now)
+	if err != nil {
+		return err
+	}
+	switch {
+	case token != "":
+		fmt.Fprintf(stdout, `
+================================================================
+ PandaDays initial setup
+ Open /setup in your browser and enter this one-time token:
+
+     %s
+
+ Expires at %s (valid for 1 hour).
+ If it expires, restart the server to get a new token.
+================================================================
+
+`, token, expires.Format(time.RFC3339))
+		logger.Info("setup token issued", "expires_at", expires)
+	case !expires.IsZero():
+		logger.Warn("setup pending: a setup token printed earlier is still valid; restart after it expires to get a new one",
+			"expires_at", expires)
+	}
+	return nil
 }
 
 // openDatabase opens <dataDir>/pandadays.db and applies pending migrations.

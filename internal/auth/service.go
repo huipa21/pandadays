@@ -64,7 +64,19 @@ func (s *Service) CreateUser(ctx context.Context, p CreateUserParams, now time.T
 		return nil, fmt.Errorf("create user: %w", err)
 	}
 	defer tx.Rollback()
+	u, err := insertUser(ctx, tx, p, hash, now)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit user: %w", err)
+	}
+	return u, nil
+}
 
+// insertUser expects trimmed, nonempty identities and an already computed
+// hash, so callers avoid running bcrypt while holding the write lock.
+func insertUser(ctx context.Context, tx *sql.Tx, p CreateUserParams, hash string, now time.Time) (*User, error) {
 	// Also prevent username/email cross-collisions, so login is unambiguous.
 	var exists bool
 	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(
@@ -93,9 +105,6 @@ func (s *Service) CreateUser(ctx context.Context, p CreateUserParams, now time.T
 		if _, err := tx.ExecContext(ctx, query, id, now.Unix()); err != nil {
 			return nil, fmt.Errorf("create reserved default: %w", err)
 		}
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit user: %w", err)
 	}
 	return &User{ID: id, Username: p.Username, Email: p.Email, IsAdmin: p.IsAdmin,
 		IsActive: true, MustChangePassword: p.MustChangePassword}, nil

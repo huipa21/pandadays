@@ -1,0 +1,30 @@
+{{define "title"}}{{t "setup.title"}} · {{t "app.name"}}{{end}}
+{{define "content"}}
+<section class="card auth-card">
+  <h1>{{t "setup.title"}}</h1>
+  <p class="tagline">{{t "app.tagline"}}</p>
+  <p class="notice">{{t "setup.intro"}}</p>
+  {{with .Error}}<p class="alert" role="alert">{{t .}}</p>{{end}}
+  <form method="post" action="/setup" class="form">
+    {{template "csrf-field" .}}
+    <label>{{t "setup.token"}}
+      <input type="password" name="token" autocomplete="off" autocapitalize="none" spellcheck="false" required autofocus aria-describedby="setup-token-hint">
+    </label>
+    <p id="setup-token-hint" class="hint">{{t "setup.token_hint"}}</p>
+    <label>{{t "setup.username"}}
+      <input type="text" name="username" value="{{.Username}}" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+    </label>
+    <label>{{t "setup.email"}}
+      <input type="email" name="email" value="{{.Email}}" autocomplete="email" required>
+    </label>
+    <label>{{t "setup.password"}}
+      <input type="password" name="password" autocomplete="new-password" minlength="8" required aria-describedby="password-hint">
+    </label>
+    <label>{{t "password.confirm"}}
+      <input type="password" name="confirm_password" autocomplete="new-password" minlength="8" required>
+    </label>
+    <p id="password-hint" class="hint">{{t "password.hint"}}</p>
+    <button type="submit" class="btn">{{t "setup.submit"}}</button>
+  </form>
+</section>
+{{end}}

@@ -25,6 +25,12 @@ func (s *Server) handleLoginForm(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
+	if s.auth != nil {
+		if admin, err := s.auth.HasAdmin(r.Context()); err == nil && !admin {
+			http.Redirect(w, r, "/setup", http.StatusSeeOther)
+			return
+		}
+	}
 	s.render(w, r, "login.html", loginPage{pageData: newPageData(r)})
 }
 

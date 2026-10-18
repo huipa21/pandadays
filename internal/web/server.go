@@ -88,6 +88,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /static/", http.StripPrefix("/static/", staticHandler(s.static)))
 	mux.Handle("GET /{$}", RequireLogin(http.HandlerFunc(s.handleHome)))
 	mux.HandleFunc("GET /login", s.handleLoginForm)
+	mux.HandleFunc("GET /setup", s.handleSetupForm)
+	mux.HandleFunc("POST /setup", s.handleSetup)
 	mux.HandleFunc("POST /login", s.handleLogin)
 	mux.HandleFunc("POST /logout", s.handleLogout)
 	mux.Handle("GET /password", RequireLogin(http.HandlerFunc(s.handlePasswordForm)))
