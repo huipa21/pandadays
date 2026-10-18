@@ -8,11 +8,14 @@ import (
 	"strconv"
 	"time"
 	_ "time/tzdata" // timezone validation must not depend on the host zoneinfo
+
+	"pandadays/internal/i18n"
 )
 
 var (
 	ErrPasswordUnchanged = errors.New("new password must differ from the current password")
 	ErrTimezone          = errors.New("invalid timezone")
+	ErrLanguage          = errors.New("invalid language")
 )
 
 // ChangePassword verifies the current password, stores the new one, clears
@@ -105,4 +108,23 @@ func (s *Service) SetTimezoneIfEmpty(ctx context.Context, userID int64, name str
 		return false, fmt.Errorf("read timezone update result: %w", err)
 	}
 	return n > 0, nil
+}
+
+// UpdatePreferences saves the user's language and timezone preferences.
+// Empty values allow the site/browser defaults to be used.
+func (s *Service) UpdatePreferences(ctx context.Context, userID int64, lang, timezone string, now time.Time) error {
+	if lang != "" && !i18n.IsSupported(lang) {
+		return ErrLanguage
+	}
+	if timezone != "" {
+		if _, err := ValidateTimezone(timezone); err != nil {
+			return err
+		}
+	}
+	_, err := s.db.ExecContext(ctx, `UPDATE users SET lang = NULLIF(?, ''), timezone = NULLIF(?, ''), updated_at = ?
+		WHERE id = ?`, lang, timezone, now.Unix(), userID)
+	if err != nil {
+		return fmt.Errorf("update user preferences: %w", err)
+	}
+	return nil
 }

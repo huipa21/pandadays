@@ -131,7 +131,7 @@ Status legend: `[ ]` todo, `[x]` done.
 
 ## Phase 6 — Admin & Settings
 
-### [ ] T15 User settings
+### [x] T15 User settings
 - `/settings`: language, timezone (select from IANA list, validated), link to password change, usage summary.
 - Parallelizable with T16.
 

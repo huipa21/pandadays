@@ -113,6 +113,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /logout", s.handleLogout)
 	mux.Handle("GET /password", RequireLogin(http.HandlerFunc(s.handlePasswordForm)))
 	mux.Handle("POST /password", RequireLogin(http.HandlerFunc(s.handlePassword)))
+	mux.Handle("GET /settings", RequireLogin(http.HandlerFunc(s.handleSettings)))
+	mux.Handle("POST /settings", RequireLogin(http.HandlerFunc(s.saveSettings)))
 	mux.Handle("POST /settings/timezone", RequireLogin(http.HandlerFunc(s.handleTimezone)))
 	if s.db != nil {
 		s.registerGroupRoutes(mux, s.collections, "collections")
