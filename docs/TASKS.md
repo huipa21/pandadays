@@ -16,7 +16,7 @@ Status legend: `[ ]` todo, `[x]` done.
 - Security headers middleware (SPEC §9), request logging (`log/slog`).
 - **Done when**: `go run ./cmd/panda` serves `/healthz` → 200 and an empty styled page.
 
-### [ ] T02 Database & migrations
+### [x] T02 Database & migrations
 - `internal/db`: open SQLite (WAL, foreign keys, busy timeout), embedded migrations runner with `schema_migrations`.
 - `0001_init.sql` with the full schema from SPEC §7 and default `settings` rows.
 - Test helper to open an in-memory/temp DB.

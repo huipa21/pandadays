@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -51,6 +54,24 @@ func TestRunServeInvalidConfig(t *testing.T) {
 	}
 	if !strings.Contains(errOut.String(), "invalid configuration") {
 		t.Fatalf("stderr = %q", errOut.String())
+	}
+}
+
+func TestOpenDatabaseCreatesAndMigrates(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "nested", "data")
+	for i := 0; i < 2; i++ {
+		conn, err := openDatabase(context.Background(), dir)
+		if err != nil {
+			t.Fatalf("run %d: %v", i, err)
+		}
+		var n int
+		if err := conn.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil || n < 1 {
+			t.Fatalf("run %d: schema_migrations count=%d err=%v", i, n, err)
+		}
+		conn.Close()
+	}
+	if _, err := os.Stat(filepath.Join(dir, "pandadays.db")); err != nil {
+		t.Fatalf("db file: %v", err)
 	}
 }
 

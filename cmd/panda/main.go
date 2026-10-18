@@ -3,15 +3,19 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
+	"time"
 	_ "time/tzdata"
 
 	"pandadays/internal/config"
+	"pandadays/internal/db"
 	"pandadays/internal/web"
 )
 
@@ -65,14 +69,21 @@ func cmdServe(args []string, getenv func(string) string, stdout, stderr io.Write
 		return 1
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	database, err := openDatabase(ctx, cfg.DataDir)
+	if err != nil {
+		logger.Error("init database", "err", err)
+		return 1
+	}
+	defer database.Close()
+
 	srv, err := web.New(cfg, logger)
 	if err != nil {
 		logger.Error("init server", "err", err)
 		return 1
 	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	logger.Info("starting panda", "version", version, "addr", cfg.Addr, "data_dir", cfg.DataDir)
 	if err := srv.Run(ctx); err != nil {
@@ -80,4 +91,20 @@ func cmdServe(args []string, getenv func(string) string, stdout, stderr io.Write
 		return 1
 	}
 	return 0
+}
+
+// openDatabase opens <dataDir>/pandadays.db and applies pending migrations.
+func openDatabase(ctx context.Context, dataDir string) (*sql.DB, error) {
+	if err := os.MkdirAll(dataDir, 0o750); err != nil {
+		return nil, fmt.Errorf("create data dir: %w", err)
+	}
+	conn, err := db.Open(ctx, filepath.Join(dataDir, db.FileName))
+	if err != nil {
+		return nil, err
+	}
+	if err := db.Migrate(ctx, conn, time.Now()); err != nil {
+		conn.Close()
+		return nil, err
+	}
+	return conn, nil
 }
