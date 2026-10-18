@@ -22,7 +22,7 @@ Status legend: `[ ]` todo, `[x]` done.
 - Test helper to open an in-memory/temp DB.
 - **Done when**: tests verify migrations apply idempotently and FK enforcement is on.
 
-### [ ] T03 i18n
+### [x] T03 i18n
 - `internal/i18n`: load `locales/en.json`, `locales/zh.json`; `t` template func; language resolution (user → site → Accept-Language → en).
 - Test: missing key in zh falls back to en; a test asserts both files have identical key sets.
 - **Done when**: layout renders in both languages via `?lang=` override in dev or resolution logic in tests.

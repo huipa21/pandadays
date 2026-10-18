@@ -87,6 +87,8 @@ img, video, audio { max-width: 100%; }
 
 .empty { min-height: 40vh; }
 
+.tagline { color: var(--muted); }
+
 @media (min-width: 768px) {
   :root { --space: 1.5rem; }
   .brand { font-size: 1.25rem; }

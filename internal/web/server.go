@@ -2,7 +2,9 @@
 package web
 
 import (
+	"bytes"
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"html/template"
@@ -13,6 +15,7 @@ import (
 	"time"
 
 	"pandadays/internal/config"
+	"pandadays/internal/i18n"
 	assets "pandadays/web"
 )
 
@@ -21,16 +24,28 @@ const shutdownTimeout = 10 * time.Second
 type Server struct {
 	cfg    config.Config
 	log    *slog.Logger
+	db     *sql.DB
+	i18n   *i18n.Bundle
 	pages  map[string]*template.Template
 	static fs.FS
 }
 
-func New(cfg config.Config, logger *slog.Logger) (*Server, error) {
+// New builds a Server. database may be nil (e.g. in tests that need no storage).
+func New(cfg config.Config, logger *slog.Logger, database *sql.DB) (*Server, error) {
+	bundle, err := i18n.LoadEmbedded()
+	if err != nil {
+		return nil, err
+	}
 	pages, err := parsePages(assets.Templates())
 	if err != nil {
 		return nil, err
 	}
-	return &Server{cfg: cfg, log: logger, pages: pages, static: assets.Static()}, nil
+	return &Server{cfg: cfg, log: logger, db: database, i18n: bundle, pages: pages, static: assets.Static()}, nil
+}
+
+// templateFuncs are placeholders for parsing; render rebinds "t" to the request language.
+var templateFuncs = template.FuncMap{
+	"t": func(key string, _ ...any) string { return key },
 }
 
 // parsePages builds one template set per page, each combining layout.html with the page file.
@@ -44,7 +59,7 @@ func parsePages(tfs fs.FS) (map[string]*template.Template, error) {
 		if name == "layout.html" {
 			continue
 		}
-		t, err := template.New(name).ParseFS(tfs, "layout.html", name)
+		t, err := template.New(name).Funcs(templateFuncs).ParseFS(tfs, "layout.html", name)
 		if err != nil {
 			return nil, fmt.Errorf("parse template %s: %w", name, err)
 		}
@@ -63,6 +78,7 @@ func (s *Server) Handler() http.Handler {
 		recoverPanics(s.log),
 		requestLogger(s.log),
 		securityHeaders,
+		s.resolveLang,
 	)
 }
 
@@ -118,20 +134,32 @@ type pageData struct {
 }
 
 func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, "home.html", pageData{Lang: s.cfg.Lang})
+	s.render(w, r, "home.html", pageData{Lang: i18n.LangFrom(r.Context())})
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, page string, data any) {
-	t, ok := s.pages[page]
+	base, ok := s.pages[page]
 	if !ok {
 		s.log.Error("template not found", "page", page)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := t.ExecuteTemplate(w, "layout", data); err != nil {
-		s.log.Error("render template", "page", page, "path", r.URL.Path, "err", err)
+	t, err := base.Clone()
+	if err != nil {
+		s.log.Error("clone template", "page", page, "err", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
 	}
+	t.Funcs(template.FuncMap{"t": s.i18n.Func(i18n.LangFrom(r.Context()))})
+
+	var buf bytes.Buffer
+	if err := t.ExecuteTemplate(&buf, "layout", data); err != nil {
+		s.log.Error("render template", "page", page, "path", r.URL.Path, "err", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = buf.WriteTo(w)
 }
 
 func staticHandler(fsys fs.FS) http.Handler {

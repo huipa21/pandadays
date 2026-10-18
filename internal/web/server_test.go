@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"database/sql"
 	"io"
 	"log/slog"
 	"net"
@@ -16,11 +17,16 @@ import (
 
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
-	cfg, err := config.Load(func(string) string { return "" })
+	return newTestServerWith(t, func(string) string { return "" }, nil)
+}
+
+func newTestServerWith(t *testing.T, getenv func(string) string, database *sql.DB) *Server {
+	t.Helper()
+	cfg, err := config.Load(getenv)
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	s, err := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), database)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -9,10 +9,13 @@ import (
 )
 
 type Config struct {
-	Addr         string
-	DataDir      string
-	BaseURL      string
-	Lang         string
+	Addr    string
+	DataDir string
+	BaseURL string
+	Lang    string
+	// LangSet is true when PANDA_LANG was given explicitly; otherwise the
+	// browser's Accept-Language takes precedence over the "en" default.
+	LangSet      bool
 	CookieSecure bool
 	Location     *time.Location
 }
@@ -33,6 +36,7 @@ func Load(getenv func(string) string) (Config, error) {
 		DataDir: get("PANDA_DATA_DIR", "/data"),
 		BaseURL: strings.TrimRight(get("PANDA_BASE_URL", ""), "/"),
 		Lang:    strings.ToLower(get("PANDA_LANG", "en")),
+		LangSet: strings.TrimSpace(getenv("PANDA_LANG")) != "",
 	}
 
 	if !isSupportedLang(cfg.Lang) {

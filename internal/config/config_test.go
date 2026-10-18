@@ -11,7 +11,7 @@ func TestLoadDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Addr != ":8080" || cfg.DataDir != "/data" || cfg.BaseURL != "" || cfg.Lang != "en" || !cfg.CookieSecure {
+	if cfg.Addr != ":8080" || cfg.DataDir != "/data" || cfg.BaseURL != "" || cfg.Lang != "en" || cfg.LangSet || !cfg.CookieSecure {
 		t.Fatalf("unexpected defaults: %+v", cfg)
 	}
 	if cfg.Location.String() != "UTC" {
@@ -32,7 +32,7 @@ func TestLoadOverrides(t *testing.T) {
 		t.Fatal(err)
 	}
 	if cfg.Addr != "127.0.0.1:9000" || cfg.DataDir != "./data" || cfg.BaseURL != "https://days.example.com" ||
-		cfg.Lang != "zh" || cfg.CookieSecure || cfg.Location.String() != "Asia/Shanghai" {
+		cfg.Lang != "zh" || !cfg.LangSet || cfg.CookieSecure || cfg.Location.String() != "Asia/Shanghai" {
 		t.Fatalf("unexpected config: %+v", cfg)
 	}
 }

@@ -79,7 +79,7 @@ func cmdServe(args []string, getenv func(string) string, stdout, stderr io.Write
 	}
 	defer database.Close()
 
-	srv, err := web.New(cfg, logger)
+	srv, err := web.New(cfg, logger, database)
 	if err != nil {
 		logger.Error("init server", "err", err)
 		return 1
