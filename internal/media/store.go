@@ -278,6 +278,38 @@ func (s *Store) ListDay(ctx context.Context, ownerID, dayID int64) ([]Attachment
 	return out, nil
 }
 
+func (s *Store) ListAccessibleDay(ctx context.Context, viewerID, dayID int64) ([]Attachment, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT a.id, a.day_id, a.owner_id, a.uuid, a.kind, a.filename, a.mime, a.size, a.created_at
+		FROM attachments a JOIN days d ON d.id = a.day_id
+		WHERE d.id = ? AND (
+			d.owner_id = ? OR EXISTS (
+				SELECT 1 FROM shares sh
+				JOIN share_recipients sr ON sr.share_id = sh.id
+				WHERE sh.owner_id = d.owner_id AND sr.recipient_id = ?
+				AND ((sh.target_type = 'day' AND sh.target_id = d.id)
+					OR (sh.target_type = 'collection' AND sh.target_id = d.collection_id AND d.archived_at IS NULL))
+			)
+		) ORDER BY a.created_at, a.id`, dayID, viewerID, viewerID)
+	if err != nil {
+		return nil, fmt.Errorf("list accessible attachments: %w", err)
+	}
+	defer rows.Close()
+	var out []Attachment
+	for rows.Next() {
+		var a Attachment
+		var created int64
+		if err := rows.Scan(&a.ID, &a.DayID, &a.OwnerID, &a.UUID, &a.Kind, &a.Filename, &a.MIME, &a.Size, &created); err != nil {
+			return nil, fmt.Errorf("scan accessible attachment: %w", err)
+		}
+		a.CreatedAt = time.Unix(created, 0).UTC()
+		out = append(out, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate accessible attachments: %w", err)
+	}
+	return out, nil
+}
+
 func (s *Store) Get(ctx context.Context, ownerID, id int64) (Attachment, error) {
 	var a Attachment
 	var created int64

@@ -10,6 +10,7 @@ import (
 	"pandadays/internal/days"
 	"pandadays/internal/i18n"
 	"pandadays/internal/media"
+	"pandadays/internal/share"
 )
 
 type dayForm struct {
@@ -54,6 +55,10 @@ type dayPage struct {
 	Tags        []days.Group
 	Attachments []media.Attachment
 	Usage       media.Usage
+	Shared      bool
+	ShareOwner  string
+	ShowComment bool
+	ShareRows   []shareRow
 }
 
 var repeatOptions = []days.Repeat{days.RepeatNone, days.RepeatWeekly, days.RepeatMonthly, days.RepeatYearly}
@@ -270,11 +275,29 @@ func (s *Server) handleDayView(w http.ResponseWriter, r *http.Request) {
 	}
 	u := CurrentUser(r.Context())
 	d, err := s.days.Get(r.Context(), u.ID, id)
+	shared := false
+	shareOwner := ""
+	showComment := true
+	if errors.Is(err, days.ErrNotFound) {
+		var sharedDay share.SharedDay
+		sharedDay, err = s.shares.GetShared(r.Context(), u.ID, id)
+		if err == nil {
+			d = days.Day{
+				ID: sharedDay.ID, OwnerID: sharedDay.OwnerID, Title: sharedDay.Title, Date: sharedDay.Date,
+				Time: sharedDay.Time, Repeat: days.Repeat(sharedDay.Repeat), Comment: sharedDay.Comment,
+				StyleColor: sharedDay.StyleColor, StyleIcon: sharedDay.StyleIcon,
+				StyleBgAttachmentID: sharedDay.StyleBgAttachmentID, ArchivedAt: sharedDay.ArchivedAt,
+			}
+			shared, shareOwner, showComment = true, sharedDay.OwnerUsername, sharedDay.ShowComment
+		} else if errors.Is(err, share.ErrNotFound) {
+			err = days.ErrNotFound
+		}
+	}
 	if err != nil {
 		s.dayFail(w, r, "get", err)
 		return
 	}
-	page := dayPage{pageData: newPageData(r), Day: d}
+	page := dayPage{pageData: newPageData(r), Day: d, Shared: shared, ShareOwner: shareOwner, ShowComment: showComment}
 	calc, err := days.Calculate(d.Schedule(), s.now(), userLocation(u))
 	if err != nil {
 		s.dayFail(w, r, "calculate", err)
@@ -291,25 +314,40 @@ func (s *Server) handleDayView(w http.ResponseWriter, r *http.Request) {
 	if calc.SinceOriginal != nil {
 		page.Since = s.breakdownParts(lang, *calc.SinceOriginal, timed)
 	}
-	if page.Collection, err = s.collections.Get(r.Context(), u.ID, d.CollectionID); err != nil {
-		s.dayFail(w, r, "get collection for", err)
-		return
+	if !shared {
+		if page.Collection, err = s.collections.Get(r.Context(), u.ID, d.CollectionID); err != nil {
+			s.dayFail(w, r, "get collection for", err)
+			return
+		}
+		groups, err := s.loadGroupIndex(r, u.ID)
+		if err != nil {
+			s.dayFail(w, r, "list tags for", err)
+			return
+		}
+		page.Tags = groups.dayTags(d)
+		shares, listErr := s.shares.List(r.Context(), u.ID, share.TargetDay, d.ID)
+		err = listErr
+		if err != nil {
+			s.dayFail(w, r, "list shares for", err)
+			return
+		}
+		page.ShareRows = shareRows(shares)
 	}
-	groups, err := s.loadGroupIndex(r, u.ID)
-	if err != nil {
-		s.dayFail(w, r, "list tags for", err)
-		return
+	if shared {
+		page.Attachments, err = s.media.ListAccessibleDay(r.Context(), u.ID, d.ID)
+	} else {
+		page.Attachments, err = s.media.ListDay(r.Context(), u.ID, d.ID)
 	}
-	page.Tags = groups.dayTags(d)
-	page.Attachments, err = s.media.ListDay(r.Context(), u.ID, d.ID)
 	if err != nil {
 		s.dayFail(w, r, "list attachments for", err)
 		return
 	}
-	page.Usage, err = s.media.Usage(r.Context(), u.ID, d.ID)
-	if err != nil {
-		s.dayFail(w, r, "read attachment usage for", err)
-		return
+	if !shared {
+		page.Usage, err = s.media.Usage(r.Context(), u.ID, d.ID)
+		if err != nil {
+			s.dayFail(w, r, "read attachment usage for", err)
+			return
+		}
 	}
 	s.render(w, r, "day.html", page)
 }

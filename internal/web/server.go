@@ -21,6 +21,7 @@ import (
 	"pandadays/internal/days"
 	"pandadays/internal/i18n"
 	"pandadays/internal/media"
+	"pandadays/internal/share"
 	assets "pandadays/web"
 )
 
@@ -40,6 +41,7 @@ type Server struct {
 	tags        *days.Groups
 	days        *days.Days
 	media       *media.Store
+	shares      *share.Store
 
 	// now is the clock used for date calculations; tests may replace it.
 	now func() time.Time
@@ -68,6 +70,7 @@ func New(cfg config.Config, logger *slog.Logger, database *sql.DB) (*Server, err
 		s.tags = days.NewTags(database)
 		s.days = days.NewDays(database)
 		s.media = media.New(database, filepath.Join(cfg.DataDir, "media"))
+		s.shares = share.New(database)
 	}
 	return s, nil
 }
@@ -116,6 +119,7 @@ func (s *Server) Handler() http.Handler {
 		s.registerGroupRoutes(mux, s.tags, "tags")
 		s.registerDayRoutes(mux)
 		s.registerAttachmentRoutes(mux)
+		s.registerShareRoutes(mux)
 	}
 
 	return chain(mux,

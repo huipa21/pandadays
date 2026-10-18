@@ -118,7 +118,7 @@ Status legend: `[ ]` todo, `[x]` done.
 
 ## Phase 5 — Sharing
 
-### [ ] T14 Sharing
+### [x] T14 Sharing
 - Create share for a day or collection with multiple recipients (username/email list), `show_comment` toggle; edit recipients; revoke.
 - Generic error for unknown recipients; disallow self.
 - Access resolver: `CanView(user, day)` → (allowed, showComment) considering direct and collection shares; dedupe.

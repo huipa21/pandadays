@@ -16,6 +16,7 @@
   {{with .User}}<nav class="nav">
     <span class="nav-user">{{.Username}}</span>
     <a href="/archive">{{t "nav.archive"}}</a>
+    <a href="/shared">{{t "sharing.title"}}</a>
     <a href="/collections">{{t "nav.collections"}}</a>
     <a href="/tags">{{t "nav.tags"}}</a>
     <a href="/password">{{t "nav.password"}}</a>
@@ -45,13 +46,16 @@
 {{define "day-icon"}}{{if .Day.StyleIcon}}{{.Day.StyleIcon}}{{else if .Day.ArchivedAt}}📦{{else if eq .State "past"}}✓{{else}}⏳{{end}}{{end}}
 {{define "day-badges"}}{{if .Day.ArchivedAt}}<span class="badge badge-archived">📦 {{t "days.archived"}}</span>{{end}}{{end}}
 {{define "day-when"}}<time datetime="{{.Target.Format "2006-01-02"}}">{{.Target.Format "2006-01-02"}}</time>{{if .Day.Time}} {{.Target.Format "15:04"}}{{end}}{{end}}
-{{define "day-item"}}<li><a class="day-item day-{{.State}}{{if .Day.ArchivedAt}} day-archived{{end}}" href="/days/{{.Day.ID}}">
+{{define "day-item"}}<li{{if .Shared}} class="shared-list-item"{{end}}><a class="day-item day-{{.State}}{{if .Shared}} day-shared{{end}}{{if .Day.ArchivedAt}} day-archived{{end}}" href="/days/{{.Day.ID}}">
   {{template "day-accent" .Day.StyleColor}}
   <span class="day-item-icon" aria-hidden="true">{{template "day-icon" .}}</span>
   <span class="day-item-main">
     <span class="day-item-title">{{.Day.Title}}</span>
     <span class="day-item-date">{{template "day-when" .}}{{if ne .Day.Repeat "none"}} · ↻ {{t (printf "days.repeat.%s" .Day.Repeat)}}{{end}}</span>
-    {{if or .Collection .Tags .Day.ArchivedAt}}<span class="chips chips-small">{{template "day-badges" .}}{{with .Collection}}<span class="chip chip-small" title="{{t "days.field.collection"}}">📚 {{if .Color}}{{template "swatch" .Color}} {{end}}{{template "group-name" .}}</span>{{end}}{{range .Tags}}<span class="chip chip-small">{{template "swatch" .Color}} {{template "group-name" .}}</span>{{end}}</span>{{end}}
+    {{if or .Collection .Tags .Day.ArchivedAt .Shared}}<span class="chips chips-small">{{template "day-badges" .}}{{if .Shared}}<span class="badge badge-shared">{{t "sharing.from" .ShareOwner}}</span>{{end}}{{with .Collection}}<span class="chip chip-small" title="{{t "days.field.collection"}}">📚 {{if .Color}}{{template "swatch" .Color}} {{end}}{{template "group-name" .}}</span>{{end}}{{range .Tags}}<span class="chip chip-small">{{template "swatch" .Color}} {{template "group-name" .}}</span>{{end}}</span>{{end}}
   </span>
   <span class="day-item-label">{{.Label}}</span>
-</a></li>{{end}}
+</a>{{if .HideAction}}<form method="post" action="{{.HideAction}}" class="inline-form shared-hide-form">
+  {{template "csrf-field" $}}
+  <button type="submit" class="link-button">{{if .Hidden}}{{t "sharing.unhide"}}{{else}}{{t "sharing.hide"}}{{end}}</button>
+</form>{{end}}</li>{{end}}

@@ -1,13 +1,14 @@
 {{define "title"}}{{.Day.Title}} · {{t "app.name"}}{{end}}
 {{define "content"}}
 <section class="stack">
-  <p><a href="/">← {{t "nav.home"}}</a></p>
-  <article class="card day-card day-{{.State}}{{if .Day.ArchivedAt}} day-archived{{end}}">
+  <p><a href="{{if .Shared}}/shared{{else}}/{{end}}">← {{if .Shared}}{{t "sharing.title"}}{{else}}{{t "nav.home"}}{{end}}</a></p>
+  <article class="card day-card day-{{.State}}{{if .Shared}} day-shared{{end}}{{if .Day.ArchivedAt}} day-archived{{end}}">
     {{template "day-accent" .Day.StyleColor}}
     {{range .Attachments}}{{if eq $.Day.StyleBgAttachmentID .ID}}<img class="day-background" src="/attachments/{{.ID}}" alt="">{{end}}{{end}}
     <header class="day-card-head">
       <span class="day-card-icon" aria-hidden="true">{{template "day-icon" .}}</span>
       <h1 class="day-heading">{{.Day.Title}}</h1>
+      {{if .Shared}}<p class="badge badge-shared">{{t "sharing.from" .ShareOwner}}</p>{{end}}
       {{if .Day.ArchivedAt}}<p class="chips">{{template "day-badges" .}}</p>{{end}}
     </header>
     <p class="countdown"><span class="countdown-big">{{.Big}}</span>{{with .Caption}} <span class="countdown-caption">{{.}}</span>{{end}}</p>
@@ -21,10 +22,11 @@
       <dt>{{t "days.field.date"}}</dt><dd><time datetime="{{.Day.Date}}">{{.Day.Date}}</time>{{with .Day.Time}} {{.}}{{else}} · {{t "days.all_day"}}{{end}}</dd>
       {{if ne .Day.Repeat "none"}}<dt>{{t "days.next"}}</dt><dd>{{template "day-when" .}}</dd>{{end}}
       <dt>{{t "days.field.repeat"}}</dt><dd>{{t (printf "days.repeat.%s" .Day.Repeat)}}</dd>
-      <dt>{{t "days.field.collection"}}</dt><dd><a class="chip" href="/collections/{{.Collection.ID}}">{{template "swatch" .Collection.Color}} {{template "group-name" .Collection}}</a></dd>
-      <dt>{{t "days.field.tags"}}</dt><dd class="chips">{{range .Tags}}<a class="chip" href="/tags/{{.ID}}">{{template "swatch" .Color}} {{template "group-name" .}}</a>{{end}}</dd>
+      {{if not .Shared}}<dt>{{t "days.field.collection"}}</dt><dd><a class="chip" href="/collections/{{.Collection.ID}}">{{template "swatch" .Collection.Color}} {{template "group-name" .Collection}}</a></dd>
+      <dt>{{t "days.field.tags"}}</dt><dd class="chips">{{range .Tags}}<a class="chip" href="/tags/{{.ID}}">{{template "swatch" .Color}} {{template "group-name" .}}</a>{{end}}</dd>{{end}}
     </dl>
-    {{with .Day.Comment}}<p class="day-comment">{{.}}</p>{{end}}
+    {{if or (not .Shared) .ShowComment}}{{with .Day.Comment}}<p class="day-comment">{{.}}</p>{{end}}{{end}}
+    {{if not .Shared}}
     <div class="chips">
       <a class="btn" href="/days/{{.Day.ID}}/edit">{{t "days.edit"}}</a>
       <form method="post" action="/days/{{.Day.ID}}/{{if .Day.ArchivedAt}}unarchive{{else}}archive{{end}}" class="inline-form"
@@ -33,13 +35,40 @@
         <button type="submit" class="btn">{{if .Day.ArchivedAt}}{{t "days.unarchive"}}{{else}}{{t "days.archive"}}{{end}}</button>
       </form>
     </div>
+    {{end}}
   </article>
+  {{if not .Shared}}
+  <section class="card form">
+    <h2>{{t "sharing.manage"}}</h2>
+    <p class="hint">{{t "sharing.identifiers_hint"}}</p>
+    <form method="post" action="/days/{{.Day.ID}}/shares" class="form">
+      {{template "csrf-field" .}}
+      <label>{{t "sharing.recipients"}}<textarea name="recipients" rows="3" required></textarea></label>
+      <label class="check"><input type="checkbox" name="show_comment" value="1"> {{t "sharing.show_comment"}}</label>
+      <button type="submit" class="btn">{{t "sharing.create"}}</button>
+    </form>
+    {{range .ShareRows}}
+    <form method="post" action="/shares/{{.Share.ID}}/edit" class="form share-entry">
+      {{template "csrf-field" $}}
+      <label>{{t "sharing.recipients"}}<textarea name="recipients" rows="2" required>{{.RecipientNames}}</textarea></label>
+      <label class="check"><input type="checkbox" name="show_comment" value="1"{{if .Share.ShowComment}} checked{{end}}> {{t "sharing.show_comment"}}</label>
+      <button type="submit" class="btn">{{t "sharing.save"}}</button>
+    </form>
+    <form method="post" action="/shares/{{.Share.ID}}/revoke" class="inline-form" hx-post="/shares/{{.Share.ID}}/revoke" hx-confirm="{{t "sharing.revoke_confirm"}}">
+      {{template "csrf-field" $}}
+      <button type="submit" class="link-button">{{t "sharing.revoke"}}</button>
+    </form>
+    {{end}}
+  </section>
+  {{end}}
   <section class="card day-attachments" id="attachments">
     <h2>{{t "days.attachments"}}</h2>
+    {{if not .Shared}}
     <p class="hint">{{t "attachments.card_usage" (bytes .Usage.CardUsed) (bytes .Usage.CardLimit)}}</p>
     <progress aria-label="{{t "attachments.card_usage" (bytes .Usage.CardUsed) (bytes .Usage.CardLimit)}}" max="{{if gt .Usage.CardLimit 0}}{{.Usage.CardLimit}}{{else}}1{{end}}" value="{{.Usage.CardUsed}}"></progress>
     <p class="hint">{{t "attachments.user_usage" (bytes .Usage.UserUsed) (bytes .Usage.UserLimit)}}</p>
     <progress aria-label="{{t "attachments.user_usage" (bytes .Usage.UserUsed) (bytes .Usage.UserLimit)}}" max="{{if gt .Usage.UserLimit 0}}{{.Usage.UserLimit}}{{else}}1{{end}}" value="{{.Usage.UserUsed}}"></progress>
+    {{end}}
     {{if .Attachments}}
     <ul class="attachment-list">
       {{range .Attachments}}<li class="attachment-item">
@@ -50,6 +79,7 @@
           <a href="/attachments/{{.ID}}">{{.Filename}}</a>
           <span class="hint">{{bytes .Size}}</span>
         </div>
+        {{if not $.Shared}}
         <div class="chips">
           {{if eq .Kind "image"}}<form method="post" action="/days/{{$.Day.ID}}/attachments/{{.ID}}/background" class="inline-form"
                 hx-post="/days/{{$.Day.ID}}/attachments/{{.ID}}/background">
@@ -62,10 +92,11 @@
             <button type="submit" class="link-button">{{t "attachments.delete"}}</button>
           </form>
         </div>
+        {{end}}
       </li>{{end}}
     </ul>
     {{else}}<p class="hint">{{t "days.attachments_empty"}}</p>{{end}}
-    <form method="post" action="/days/{{.Day.ID}}/attachments" enctype="multipart/form-data"
+    {{if not .Shared}}<form method="post" action="/days/{{.Day.ID}}/attachments" enctype="multipart/form-data"
           class="form attachment-upload" hx-post="/days/{{.Day.ID}}/attachments" hx-encoding="multipart/form-data">
       {{template "csrf-field" .}}
       <label>{{t "attachments.choose_file"}}<input type="file" name="file" required></label>
@@ -77,8 +108,11 @@
       <button type="button" class="btn" data-record-button>{{t "attachments.record_start"}}</button>
       <span role="status" aria-live="polite" data-record-status></span>
     </div>
+    {{end}}
   </section>
+  {{if not .Shared}}
   <script src="/static/attachments.js" defer></script>
   {{template "day-delete" .}}
+  {{end}}
 </section>
 {{end}}

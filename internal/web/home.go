@@ -8,6 +8,7 @@ import (
 
 	"pandadays/internal/days"
 	"pandadays/internal/i18n"
+	"pandadays/internal/share"
 )
 
 // dayItem is one row of a day list.
@@ -19,6 +20,11 @@ type dayItem struct {
 	// Collection and Tags are only set for the viewer's own days.
 	Collection *days.Group
 	Tags       []days.Group
+	Shared     bool
+	ShareOwner string
+	Hidden     bool
+	HideAction string
+	CSRFToken  string
 }
 
 type homePage struct {
@@ -77,8 +83,29 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		s.dayFail(w, r, "list groups for", err)
 		return
 	}
+	shared, err := s.shares.ListForUser(r.Context(), u.ID, false)
+	if err != nil {
+		s.dayFail(w, r, "list shared days", err)
+		return
+	}
+	sharedDays := make([]days.Day, 0, len(shared))
+	sharedByID := make(map[int64]share.SharedDay, len(shared))
+	for _, d := range shared {
+		sharedDays = append(sharedDays, sharedDayForList(d))
+		sharedByID[d.ID] = d
+	}
+	list = append(list, sharedDays...)
+	entries := days.HomeList(list, when, s.now(), userLocation(u))
+	items := s.dayItems(r, entries, groups)
+	for i := range items {
+		if sharedDay, ok := sharedByID[items[i].Day.ID]; ok {
+			items[i].Shared = true
+			items[i].ShareOwner = sharedDay.OwnerUsername
+			items[i].HideAction = "/shared/" + strconv.FormatInt(sharedDay.ID, 10) + "/hide"
+		}
+	}
 	page := homePage{pageData: newPageData(r), When: when,
-		Items: s.dayItems(r, days.HomeList(list, when, s.now(), userLocation(u)), groups)}
+		Items: items}
 	w.Header().Add("Vary", "HX-Request")
 	if isHTMX(r) && r.Header.Get("HX-History-Restore-Request") == "" {
 		s.renderPartial(w, r, "home.html", "home-days", page)
@@ -87,12 +114,21 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "home.html", page)
 }
 
+func sharedDayForList(d share.SharedDay) days.Day {
+	return days.Day{
+		ID: d.ID, OwnerID: d.OwnerID, Title: d.Title, Date: d.Date, Time: d.Time, Repeat: days.Repeat(d.Repeat),
+		StyleColor: d.StyleColor, StyleIcon: d.StyleIcon, StyleBgAttachmentID: d.StyleBgAttachmentID,
+		ArchivedAt: d.ArchivedAt,
+	}
+}
+
 func (s *Server) dayItems(r *http.Request, entries []days.Entry, groups groupIndex) []dayItem {
 	lang := i18n.LangFrom(r.Context())
 	items := make([]dayItem, 0, len(entries))
 	for _, e := range entries {
 		item := dayItem{Day: e.Day, State: e.Calc.Classification, Target: e.Calc.Target,
-			Label: s.i18n.T(lang, e.Calc.ListLabel.Key, e.Calc.ListLabel.Args...), Tags: groups.dayTags(e.Day)}
+			Label: s.i18n.T(lang, e.Calc.ListLabel.Key, e.Calc.ListLabel.Args...),
+			Tags:  groups.dayTags(e.Day), CSRFToken: CSRFToken(r.Context())}
 		if c, ok := groups.collections[e.Day.CollectionID]; ok {
 			item.Collection = &c
 		}

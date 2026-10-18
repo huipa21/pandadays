@@ -267,6 +267,9 @@ a.btn { text-decoration: none; }
 .day-item-date { color: var(--muted); font-size: 0.875rem; }
 .day-item-label { flex: none; max-width: 40%; text-align: right; font-weight: 700; color: var(--state-text); }
 .day-archived .day-item-title, .day-archived .day-item-label { color: var(--muted); }
+.shared-list-item { display: flex; align-items: center; gap: 0.5rem; }
+.shared-list-item .day-item { flex: 1; min-width: 0; }
+.shared-hide-form { flex: none; padding-right: 0.5rem; }
 .chips-small { gap: 0.25rem; margin-top: 0.25rem; }
 .chip.chip-small { min-height: 0; padding: 0 0.5rem; font-size: 0.75rem; }
 .chip-small .swatch { width: 0.75rem; height: 0.75rem; }
@@ -288,6 +291,7 @@ a.btn { text-decoration: none; }
 .day-attachments { display: grid; gap: 0.5rem; }
 .day-attachments > * { margin: 0; }
 .day-attachments h2 { font-size: 1.125rem; }
+.share-entry { padding-top: 0.75rem; border-top: 1px solid var(--border); }
 
 .form label.check {
   display: flex;

@@ -1,0 +1,8 @@
+{{define "title"}}{{t "sharing.title"}} · {{t "app.name"}}{{end}}
+{{define "content"}}
+<section class="stack">
+  <h1>{{t "sharing.title"}}</h1>
+  {{if .Items}}<ul class="day-list">{{range .Items}}{{template "day-item" .}}{{end}}</ul>
+  {{else}}<p class="empty-list">{{t "sharing.empty"}}</p>{{end}}
+</section>
+{{end}}

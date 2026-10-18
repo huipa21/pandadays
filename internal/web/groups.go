@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"pandadays/internal/days"
+	"pandadays/internal/share"
 )
 
 // groupSection describes how one kind of group (collections or tags) is
@@ -38,6 +39,7 @@ type groupPage struct {
 	Error        string
 	HideArchived bool
 	Items        []dayItem
+	ShareRows    []shareRow
 }
 
 const defaultGroupColor = "#2f855a"
@@ -159,6 +161,14 @@ func (h *groupHandlers) renderDetail(w http.ResponseWriter, r *http.Request, sta
 	}
 	page := groupPage{pageData: newPageData(r), Section: h.section,
 		Group: g, Form: form, Error: errKey, HideArchived: hideArchived, Items: items}
+	if h.section.Key == "collections" {
+		shares, err := h.s.shares.List(r.Context(), owner, share.TargetCollection, g.ID)
+		if err != nil {
+			h.fail(w, r, "list collection shares for", err)
+			return
+		}
+		page.ShareRows = shareRows(shares)
+	}
 	w.Header().Add("Vary", "HX-Request")
 	if r.Method == http.MethodGet && isHTMX(r) && r.Header.Get("HX-History-Restore-Request") == "" {
 		h.s.renderPartial(w, r, "group.html", "group-days", page)
