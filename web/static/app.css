@@ -11,7 +11,6 @@
   --focus: #276749;
   --radius: 12px;
   --space: 1rem;
-  --maxw: 960px;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
   line-height: 1.5;
   color-scheme: light dark;
@@ -96,8 +95,6 @@ img, video, audio { max-width: 100%; }
 
 .container {
   width: 100%;
-  max-width: var(--maxw);
-  margin: 0 auto;
   padding: var(--space);
 }
 

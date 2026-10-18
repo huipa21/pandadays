@@ -2,6 +2,10 @@
 
 PandaDays tracks meaningful days: a future target shows how much time is left; a past day shows how much time has passed. Mobile-first, works on laptop. Multi-user, self-hosted via Docker Compose.
 
+The main content fills the available viewport width with responsive page padding,
+without a fixed desktop width cap. Login, setup, and password forms remain
+centered and width-limited for readability.
+
 ---
 
 ## 1. Tech Stack

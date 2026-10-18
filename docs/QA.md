@@ -30,6 +30,18 @@ Last run: 2026-10-18, automated (see *Method*). The iOS Safari and Android Chrom
 
 Notes:
 
+Responsive-width regression check: resize the same page through 375, 768, 1280,
+and 1600 px. Main content must fill the viewport (including 16 px page padding
+on mobile and 24 px at widths of at least 768 px), rather than stop growing at
+960 px. Verify no horizontal document overflow; login, setup, and password cards
+must remain centered and no wider than 420 px. Check populated day lists,
+day forms, settings, and the two-column admin user list as well as empty pages.
+Passed on 2026-10-18 in the integrated Chromium browser against a fresh build:
+setup, populated home/day, day edit, settings, admin users, and password pages at
+all four widths. Home measured 1280 px and 1600 px wide at those viewport widths;
+scrolling pages filled the available width minus the browser scrollbar. No
+horizontal document overflow; auth cards stayed at or below 420 px.
+
 1. Playwright's WebKit build has no `MediaRecorder`/`getUserMedia`; the app correctly hides the record button. A Safari-format AAC `.m4a` voice note uploaded through the form is stored and served as audio, but this WebKit build cannot decode AAC (it also fails from a `blob:` URL of the same bytes, so the server is not at fault). **Re-check recording and playback on a real iPhone** — Safari records `audio/mp4`.
 2. Upload, progress and `<video playsinline>` markup pass; the WebKit build has no H.264 decoder (same `blob:` cross-check). Re-check playback on a real iPhone.
 3. Found during this QA: `.mov` files were sniffed as `application/octet-stream` and shown as plain file links. Fixed in `internal/media/sniff.go` (now `video/quicktime`).
