@@ -30,8 +30,8 @@ func (s *Server) requestLang(r *http.Request) string {
 	return i18n.Resolve(userLang, s.siteLang(r.Context()), r.Header.Get("Accept-Language"))
 }
 
-// siteLang returns the admin-set site_lang setting, else PANDA_LANG if it was
-// set explicitly, else "" so that Accept-Language decides.
+// siteLang returns the admin-set site_lang setting, or "" so that
+// Accept-Language decides.
 func (s *Server) siteLang(ctx context.Context) string {
 	if s.db != nil {
 		var v string
@@ -44,9 +44,6 @@ func (s *Server) siteLang(ctx context.Context) string {
 		case !errors.Is(err, sql.ErrNoRows):
 			s.log.Warn("read site_lang", "err", err)
 		}
-	}
-	if s.cfg.LangSet {
-		return s.cfg.Lang
 	}
 	return ""
 }

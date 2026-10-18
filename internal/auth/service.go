@@ -46,6 +46,8 @@ type CreateUserParams struct {
 	Password           string
 	IsAdmin            bool
 	MustChangePassword bool
+	Lang               string
+	Timezone           string
 }
 
 // CreateUser atomically creates an active account and its reserved defaults.
@@ -54,6 +56,9 @@ func (s *Service) CreateUser(ctx context.Context, p CreateUserParams, now time.T
 	p.Username, p.Email = strings.TrimSpace(p.Username), strings.TrimSpace(p.Email)
 	if p.Username == "" || p.Email == "" {
 		return nil, ErrIdentity
+	}
+	if err := validatePreferences(p.Lang, p.Timezone); err != nil {
+		return nil, err
 	}
 	hash, err := HashPassword(p.Password)
 	if err != nil {
@@ -88,9 +93,9 @@ func insertUser(ctx context.Context, tx *sql.Tx, p CreateUserParams, hash string
 		return nil, ErrIdentity
 	}
 	res, err := tx.ExecContext(ctx, `INSERT INTO users
-		(username, email, password_hash, is_admin, must_change_password, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		p.Username, p.Email, hash, p.IsAdmin, p.MustChangePassword, now.Unix(), now.Unix())
+		(username, email, password_hash, is_admin, must_change_password, lang, timezone, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?)`,
+		p.Username, p.Email, hash, p.IsAdmin, p.MustChangePassword, p.Lang, p.Timezone, now.Unix(), now.Unix())
 	if err != nil {
 		return nil, fmt.Errorf("insert user: %w", err)
 	}
@@ -107,7 +112,7 @@ func insertUser(ctx context.Context, tx *sql.Tx, p CreateUserParams, hash string
 		}
 	}
 	return &User{ID: id, Username: p.Username, Email: p.Email, IsAdmin: p.IsAdmin,
-		IsActive: true, MustChangePassword: p.MustChangePassword}, nil
+		IsActive: true, MustChangePassword: p.MustChangePassword, Lang: p.Lang, Timezone: p.Timezone}, nil
 }
 
 // Authenticate applies the same error and bcrypt work to unknown and inactive users.

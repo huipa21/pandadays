@@ -18,14 +18,13 @@ RUN apk add --no-cache ca-certificates \
     && chmod 750 /data
 COPY --from=build /out/panda /usr/local/bin/panda
 
-ENV PANDA_ADDR=:8080 \
-    PANDA_DATA_DIR=/data \
-    TZ=UTC
+ENV ADDR=:8080 \
+    DATA_DIR=/data
 USER panda:panda
 WORKDIR /data
 VOLUME ["/data"]
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -q -T 4 -O /dev/null "http://127.0.0.1:$(printf '%s' "$PANDA_ADDR" | sed 's/.*://')/healthz" || exit 1
+    CMD wget -q -T 4 -O /dev/null http://127.0.0.1:8080/healthz || exit 1
 ENTRYPOINT ["panda"]
 CMD ["serve"]

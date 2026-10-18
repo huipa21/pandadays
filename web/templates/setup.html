@@ -24,6 +24,20 @@
       <input type="password" name="confirm_password" autocomplete="new-password" minlength="8" required>
     </label>
     <p id="password-hint" class="hint">{{t "password.hint"}}</p>
+    <label>{{t "settings.language"}}
+      <select name="lang">
+        <option value=""{{if eq .Language ""}} selected{{end}}>{{t "settings.language_auto"}}</option>
+        <option value="en" lang="en"{{if eq .Language "en"}} selected{{end}}>{{t "lang.en"}}</option>
+        <option value="zh" lang="zh"{{if eq .Language "zh"}} selected{{end}}>{{t "lang.zh"}}</option>
+      </select>
+    </label>
+    <label>{{t "settings.timezone"}}
+      <input type="text" name="timezone" value="{{.Timezone}}" list="setup-timezones" data-browser-timezone placeholder="{{t "settings.timezone_auto"}}" autocomplete="off" aria-describedby="timezone-hint">
+    </label>
+    <datalist id="setup-timezones">
+      {{range .Timezones}}<option value="{{.}}">{{end}}
+    </datalist>
+    <p id="timezone-hint" class="hint">{{t "setup.timezone_hint"}}</p>
     <button type="submit" class="btn">{{t "setup.submit"}}</button>
   </form>
 </section>

@@ -113,6 +113,18 @@ func (s *Service) SetTimezoneIfEmpty(ctx context.Context, userID int64, name str
 // UpdatePreferences saves the user's language and timezone preferences.
 // Empty values allow the site/browser defaults to be used.
 func (s *Service) UpdatePreferences(ctx context.Context, userID int64, lang, timezone string, now time.Time) error {
+	if err := validatePreferences(lang, timezone); err != nil {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `UPDATE users SET lang = NULLIF(?, ''), timezone = NULLIF(?, ''), updated_at = ?
+		WHERE id = ?`, lang, timezone, now.Unix(), userID)
+	if err != nil {
+		return fmt.Errorf("update user preferences: %w", err)
+	}
+	return nil
+}
+
+func validatePreferences(lang, timezone string) error {
 	if lang != "" && !i18n.IsSupported(lang) {
 		return ErrLanguage
 	}
@@ -120,11 +132,6 @@ func (s *Service) UpdatePreferences(ctx context.Context, userID int64, lang, tim
 		if _, err := ValidateTimezone(timezone); err != nil {
 			return err
 		}
-	}
-	_, err := s.db.ExecContext(ctx, `UPDATE users SET lang = NULLIF(?, ''), timezone = NULLIF(?, ''), updated_at = ?
-		WHERE id = ?`, lang, timezone, now.Unix(), userID)
-	if err != nil {
-		return fmt.Errorf("update user preferences: %w", err)
 	}
 	return nil
 }

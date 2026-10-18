@@ -24,7 +24,7 @@ Run from the project root in PowerShell:
 
 ```powershell
 .\scripts\build.ps1
-scp .\dist\pandadays-image.tar compose.yaml .env.example user@server:/opt/pandadays/
+scp .\dist\pandadays-image.tar compose.yaml user@server:/opt/pandadays/
 ```
 
 The script automatically detects Docker, then Podman; use `-Engine podman`
@@ -37,17 +37,17 @@ there first, with write access for that user. The existing multi-stage
 Dockerfile builds the CGO-free binary and packages it with a non-root Alpine
 runtime; no server-side build is required.
 
-Like PandaBlog, the script generates `YYYYMMDDTHHmmssZ-g<12-character-SHA>`
+The script generates `YYYYMMDDTHHmmssZ-g<12-character-SHA>`
 from the commit's **committer timestamp in UTC**, not the build time. The same
 commit always produces the same version. It embeds that version in the binary
-(including backup manifests), tags the image as both `pandadays:<version>` and
-`pandadays:latest`, and saves **both tags** in `dist/pandadays-image.tar`.
+(including backup manifests), tags the image as both `localhost/pandadays:<version>` and
+`localhost/pandadays:latest`, and saves **both tags** in `dist/pandadays-image.tar`.
 No manual version or tag is needed. Compose runs `latest` by default.
 
 Builds require a commit and a clean working tree, including untracked files.
 Commit your changes before building. For an intentional development build,
-set `$env:PANDA_ALLOW_DIRTY = "1"`; its generated version gets a `.dirty`
-suffix. Remove that override afterward with `Remove-Item Env:PANDA_ALLOW_DIRTY`.
+set `$env:ALLOW_DIRTY = "1"`; its generated version gets a `.dirty`
+suffix. Remove that override afterward with `Remove-Item Env:ALLOW_DIRTY`.
 No Git metadata or Git failure ever falls back to a made-up version.
 
 ### Run on the server
@@ -57,12 +57,15 @@ load the transferred image and configure the deployment:
 
 ```sh
 docker load --input pandadays-image.tar
-cp .env.example .env
+mkdir -p data
+sudo chown 10001:10001 data
+sudo chmod 750 data
 ```
 
-Edit `.env` for the server, especially the public URL and HTTPS cookie setting
-described below. Only copy `.env.example` on the first deployment; preserve
-your existing `.env` on updates. Then start the service:
+Edit `compose.yaml` for the server, especially `BASE_URL`, and connect your
+reverse proxy to the service's Docker network as described below. All deployment configuration lives
+in this file; no `.env` file is needed. Preserve your edits on updates.
+Then start the service:
 
 ```sh
 docker compose up -d --no-build
@@ -70,19 +73,21 @@ docker compose ps
 docker compose logs pandadays
 ```
 
-Compose uses `PANDA_IMAGE` (default `pandadays:latest`) with `pull_policy: never`:
+Compose uses `localhost/pandadays:latest` with `pull_policy: never`:
 the image must already be loaded locally, and a missing image is an error.
 For a local laptop deployment, skip the transfer and load steps after building.
-Open <http://localhost:8080/setup> locally, or `/setup` at your configured HTTPS
-URL on the server. The default Compose configuration binds only to localhost
-and allows plain HTTP cookies for local use. For remote access, configure HTTPS
-as described below before exposing the service.
+Open `/setup` at your configured public HTTPS URL. Compose exposes port 8080
+to containers on its network but does not publish a host port. Configure the
+reverse proxy as described below before accessing the service.
 
 ### First-run setup and accounts
 
 1. Find the one-time setup token in `docker compose logs pandadays`.
 2. Enter it at `/setup`, choose an admin username (for example, `admin`), email,
-   and password. Setup signs you in automatically.
+   and password. Language follows your browser by default; you can choose
+   English or Chinese. Timezone is detected from your browser and can be edited
+   before submitting. Both preferences can be changed later in **Settings**.
+   Setup signs you in automatically.
 3. Open **Admin users** (`/admin/users`), create a user, and securely deliver
    their displayed temporary password. It is displayed only in that response.
 4. Sign out, then sign in at `/login` as the new user. On first login they must
@@ -109,44 +114,64 @@ Do not run it during a restore.
 
 ## Configuration
 
-Optionally copy [`.env.example`](.env.example) to `.env` and edit it before
-starting. Compose reads `.env` automatically; do not commit deployment secrets.
-After editing, use `docker compose up -d` to recreate the service with the new
+Edit [`compose.yaml`](compose.yaml) directly before starting; do not commit
+deployment secrets. After editing, use `docker compose up -d` to recreate the service with the new
 configuration (a restart alone does not reload environment changes).
 
 | Variable | Binary/image default | Compose default / notes |
 |---|---|---|
-| `PANDA_ADDR` | `:8080` | Fixed to `:8080` inside the container. |
-| `PANDA_DATA_DIR` | `/data` | Fixed to `/data`, backed by the named volume. |
-| `PANDA_BASE_URL` | Empty | `http://localhost:8080`; set to the public URL. |
-| `PANDA_LANG` | `en` | Blank: use browser language, then English. Explicit `en` or `zh` sets the site default; user/site preferences can override it. |
-| `PANDA_COOKIE_SECURE` | `true` | `false` for local HTTP only; **set `true` for HTTPS deployments**. |
-| `TZ` | `UTC` | `UTC`; IANA timezone fallback, e.g. `Asia/Shanghai`. User timezones take precedence for date calculations. Timezone data is embedded. |
-| `PANDA_BIND` | Compose only | `127.0.0.1`; host address for the published port. |
-| `PANDA_PORT` | Compose only | `8080`; host port. Update the base URL if changing it. |
-| `PANDA_IMAGE` | Compose only | `pandadays:latest`; prebuilt local image name/tag. Compose never builds or pulls it. |
+| `BASE_URL` | Empty | `https://days.example.com`; replace with the actual public address users visit, not the internal proxy upstream. |
+| `COOKIE_SECURE` | `true` | `true` for HTTPS; use `false` only for plain-HTTP local development. |
+
+The image sets `ADDR=:8080` (listen on all container interfaces on port 8080)
+and `DATA_DIR=/data` (the container's data directory). These stay fixed in the
+container and are not repeated in Compose. The host `./data` folder is mounted
+at `/data`. Native, non-container runs can override `ADDR` and `DATA_DIR`.
+
+Language and timezone need no environment variables. Language follows the
+browser's `Accept-Language` header (falling back to English) unless a user or
+admin site preference overrides it. The browser timezone is detected during
+setup and, for other users without a saved timezone, after login. Users can
+change either preference in **Settings**. `TZ` is optional for the server's
+fallback timezone only (UTC in the image); it does not set a user's timezone.
+Timezone data is embedded.
+
+The `expose: ["8080"]` entry documents the container port; it does not publish
+it on the host or restrict access by other containers on the same network.
+A containerized reverse proxy must share that network and connect to
+`pandadays:8080`. Set `BASE_URL` to the public HTTPS address users visit,
+including a port only when it is part of that public address.
+
+Existing deployments must rename the old prefixed environment variables;
+they are no longer read. There is no language environment override.
 
 The build script supplies the Dockerfile's required `VERSION` argument
 automatically. Setting an environment variable on the server does not change
 the binary version. Use `docker compose exec pandadays panda version` to see
 the deployed version.
 
-The image runs as UID/GID `10001:10001`. The default named volume is initialized
-with writable permissions. If replacing it with a bind mount, pre-create that
-directory and grant this UID/GID read/write access; the image does not start as
-root to repair permissions. Keep the container data path and port unchanged
-unless also updating mounts, port mappings, and any proxy configuration.
+The image runs as UID/GID `10001:10001`. Pre-create the host `./data` directory
+and grant this UID/GID read/write access as shown above; the image does not
+start as root to repair bind-mount permissions. Keep the container data path
+and port unchanged.
+
+If migrating an existing named-volume deployment, stop the service and copy
+or restore its data into `./data` before changing the mount. An empty bind
+mount does not automatically import the old volume.
 
 ### Storage, health, and updates
 
-The single `panda-data` volume contains `pandadays.db`, SQLite sidecars,
+The host `./data` folder contains `pandadays.db`, SQLite sidecars,
 `media/`, `backups/`, and `tmp/`. Keep it on local storage suitable for SQLite,
-not a shared network filesystem. `docker compose down` preserves it;
-**`docker compose down -v` deletes the volume and all site data**.
+not a shared network filesystem. Both `docker compose down` and
+`docker compose down -v` preserve this bind-mounted folder. Back it up before
+changing or removing it.
 
 `GET /healthz` is unauthenticated. The image and `compose.yaml` probe it every
-30 seconds (the Compose copy keeps health checks working with Podman, whose
-OCI-format builds drop the image `HEALTHCHECK`). The image runs
+30 seconds. The build script uses Docker image format, which retains the
+Dockerfile's `HEALTHCHECK`. OCI image format does not retain that instruction;
+the explicit Compose health check also works if you build an OCI-format image
+separately. Neither check publishes a port on the host. The image runs
 the static, CGO-free Go binary as a non-root user. Health checks return 503
 during restore maintenance; this is expected. Docker's restart policy handles
 process exits, not an unhealthy status by itself.
@@ -161,11 +186,11 @@ docker compose up -d --no-build --force-recreate
 docker compose logs --tail=100 pandadays
 ```
 
-Leave `PANDA_IMAGE=pandadays:latest` for automatic updates without editing tags.
+Leave `image: localhost/pandadays:latest` for updates without editing tags.
 `--force-recreate` ensures an update when reusing `latest`. Both tags are loaded,
-so you can optionally pin `PANDA_IMAGE` to a generated version for rollback
+so you can optionally pin `image` to `localhost/pandadays:<version>` for rollback
 (subject to schema compatibility). Keep the same deployment directory so
-Compose reuses the existing named data volume.
+Compose reuses the existing `./data` folder.
 
 Migrations run automatically at startup. Do not assume an older binary can
 read a newer schema; keep the previous source/image and a pre-upgrade backup.
@@ -218,7 +243,7 @@ docker compose start pandadays
 `docker compose cp` requires an existing service container. On a fresh host,
 transfer the deployment files and load the prebuilt image as described above,
 then run `docker compose create --no-build pandadays` (do not start it before
-restoring). Keep the same Compose project name if restoring an existing volume.
+restoring). Prepare the bind-mounted `./data` directory as above.
 Ensure copied restore files are readable by UID 10001. If a command fails,
 inspect the error and recovery files before starting the service.
 
@@ -236,38 +261,59 @@ See [the backup specification](docs/SPEC.md#63-admin-site-backup--restore-admin-
 
 ## Reverse proxy and HTTPS
 
-Terminate TLS at a trusted reverse proxy. Set these in `.env`:
+Terminate TLS at a trusted reverse proxy. Set these under `environment` in
+`compose.yaml`:
 
-```dotenv
-PANDA_BASE_URL=https://days.example.com
-PANDA_COOKIE_SECURE=true
+```yaml
+BASE_URL: https://days.example.com
+COOKIE_SECURE: "true"
 ```
 
-Keep the default localhost binding when the proxy runs on the host. A proxy
-in another container must instead share a Docker network with PandaDays and
-connect to `http://pandadays:8080`; `localhost` inside that proxy is not the
-PandaDays container. Avoid publishing the application directly to the Internet.
+For Caddy in the same Compose project, use this upstream in its Caddyfile:
 
-Example Nginx location inside an HTTPS virtual host, with Nginx on the host:
-
-```nginx
-location / {
-    proxy_pass http://127.0.0.1:8080;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    client_max_body_size 0;
-    proxy_request_buffering off;
-    proxy_read_timeout 3600s;
-    proxy_send_timeout 3600s;
+```caddyfile
+days.example.com {
+    reverse_proxy pandadays:8080
 }
 ```
 
-Configure certificates and the HTTP-to-HTTPS redirect in your proxy. The body
-size above is unlimited because full-site restore uploads can be much larger
-than a single attachment; choose a sufficiently large explicit limit if your
-policy requires one. Adjust timeouts for your largest restore, and check any
-other proxy/CDN limits. Application attachment and import quotas still apply.
+Replace `days.example.com` with your domain. Both services must share a Docker
+network. Services in the same Compose project use its default network unless
+configured otherwise. If Caddy is in another Compose project, attach both
+services to the same external network. Publish only the proxy's HTTP/HTTPS
+ports; PandaDays needs no host port.
+
+Ready-to-adapt **host-installed** proxy configurations are in
+[`deploy/nginx.conf`](deploy/nginx.conf) and [`deploy/Caddyfile`](deploy/Caddyfile).
+These use `127.0.0.1:8080` and require adding a loopback host mapping to the
+PandaDays service (the default Compose file intentionally has none):
+
+```yaml
+ports:
+  - "127.0.0.1:8080:8080"
+```
+
+You can use another host port, such as `127.0.0.1:9000:8080`, and update the
+host proxy's upstream accordingly. The container port remains 8080.
+
+For Nginx, install the config in your distribution's site configuration
+directory and provide a certificate at the paths referenced in the file (for
+example, with Certbot). For Caddy, install the Caddyfile and ensure DNS points
+to the server and inbound ports 80 and 443 are open; Caddy obtains and renews
+HTTPS certificates automatically.
+
+`localhost` inside a proxy container is not the PandaDays container. Use the
+service name as above, and avoid publishing the application directly to the
+Internet.
+
+The Nginx example sets `client_max_body_size 0`, which allows unlimited request
+bodies. Caddy also has no request-body size limit by default; the Caddyfile
+intentionally does not set `request_body max_size`. These settings allow large
+full-site restore uploads. Choose a sufficiently large explicit limit if your
+policy requires one, and check any other proxy/CDN limits as well. Nginx proxy
+timeouts are set to one hour for long restore operations; adjust them as
+needed. Application attachment and import quotas still apply.
+
 HTTPS is also required for browser microphone recording outside localhost.
 
 ## Develop or run without Docker
@@ -278,15 +324,15 @@ timezone data are embedded; no Node.js, CGO, or external SQLite is needed.
 
 ```sh
 go build -o panda ./cmd/panda
-PANDA_DATA_DIR=./data PANDA_COOKIE_SECURE=false ./panda serve
+DATA_DIR=./data COOKIE_SECURE=false ./panda serve
 ```
 
 PowerShell equivalent:
 
 ```powershell
 go build -o panda.exe .\cmd\panda
-$env:PANDA_DATA_DIR = ".\data"
-$env:PANDA_COOKIE_SECURE = "false"
+$env:DATA_DIR = ".\data"
+$env:COOKIE_SECURE = "false"
 .\panda.exe serve
 ```
 

@@ -17,7 +17,7 @@ Spec: [docs/SPEC.md](docs/SPEC.md). Tasks: [docs/TASKS.md](docs/TASKS.md). Imple
 - Mobile-first CSS; test at 375px and 1280px.
 
 ## Commands
-- Run: `go run ./cmd/panda serve` (set `PANDA_DATA_DIR=./data PANDA_COOKIE_SECURE=false` locally)
+- Run: `go run ./cmd/panda serve` (set `DATA_DIR=./data COOKIE_SECURE=false` locally)
 - Test: `go test ./...` (run the package you changed first)
 - Lint: `go vet ./...`
 

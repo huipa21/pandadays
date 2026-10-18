@@ -132,6 +132,7 @@
   "setup.email": "管理员邮箱",
   "setup.password": "密码",
   "setup.submit": "创建管理员",
+  "setup.timezone_hint": "自动检测浏览器时区。可在此处修改，也可稍后在设置中修改。",
   "setup.error.token": "初始化令牌无效或已过期。请重启服务器以获取新令牌。",
   "setup.error.rate_limited": "尝试次数过多，请稍后再试。",
   "setup.error.policy": "密码长度须为 8–32 个字符。",

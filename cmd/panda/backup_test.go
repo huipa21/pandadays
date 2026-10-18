@@ -12,7 +12,7 @@ import (
 func TestBackupRestoreCLI(t *testing.T) {
 	dir := t.TempDir()
 	env := func(key string) string {
-		if key == "PANDA_DATA_DIR" {
+		if key == "DATA_DIR" {
 			return dir
 		}
 		return ""
@@ -113,7 +113,7 @@ func TestBackupCLIConfigurationAndWriteErrors(t *testing.T) {
 			option = "--file"
 		}
 		env := func(key string) string {
-			if key == "PANDA_LANG" {
+			if key == "COOKIE_SECURE" {
 				return "invalid"
 			}
 			return ""
@@ -129,7 +129,7 @@ func TestBackupCLIConfigurationAndWriteErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	env := func(key string) string {
-		if key == "PANDA_DATA_DIR" {
+		if key == "DATA_DIR" {
 			return dir
 		}
 		return ""

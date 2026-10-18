@@ -114,6 +114,9 @@ func (s *Service) CompleteSetup(ctx context.Context, ip, token string, p CreateU
 	if p.Username == "" || p.Email == "" {
 		return nil, ErrIdentity
 	}
+	if err := validatePreferences(p.Lang, p.Timezone); err != nil {
+		return nil, err
+	}
 	p.IsAdmin, p.MustChangePassword = true, false
 	hash, err := HashPassword(p.Password)
 	if err != nil {

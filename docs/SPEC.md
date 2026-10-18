@@ -24,12 +24,21 @@ Dependencies are kept minimal: SQLite driver, `golang.org/x/crypto/bcrypt`. Ever
 
 | Var | Default | Meaning |
 |---|---|---|
-| `PANDA_ADDR` | `:8080` | Listen address |
-| `PANDA_DATA_DIR` | `/data` | Data root |
-| `PANDA_BASE_URL` | — | Public URL (used for cookie/redirect correctness) |
-| `PANDA_LANG` | `en` | Site default language (`en` or `zh`) |
-| `PANDA_COOKIE_SECURE` | `true` | Set `false` for plain-HTTP local dev |
+| `ADDR` | `:8080` | Listen address; set by the image, not repeated in Compose |
+| `DATA_DIR` | `/data` | Data root; set by the image, bind-mounted from `./data` |
+| `BASE_URL` | — | Actual public address users visit, including scheme and any public port |
+| `COOKIE_SECURE` | `true` | Set `false` for plain-HTTP local dev |
 | `TZ` | `UTC` | Server timezone (fallback only) |
+
+Deployment settings live directly in `compose.yaml`, with no `.env.example`
+or variable interpolation. Compose runs the prebuilt local
+`localhost/pandadays:latest` image and never pulls it. Compose exposes port
+8080 without publishing a host port; a containerized reverse proxy shares
+the network and connects to `pandadays:8080`. A host-installed proxy requires
+an explicit loopback host mapping. Keep the container port (8080) and data
+directory (`/data`) unchanged. Language
+and user timezone come from the browser and can be chosen in setup/settings;
+neither needs a deployment environment setting.
 
 ---
 
@@ -168,8 +177,8 @@ Other subcommands:
 - `panda version`
 
 ### 4.5 Timezone & language
-- Timezone: user setting. If empty, the browser's `Intl.DateTimeFormat().resolvedOptions().timeZone` is posted on first page load after login and saved. Validated with `time.LoadLocation` (embed `time/tzdata`).
-- Language: `en` or `zh`. Resolution order: user setting → `PANDA_LANG`/site setting → `Accept-Language` → `en`.
+- Timezone: per-user setting, detected from the browser's `Intl.DateTimeFormat().resolvedOptions().timeZone` during setup, editable before submission and later in Settings. If empty, the browser timezone is posted on first page load after login and saved. Validated with `time.LoadLocation` (embed `time/tzdata`). Server timezone (UTC in the image) is only a fallback until capture succeeds.
+- Language: `en` or `zh`, selectable during setup and later in Settings. Resolution order: user setting → site setting → `Accept-Language` → `en`. Setup defaults to browser language; there is no language environment variable.
 
 ---
 
@@ -257,7 +266,7 @@ CLI `panda backup` / `panda restore` share the same `internal/backup` package.
 
 Stop the server before running either command so the database snapshot and media
 remain consistent, and so no open handles interfere with restore. Set
-`PANDA_DATA_DIR` to the site's data directory, then run:
+`DATA_DIR` to the site's data directory, then run:
 
 ```
 panda backup --out pandadays-backup.tar.gz

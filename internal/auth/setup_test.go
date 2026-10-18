@@ -74,12 +74,16 @@ func TestCompleteSetupValid(t *testing.T) {
 	p := setupParams()
 	p.Username = "  admin "
 	p.MustChangePassword = true // ignored: setup chooses its own password
+	p.Lang, p.Timezone = "zh", "Asia/Shanghai"
 	u, err := s.CompleteSetup(ctx, "192.0.2.1", token, p, testNow.Add(30*time.Minute))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !u.IsAdmin || u.MustChangePassword || u.Username != "admin" {
 		t.Fatalf("unexpected admin: %+v", u)
+	}
+	if u.Lang != p.Lang || u.Timezone != p.Timezone {
+		t.Fatalf("preferences missing from created admin: %+v", u)
 	}
 	if countSetupRows(t, db) != 0 {
 		t.Fatal("setup token not deleted")
@@ -155,6 +159,19 @@ func TestCompleteSetupValidationKeepsToken(t *testing.T) {
 	same.Email = "  "
 	if _, err := s.CompleteSetup(ctx, "192.0.2.1", token, same, testNow); !errors.Is(err, ErrIdentity) {
 		t.Fatalf("colliding identity: err=%v", err)
+	}
+	for _, tc := range []struct {
+		lang, timezone string
+		want           error
+	}{
+		{"fr", "UTC", ErrLanguage},
+		{"en", "Mars/Olympus", ErrTimezone},
+	} {
+		p := setupParams()
+		p.Lang, p.Timezone = tc.lang, tc.timezone
+		if _, err := s.CompleteSetup(ctx, "192.0.2.1", token, p, testNow); !errors.Is(err, tc.want) {
+			t.Fatalf("invalid preferences: err=%v, want %v", err, tc.want)
+		}
 	}
 	if countSetupRows(t, db) != 2 {
 		t.Fatal("failed validation must not consume the token")

@@ -1,0 +1,4 @@
+days.example.com {
+	# No request_body max_size is set: Caddy does not impose a body-size limit by default.
+	reverse_proxy 127.0.0.1:8080
+}

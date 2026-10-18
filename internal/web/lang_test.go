@@ -58,12 +58,6 @@ func TestLayoutRendersInBothLanguages(t *testing.T) {
 
 func TestLangResolution(t *testing.T) {
 	noenv := func(string) string { return "" }
-	zhEnv := func(k string) string {
-		if k == "PANDA_LANG" {
-			return "zh"
-		}
-		return ""
-	}
 
 	t.Run("default en", func(t *testing.T) {
 		assertLang(t, getPage(t, newTestServer(t), "/login", ""), "en")
@@ -71,21 +65,22 @@ func TestLangResolution(t *testing.T) {
 	t.Run("accept-language when no site lang", func(t *testing.T) {
 		assertLang(t, getPage(t, newTestServer(t), "/login", "zh-CN,zh;q=0.9,en;q=0.8"), "zh")
 	})
-	t.Run("explicit PANDA_LANG beats accept-language", func(t *testing.T) {
-		assertLang(t, getPage(t, newTestServerWith(t, zhEnv, nil), "/login", "en-US"), "zh")
-	})
-	t.Run("site_lang setting beats PANDA_LANG and accept-language", func(t *testing.T) {
+	t.Run("site_lang setting beats accept-language", func(t *testing.T) {
 		database := dbtest.Open(t)
 		if _, err := database.Exec(`INSERT INTO settings (key, value) VALUES ('site_lang', 'en')`); err != nil {
 			t.Fatal(err)
 		}
 		// Without an admin, /login redirects; /setup is the public page here.
-		assertLang(t, getPage(t, newTestServerWith(t, zhEnv, database), "/setup", "zh"), "en")
+		assertLang(t, getPage(t, newTestServerWith(t, noenv, database), "/setup", "zh"), "en")
 	})
 	t.Run("no site_lang row falls through to accept-language", func(t *testing.T) {
 		assertLang(t, getPage(t, newTestServerWith(t, noenv, dbtest.Open(t)), "/setup", "zh"), "zh")
 	})
 	t.Run("query override beats site setting", func(t *testing.T) {
-		assertLang(t, getPage(t, newTestServerWith(t, zhEnv, nil), "/login?lang=en", "zh"), "en")
+		database := dbtest.Open(t)
+		if _, err := database.Exec(`INSERT INTO settings (key, value) VALUES ('site_lang', 'zh')`); err != nil {
+			t.Fatal(err)
+		}
+		assertLang(t, getPage(t, newTestServerWith(t, noenv, database), "/setup?lang=en", "zh"), "en")
 	})
 }

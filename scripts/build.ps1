@@ -23,8 +23,8 @@ function Get-BuildIdentity {
     $epoch = (Invoke-BuildCommand git @('-C', $Root, 'show', '-s', '--format=%ct', $sha)).Trim()
     $status = Invoke-BuildCommand git @('-C', $Root, 'status', '--porcelain')
     $dirty = [bool]$status
-    if ($dirty -and $env:PANDA_ALLOW_DIRTY -ne '1') {
-        throw "Working tree has uncommitted changes. Commit them first, or set PANDA_ALLOW_DIRTY=1 to create a .dirty build."
+    if ($dirty -and $env:ALLOW_DIRTY -ne '1') {
+        throw "Working tree has uncommitted changes. Commit them first, or set ALLOW_DIRTY=1 to create a .dirty build."
     }
     if ($sha -notmatch '^[0-9a-f]{40,64}$' -or $epoch -notmatch '^\d+$') {
         throw 'Invalid Git commit metadata.'
@@ -46,8 +46,8 @@ function Invoke-ImageBuild {
         else { throw 'Install Docker Desktop or Podman before building.' }
     }
 
-    $versionTag = "pandadays:$version"
-    $latestTag = 'pandadays:latest'
+    $versionTag = "localhost/pandadays:$version"
+    $latestTag = 'localhost/pandadays:latest'
     $arguments = if ($Engine -eq 'docker') {
         @('buildx', 'build', '--load')
     } else {

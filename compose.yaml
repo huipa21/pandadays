@@ -1,19 +1,14 @@
 services:
   pandadays:
-    image: ${PANDA_IMAGE:-pandadays:latest}
+    image: localhost/pandadays:latest
     pull_policy: never
-    ports:
-      - "${PANDA_BIND:-127.0.0.1}:${PANDA_PORT:-8080}:8080"
+    expose:
+      - "8080"
     environment:
-      PANDA_ADDR: ":8080"
-      PANDA_DATA_DIR: /data
-      PANDA_BASE_URL: ${PANDA_BASE_URL:-http://localhost:8080}
-      PANDA_LANG: ${PANDA_LANG:-}
-      PANDA_COOKIE_SECURE: "${PANDA_COOKIE_SECURE:-false}"
-      TZ: ${TZ:-UTC}
+      BASE_URL: https://days.example.com # Replace with your public address.
+      COOKIE_SECURE: "true"
     volumes:
-      - panda-data:/data
-    # Mirrors the Dockerfile HEALTHCHECK; Podman builds OCI images, which drop it.
+      - ./data:/data
     healthcheck:
       test: ["CMD", "wget", "-q", "-T", "4", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
       interval: 30s
@@ -22,6 +17,3 @@ services:
       retries: 3
     restart: unless-stopped
     stop_grace_period: 30s
-
-volumes:
-  panda-data:

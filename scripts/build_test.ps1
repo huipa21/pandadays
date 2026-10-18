@@ -16,7 +16,7 @@ function Assert-Fails {
 }
 
 $root = Join-Path ([IO.Path]::GetTempPath()) "pandadays-build-test-$([guid]::NewGuid())"
-$oldDirty = $env:PANDA_ALLOW_DIRTY
+$oldDirty = $env:ALLOW_DIRTY
 $oldAuthorDate = $env:GIT_AUTHOR_DATE
 $oldCommitterDate = $env:GIT_COMMITTER_DATE
 $script:calls = [Collections.Generic.List[object]]::new()
@@ -33,7 +33,7 @@ function podman {
 
 try {
     New-Item -ItemType Directory $root | Out-Null
-    $env:PANDA_ALLOW_DIRTY = $null
+    $env:ALLOW_DIRTY = $null
     Assert-Fails { Get-BuildIdentity $root } 'failed'
     Invoke-BuildCommand git @('-C', $root, 'init', '--quiet')
     Assert-Fails { Get-BuildIdentity $root } 'failed'
@@ -54,8 +54,8 @@ try {
     Assert ($script:calls.Count -eq 2) 'Expected build then save'
     $build = $script:calls[0] -join ' '
     $save = $script:calls[1] -join ' '
-    Assert ($build -like "buildx build --load --platform linux/amd64 --build-arg VERSION=$expected --tag pandadays:$expected --tag pandadays:latest *") 'Docker version and tags not wired'
-    Assert ($save -like "save --output *pandadays-image.tar pandadays:$expected pandadays:latest") 'Archive must include both tags'
+    Assert ($build -like "buildx build --load --platform linux/amd64 --build-arg VERSION=$expected --tag localhost/pandadays:$expected --tag localhost/pandadays:latest *") 'Docker version and tags not wired'
+    Assert ($save -like "save --output *pandadays-image.tar localhost/pandadays:$expected localhost/pandadays:latest") 'Archive must include both tags'
     Assert ((Get-BuildIdentity $root) -ceq $expected) 'Ignored output must not dirty the tree'
 
     $script:calls.Clear()
@@ -64,9 +64,9 @@ try {
 
     Set-Content (Join-Path $root 'source.txt') 'modified'
     Assert-Fails { Get-BuildIdentity $root } 'uncommitted changes'
-    $env:PANDA_ALLOW_DIRTY = '1'
+    $env:ALLOW_DIRTY = '1'
     Assert ((Get-BuildIdentity $root) -ceq "$expected.dirty") 'Dirty override must mark version'
-    $env:PANDA_ALLOW_DIRTY = $null
+    $env:ALLOW_DIRTY = $null
     Invoke-BuildCommand git @('-C', $root, 'restore', 'source.txt')
     Set-Content (Join-Path $root 'untracked.txt') 'untracked'
     Assert-Fails { Get-BuildIdentity $root } 'uncommitted changes'
@@ -80,7 +80,7 @@ try {
     Assert-Fails { Invoke-ImageBuild $root docker 'linux/amd64' } 'exit 23'
     Write-Host 'PASS: commit identity, dirty checks, Docker/Podman tags, archive, and error propagation'
 } finally {
-    $env:PANDA_ALLOW_DIRTY = $oldDirty
+    $env:ALLOW_DIRTY = $oldDirty
     $env:GIT_AUTHOR_DATE = $oldAuthorDate
     $env:GIT_COMMITTER_DATE = $oldCommitterDate
     Remove-Item -LiteralPath $root -Recurse -Force

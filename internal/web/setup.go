@@ -10,9 +10,18 @@ import (
 
 type setupPage struct {
 	pageData
-	Username string
-	Email    string
-	Error    string
+	Username  string
+	Email     string
+	Language  string
+	Timezone  string
+	Timezones []string
+	Error     string
+}
+
+func newSetupPage(r *http.Request) setupPage {
+	page := setupPage{pageData: newPageData(r), Timezones: settingsTimezones}
+	page.CaptureTimezone = true
+	return page
 }
 
 // setupOpen 404s once an admin exists, so /setup is invisible after setup.
@@ -38,7 +47,7 @@ func (s *Server) handleSetupForm(w http.ResponseWriter, r *http.Request) {
 	if !s.setupOpen(w, r) {
 		return
 	}
-	s.render(w, r, "setup.html", setupPage{pageData: newPageData(r)})
+	s.render(w, r, "setup.html", newSetupPage(r))
 }
 
 func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
@@ -49,8 +58,9 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 		return
 	}
-	page := setupPage{pageData: newPageData(r),
-		Username: r.PostForm.Get("username"), Email: r.PostForm.Get("email")}
+	page := newSetupPage(r)
+	page.Username, page.Email = r.PostForm.Get("username"), r.PostForm.Get("email")
+	page.Language, page.Timezone = r.PostForm.Get("lang"), r.PostForm.Get("timezone")
 	password := r.PostForm.Get("password")
 	if password != r.PostForm.Get("confirm_password") {
 		page.Error = "password.error.mismatch"
@@ -59,7 +69,8 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now()
 	user, err := s.auth.CompleteSetup(r.Context(), ClientIP(r), r.PostForm.Get("token"),
-		auth.CreateUserParams{Username: page.Username, Email: page.Email, Password: password}, now)
+		auth.CreateUserParams{Username: page.Username, Email: page.Email, Password: password,
+			Lang: page.Language, Timezone: page.Timezone}, now)
 	status := http.StatusUnprocessableEntity
 	switch {
 	case err == nil:
@@ -74,6 +85,10 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		page.Error = "setup.error.policy"
 	case errors.Is(err, auth.ErrIdentity):
 		page.Error = "setup.error.identity"
+	case errors.Is(err, auth.ErrLanguage):
+		page.Error = "settings.error.language"
+	case errors.Is(err, auth.ErrTimezone):
+		page.Error = "settings.error.timezone"
 	default:
 		s.log.Error("complete setup", "err", err)
 		s.authError(w, r, "error.internal", http.StatusInternalServerError)

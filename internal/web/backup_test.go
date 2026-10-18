@@ -32,7 +32,7 @@ func backupServer(t *testing.T) (*Server, *auth.User, string) {
 		t.Fatal(err)
 	}
 	s := newTestServerWith(t, func(key string) string {
-		if key == "PANDA_DATA_DIR" {
+		if key == "DATA_DIR" {
 			return root
 		}
 		return ""

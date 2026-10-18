@@ -49,8 +49,8 @@ func TestRunUnknownCommand(t *testing.T) {
 func TestRunServeInvalidConfig(t *testing.T) {
 	var out, errOut bytes.Buffer
 	env := func(k string) string {
-		if k == "PANDA_LANG" {
-			return "xx"
+		if k == "COOKIE_SECURE" {
+			return "invalid"
 		}
 		return ""
 	}
@@ -124,7 +124,7 @@ func TestIssueSetupTokenPrintsBannerOnce(t *testing.T) {
 func TestResetAdminPassword(t *testing.T) {
 	dir := t.TempDir()
 	env := func(k string) string {
-		if k == "PANDA_DATA_DIR" {
+		if k == "DATA_DIR" {
 			return dir
 		}
 		return ""
