@@ -4,5 +4,8 @@
   "lang.en": "English",
   "lang.zh": "中文",
   "nav.home": "Home",
-  "nav.language": "Language"
+  "nav.language": "Language",
+  "error.csrf": "This form has expired or could not be verified. Reload the page and try again.",
+  "error.session": "The session cookie could not be read.",
+  "error.internal": "An internal error occurred. Please try again later."
 }

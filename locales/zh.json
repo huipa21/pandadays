@@ -4,5 +4,8 @@
   "lang.en": "English",
   "lang.zh": "中文",
   "nav.home": "首页",
-  "nav.language": "语言"
+  "nav.language": "语言",
+  "error.csrf": "表单已过期或无法验证。请刷新页面后重试。",
+  "error.session": "无法读取会话 Cookie。",
+  "error.internal": "发生内部错误，请稍后重试。"
 }

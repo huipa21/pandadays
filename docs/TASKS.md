@@ -31,13 +31,15 @@ Status legend: `[ ]` todo, `[x]` done.
 
 ## Phase 2 — Auth
 
-### [ ] T04 Users, passwords, sessions
+### [x] T04 Users, passwords, sessions
 - `internal/auth`: bcrypt hashing, password policy 8–32 runes (and ≤72 bytes), random password generator (16 chars), session create/lookup/delete (hashed tokens), cookie handling (persistent vs session cookie, `session_days` setting, 12h non-persistent cap).
 - Middleware: load current user; `RequireLogin`; `RequireAdmin`; forced-password-change redirect.
 - CSRF middleware (per-session token, hidden field + `HX-Request` header support).
 - Login rate limiting (in-memory backoff).
 - Creating a user also creates the reserved Default collection and Default tag (shared helper `CreateUser` in a service package).
 - **Done when**: unit tests cover policy, session expiry, CSRF reject, forced change redirect.
+- Integration: `auth.Service.CreateUser` creates users and reserved defaults in one transaction; `Authenticate` applies IP+account backoff. HTTP guards use `web.CurrentUser` / `web.CurrentSession`.
+- Forms use `{{template "csrf-field" .}}` with `pageData.CSRFToken`; the layout supplies `X-CSRF-Token` to htmx. Streaming multipart/JS requests must send that header. Signed anonymous CSRF cookies support the upcoming login/setup forms and expire on server restart. Health/static routes are exempt from CSRF and forced-password redirects; the placeholder home remains public until the auth pages are implemented in T05.
 
 ### [ ] T05 Login / logout / change password pages
 - `/login` (username or email, "Keep me signed in"), `/logout`, `/password`.

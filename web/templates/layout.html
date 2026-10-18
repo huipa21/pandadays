@@ -4,11 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="htmx-config" content='{"includeIndicatorStyles":false}'>
+<meta name="csrf-token" content="{{.CSRFToken}}">
 <title>{{block "title" .}}{{t "app.name"}}{{end}}</title>
 <link rel="stylesheet" href="/static/app.css">
 <script src="/static/htmx.min.js" defer></script>
 </head>
-<body>
+<body hx-headers='{"X-CSRF-Token":"{{.CSRFToken}}"}'>
 <header class="site-header">
   <a class="brand" href="/">🐼 {{t "app.name"}}</a>
 </header>
@@ -18,3 +19,4 @@
 </body>
 </html>
 {{end}}
+{{define "csrf-field"}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}

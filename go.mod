@@ -2,7 +2,10 @@ module pandadays
 
 go 1.23.0
 
-require modernc.org/sqlite v1.38.2
+require (
+	golang.org/x/crypto v0.40.0
+	modernc.org/sqlite v1.38.2
+)
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect

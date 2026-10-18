@@ -4,6 +4,7 @@ package web
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"net/http"
 	"time"
 
+	"pandadays/internal/auth"
 	"pandadays/internal/config"
 	"pandadays/internal/i18n"
 	assets "pandadays/web"
@@ -22,12 +24,14 @@ import (
 const shutdownTimeout = 10 * time.Second
 
 type Server struct {
-	cfg    config.Config
-	log    *slog.Logger
-	db     *sql.DB
-	i18n   *i18n.Bundle
-	pages  map[string]*template.Template
-	static fs.FS
+	cfg     config.Config
+	log     *slog.Logger
+	db      *sql.DB
+	i18n    *i18n.Bundle
+	pages   map[string]*template.Template
+	static  fs.FS
+	auth    *auth.Service
+	csrfKey [32]byte
 }
 
 // New builds a Server. database may be nil (e.g. in tests that need no storage).
@@ -40,7 +44,17 @@ func New(cfg config.Config, logger *slog.Logger, database *sql.DB) (*Server, err
 	if err != nil {
 		return nil, err
 	}
-	return &Server{cfg: cfg, log: logger, db: database, i18n: bundle, pages: pages, static: assets.Static()}, nil
+	s := &Server{cfg: cfg, log: logger, db: database, i18n: bundle, pages: pages, static: assets.Static()}
+	if _, err := rand.Read(s.csrfKey[:]); err != nil {
+		return nil, fmt.Errorf("initialize CSRF key: %w", err)
+	}
+	if database != nil {
+		s.auth, err = auth.NewService(database)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return s, nil
 }
 
 // templateFuncs are placeholders for parsing; render rebinds "t" to the request language.
@@ -78,7 +92,10 @@ func (s *Server) Handler() http.Handler {
 		recoverPanics(s.log),
 		requestLogger(s.log),
 		securityHeaders,
+		s.loadCurrentUser,
 		s.resolveLang,
+		forcePasswordChange,
+		s.csrf,
 	)
 }
 
@@ -130,11 +147,12 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 }
 
 type pageData struct {
-	Lang string
+	Lang      string
+	CSRFToken string
 }
 
 func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, "home.html", pageData{Lang: i18n.LangFrom(r.Context())})
+	s.render(w, r, "home.html", pageData{Lang: i18n.LangFrom(r.Context()), CSRFToken: CSRFToken(r.Context())})
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, page string, data any) {

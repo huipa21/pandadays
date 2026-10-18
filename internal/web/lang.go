@@ -14,14 +14,20 @@ import (
 // pages in another language without changing settings.
 func (s *Server) resolveLang(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		lang := i18n.Normalize(r.URL.Query().Get("lang"))
-		if lang == "" {
-			// User language is added once sessions exist (T04).
-			lang = i18n.Resolve("", s.siteLang(r.Context()), r.Header.Get("Accept-Language"))
-		}
 		w.Header().Add("Vary", "Accept-Language")
-		next.ServeHTTP(w, r.WithContext(i18n.WithLang(r.Context(), lang)))
+		next.ServeHTTP(w, r.WithContext(i18n.WithLang(r.Context(), s.requestLang(r))))
 	})
+}
+
+func (s *Server) requestLang(r *http.Request) string {
+	if lang := i18n.Normalize(r.URL.Query().Get("lang")); lang != "" {
+		return lang
+	}
+	userLang := ""
+	if user := CurrentUser(r.Context()); user != nil {
+		userLang = user.Lang
+	}
+	return i18n.Resolve(userLang, s.siteLang(r.Context()), r.Header.Get("Accept-Language"))
 }
 
 // siteLang returns the admin-set site_lang setting, else PANDA_LANG if it was
