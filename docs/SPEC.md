@@ -121,6 +121,19 @@ Badges are never removed by custom styles so states remain distinguishable witho
 
 Site-wide defaults live in `settings`; each user row may override (`NULL` = use site default). Enforcement on create day, upload, and import. Server uses `http.MaxBytesReader` sized to remaining card allowance.
 
+Admins manage accounts and usage at `/admin/users` and defaults at `/admin/settings`.
+Blank user quota fields restore inheritance; zero is an explicit limit that blocks new
+days or uploads. Lowering a limit preserves existing data. Quotas and backup retention
+must be nonnegative integers; session duration must be 1–106751 days. Site language
+may be cleared to return to the environment/browser fallback.
+
+User creation and password reset show a random temporary password only in the
+non-cacheable POST response; it is never stored in plaintext. Resets and deactivation
+revoke all of the affected user's sessions. Deletion requires explicit confirmation,
+removes the account and owned data, and stages its media directory until the database
+transaction commits (restoring files on rollback). An admin cannot deactivate/delete
+themselves or the last active admin; these checks run inside the write transaction.
+
 ---
 
 ## 4. Authentication & Accounts
@@ -290,8 +303,9 @@ Deleting a day/collection also deletes shares targeting it (application-level, s
 | `POST /shared/{day_id}/hide`, `/unhide` | Recipient hide |
 | `GET/POST /settings` | Language, timezone, password link |
 | `GET /settings/export`, `POST /settings/import`, `POST /settings/import/confirm` | User zip |
-| `/admin/users` (+CRUD, reset password, quotas, activate) | Admin users |
-| `/admin/settings` | Site settings (lang, session_days, default limits, retention) |
+| `GET/POST /admin/users` | List usage / create account (optional admin role) |
+| `POST /admin/users/{id}/reset-password`, `/activate`, `/deactivate`, `/delete`, `/quotas` | Admin account actions; delete requires confirmation |
+| `GET/POST /admin/settings` | Site settings (lang, session_days, default limits, retention) |
 | `/admin/backup` (+create, download, delete, restore) | Backup/restore |
 | `GET /healthz` | Health check |
 

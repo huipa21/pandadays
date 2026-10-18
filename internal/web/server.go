@@ -122,6 +122,7 @@ func (s *Server) Handler() http.Handler {
 		s.registerDayRoutes(mux)
 		s.registerAttachmentRoutes(mux)
 		s.registerShareRoutes(mux)
+		s.registerAdminRoutes(mux)
 	}
 
 	return chain(mux,

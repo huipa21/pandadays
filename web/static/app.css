@@ -101,6 +101,14 @@ img, video, audio { max-width: 100%; }
 
 .nav-user { color: var(--muted); }
 
+.admin-users { display: grid; gap: 1rem; margin-top: 1rem; }
+.admin-users > .card { min-width: 0; }
+.admin-identity { overflow-wrap: anywhere; margin: 0; }
+
+@media (min-width: 720px) {
+  .admin-users { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 .inline-form { display: inline; margin: 0; }
 
 .link-button {
@@ -125,6 +133,7 @@ img, video, audio { max-width: 100%; }
 .form input[type="text"],
 .form input[type="email"],
 .form input[type="password"],
+.form input[type="number"],
 .form input[type="date"],
 .form input[type="time"],
 .form select,

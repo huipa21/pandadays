@@ -1,0 +1,53 @@
+{{define "title"}}{{t "admin.users"}} - {{t "app.name"}}{{end}}
+{{define "content"}}
+<h1>{{t "admin.users"}}</h1>
+<p><a href="/admin/settings">{{t "admin.settings"}}</a></p>
+{{if .Error}}<p class="alert" role="alert">{{t .Error}}</p>{{end}}
+{{if .Password}}<section class="card form" role="status">
+  <h2>{{t "admin.password_once"}}</h2>
+  <p>{{.Account}}: <code id="generated-password">{{.Password}}</code></p>
+  <p>{{t "admin.password_hint"}}</p>
+</section>{{end}}
+<section class="card form">
+  <h2>{{t "admin.create"}}</h2>
+  <form method="post" action="/admin/users" class="form">
+    {{template "csrf-field" .}}
+    <label>{{t "admin.username"}}<input type="text" name="username" required autocomplete="off"></label>
+    <label>{{t "admin.email"}}<input type="email" name="email" required autocomplete="off"></label>
+    <label class="check"><input type="checkbox" name="is_admin" value="1"> {{t "admin.role"}}</label>
+    <button class="btn" type="submit">{{t "admin.create"}}</button>
+  </form>
+</section>
+<div class="admin-users">
+{{range .Users}}
+<section class="card form">
+  <h2 class="admin-identity">{{.Username}}{{if .IsAdmin}} <span class="badge">{{t "admin.role"}}</span>{{end}}</h2>
+  <p class="admin-identity">{{.Email}} · {{if .IsActive}}{{t "admin.active"}}{{else}}{{t "admin.inactive"}}{{end}}</p>
+  <p>{{t "admin.days_usage" .UsedDays .EffectiveDays}}<br>{{t "attachments.user_usage" (bytes .UsedBytes) (bytes .EffectiveBytes)}}<br>{{t "admin.card_limit" (bytes .EffectiveCardBytes)}}</p>
+  <form method="post" action="/admin/users/{{.ID}}/quotas" class="form">
+    {{template "csrf-field" $}}
+    <p>{{t "admin.quota_hint"}}</p>
+    <label>{{t "admin.quota_days"}}<input type="number" name="quota_days" min="0" step="1" value="{{if .Days.Valid}}{{.Days.Int64}}{{end}}"></label>
+    <label>{{t "admin.quota_bytes"}}<input type="number" name="quota_bytes" min="0" step="1" value="{{if .Bytes.Valid}}{{.Bytes.Int64}}{{end}}"></label>
+    <label>{{t "admin.max_card_bytes"}}<input type="number" name="max_card_bytes" min="0" step="1" value="{{if .CardBytes.Valid}}{{.CardBytes.Int64}}{{end}}"></label>
+    <button class="btn" type="submit">{{t "settings.save"}}</button>
+  </form>
+  <form method="post" action="/admin/users/{{.ID}}/reset-password">
+    {{template "csrf-field" $}}
+    <button class="btn" type="submit">{{t "admin.reset"}}</button>
+  </form>
+  {{if ne .ID $.User.ID}}
+  <form method="post" action="/admin/users/{{.ID}}/{{if .IsActive}}deactivate{{else}}activate{{end}}">
+    {{template "csrf-field" $}}
+    <button class="btn" type="submit">{{if .IsActive}}{{t "admin.deactivate"}}{{else}}{{t "admin.activate"}}{{end}}</button>
+  </form>
+  <form method="post" action="/admin/users/{{.ID}}/delete" class="form danger-zone">
+    {{template "csrf-field" $}}
+    <label class="check"><input type="checkbox" name="confirm" value="1" required> {{t "admin.delete_confirm"}}</label>
+    <button class="btn btn-danger" type="submit">{{t "admin.delete"}}</button>
+  </form>
+  {{end}}
+</section>
+{{end}}
+</div>
+{{end}}

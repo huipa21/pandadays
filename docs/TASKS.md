@@ -135,7 +135,7 @@ Status legend: `[ ]` todo, `[x]` done.
 - `/settings`: language, timezone (select from IANA list, validated), link to password change, usage summary.
 - Parallelizable with T16.
 
-### [ ] T16 Admin users & site settings
+### [x] T16 Admin users & site settings
 - `/admin/users`: list with usage; create user (random password shown once, forced change); reset password; activate/deactivate; delete (with confirmation, removes media); set per-user `quota_days`, `quota_bytes`, `max_card_bytes` (blank = site default).
 - `/admin/settings`: `site_lang`, `session_days`, default quotas/limits, `backup_retention`.
 - Admin cannot deactivate/delete themselves or the last admin.

@@ -20,6 +20,8 @@
     <a href="/collections">{{t "nav.collections"}}</a>
     <a href="/tags">{{t "nav.tags"}}</a>
     <a href="/settings">{{t "nav.settings"}}</a>
+    {{if .IsAdmin}}<a href="/admin/users">{{t "admin.users"}}</a>
+    <a href="/admin/settings">{{t "admin.settings"}}</a>{{end}}
     <a href="/password">{{t "nav.password"}}</a>
     <form method="post" action="/logout" class="inline-form">{{template "csrf-field" $}}<button type="submit" class="link-button">{{t "nav.logout"}}</button></form>
   </nav>{{end}}
