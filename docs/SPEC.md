@@ -229,6 +229,44 @@ title,date,time,repeat,collection,tags,comment,archived,style_color,style_icon,s
 
 CLI `panda backup` / `panda restore` share the same `internal/backup` package.
 
+#### Offline CLI (T18)
+
+Stop the server before running either command so the database snapshot and media
+remain consistent, and so no open handles interfere with restore. Set
+`PANDA_DATA_DIR` to the site's data directory, then run:
+
+```
+panda backup --out pandadays-backup.tar.gz
+panda restore --file pandadays-backup.tar.gz
+```
+
+Backup refuses to overwrite an existing output file or write into live media.
+It includes all users, settings, sharing data, and media; treat archives as
+sensitive, since they contain password hashes and session records.
+Restore fully stages the archive under `<data>/tmp` on the same volume before
+changing live data. The manifest records `app_version`, `schema_version`,
+`created_at` (UTC RFC 3339), and `files` (`path`, `size`, `sha256`).
+Validation requires an exact file list, SHA-256 checksums, a supported schema,
+SQLite integrity and foreign-key checks, regular files only, and safe paths.
+The archive uses file entries only (no directory or link entries); an empty
+media directory is recreated on restore. Manifest metadata is capped at 16 MiB
+and archives at 100,000 payload files; there is no application-level payload
+byte limit. Staging and the pre-restore backup must finish successfully
+(including disk writes) before swapping; allow space for both, plus migrations.
+
+If a database already exists, restore retains
+`<data>/backups/pre-restore-<timestamp>-<unique>.tar.gz`.
+Database, SQLite sidecars, and media are saved in the staging directory as
+`*.old`; same-volume renames install the staged database and media. The engine
+reopens the database, applies migrations, and clears all sessions before
+discarding old data. A swap or reopen failure rolls back the renames and keeps
+the pre-restore archive. If rollback itself fails, the error names the recovery
+directory, which is preserved for manual recovery. Individual renames are
+atomic; the pair is not a crash-recovery transaction, so do not interrupt a
+restore. Existing retained backups and unrelated temporary files are preserved.
+Restart the server and sign in using the restored credentials.
+Web maintenance mode, request draining, and live DB handle replacement are T19.
+
 ---
 
 ## 7. Data Model (SQLite)

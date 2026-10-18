@@ -32,6 +32,8 @@ Commands:
   serve                                 Start the web server (default)
   reset-admin-password --username NAME  Set a random password for an admin
                                         and sign them out everywhere
+  backup --out FILE                     Write a site backup (server stopped)
+  restore --file FILE                   Restore a site backup (server stopped)
   version                               Print the version
   help                                  Show this help
 `
@@ -51,6 +53,8 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 		return cmdServe(args, getenv, stdout, stderr)
 	case "reset-admin-password":
 		return cmdResetAdminPassword(args, getenv, stdout, stderr)
+	case "backup", "restore":
+		return cmdBackup(cmd, args, getenv, stdout, stderr)
 	case "version", "--version", "-v":
 		fmt.Fprintf(stdout, "panda %s\n", version)
 		return 0
