@@ -1,9 +1,7 @@
 services:
   pandadays:
-    build:
-      context: .
-      args:
-        VERSION: ${PANDA_VERSION:-dev}
+    image: ${PANDA_IMAGE:-pandadays:latest}
+    pull_policy: never
     ports:
       - "${PANDA_BIND:-127.0.0.1}:${PANDA_PORT:-8080}:8080"
     environment:

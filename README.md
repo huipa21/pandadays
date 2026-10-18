@@ -7,18 +7,76 @@ database, or frontend build step is needed.
 
 ## Install with Docker Compose
 
-Requirements: Docker Engine with the Compose v2 plugin (or Docker Desktop),
-and a local checkout of this source tree. Run from the project root:
+Build the image on your development laptop, then transfer it to the cloud
+server. The server only runs the prebuilt image; it does not need Go, the
+source tree, or enough memory to compile the application.
+
+### Build on the laptop
+
+Requirements: Git, PowerShell (Windows PowerShell 5.1 or PowerShell 7+),
+Docker Desktop in Linux-container mode (or Docker Engine with Buildx, or
+Podman), and a local Git checkout of this source tree. Check the **server's**
+architecture with `uname -m`: use `linux/amd64` for `x86_64`, or `linux/arm64`
+for `aarch64`. The commands below target an x86-64 Lighthouse server, even
+if the laptop uses a different architecture.
+
+Run from the project root in PowerShell:
+
+```powershell
+.\scripts\build.ps1
+scp .\dist\pandadays-image.tar compose.yaml .env.example user@server:/opt/pandadays/
+```
+
+The script automatically detects Docker, then Podman; use `-Engine podman`
+to select Podman explicitly. For an ARM server, use
+`.\scripts\build.ps1 -Platform linux/arm64`. On macOS/Linux with PowerShell 7,
+run `pwsh -File ./scripts/build.ps1`.
+
+Replace `user@server` with your SSH destination and create `/opt/pandadays`
+there first, with write access for that user. The existing multi-stage
+Dockerfile builds the CGO-free binary and packages it with a non-root Alpine
+runtime; no server-side build is required.
+
+Like PandaBlog, the script generates `YYYYMMDDTHHmmssZ-g<12-character-SHA>`
+from the commit's **committer timestamp in UTC**, not the build time. The same
+commit always produces the same version. It embeds that version in the binary
+(including backup manifests), tags the image as both `pandadays:<version>` and
+`pandadays:latest`, and saves **both tags** in `dist/pandadays-image.tar`.
+No manual version or tag is needed. Compose runs `latest` by default.
+
+Builds require a commit and a clean working tree, including untracked files.
+Commit your changes before building. For an intentional development build,
+set `$env:PANDA_ALLOW_DIRTY = "1"`; its generated version gets a `.dirty`
+suffix. Remove that override afterward with `Remove-Item Env:PANDA_ALLOW_DIRTY`.
+No Git metadata or Git failure ever falls back to a made-up version.
+
+### Run on the server
+
+Requirements: Docker Engine with the Compose v2 plugin. In `/opt/pandadays`,
+load the transferred image and configure the deployment:
 
 ```sh
-docker compose up -d --build
+docker load --input pandadays-image.tar
+cp .env.example .env
+```
+
+Edit `.env` for the server, especially the public URL and HTTPS cookie setting
+described below. Only copy `.env.example` on the first deployment; preserve
+your existing `.env` on updates. Then start the service:
+
+```sh
+docker compose up -d --no-build
 docker compose ps
 docker compose logs pandadays
 ```
 
-Open <http://localhost:8080/setup>. The default Compose configuration binds only
-to localhost and allows plain HTTP cookies for local use. For remote access,
-configure HTTPS as described below before exposing the service.
+Compose uses `PANDA_IMAGE` (default `pandadays:latest`) with `pull_policy: never`:
+the image must already be loaded locally, and a missing image is an error.
+For a local laptop deployment, skip the transfer and load steps after building.
+Open <http://localhost:8080/setup> locally, or `/setup` at your configured HTTPS
+URL on the server. The default Compose configuration binds only to localhost
+and allows plain HTTP cookies for local use. For remote access, configure HTTPS
+as described below before exposing the service.
 
 ### First-run setup and accounts
 
@@ -66,7 +124,12 @@ configuration (a restart alone does not reload environment changes).
 | `TZ` | `UTC` | `UTC`; IANA timezone fallback, e.g. `Asia/Shanghai`. User timezones take precedence for date calculations. Timezone data is embedded. |
 | `PANDA_BIND` | Compose only | `127.0.0.1`; host address for the published port. |
 | `PANDA_PORT` | Compose only | `8080`; host port. Update the base URL if changing it. |
-| `PANDA_VERSION` | Build argument only | `dev`; binary version and backup manifest metadata. Rebuild after changing it. |
+| `PANDA_IMAGE` | Compose only | `pandadays:latest`; prebuilt local image name/tag. Compose never builds or pulls it. |
+
+The build script supplies the Dockerfile's required `VERSION` argument
+automatically. Setting an environment variable on the server does not change
+the binary version. Use `docker compose exec pandadays panda version` to see
+the deployed version.
 
 The image runs as UID/GID `10001:10001`. The default named volume is initialized
 with writable permissions. If replacing it with a bind mount, pre-create that
@@ -88,12 +151,21 @@ the static, CGO-free Go binary as a non-root user. Health checks return 503
 during restore maintenance; this is expected. Docker's restart policy handles
 process exits, not an unhealthy status by itself.
 
-To update, first download a site backup, update the source checkout, then run:
+To update, first download a site backup. Update the source checkout **on the
+laptop**, rebuild and save the image using the commands above, and transfer
+the archive to the server. On the server, load it and recreate the service:
 
 ```sh
-docker compose up -d --build
+docker load --input pandadays-image.tar
+docker compose up -d --no-build --force-recreate
 docker compose logs --tail=100 pandadays
 ```
+
+Leave `PANDA_IMAGE=pandadays:latest` for automatic updates without editing tags.
+`--force-recreate` ensures an update when reusing `latest`. Both tags are loaded,
+so you can optionally pin `PANDA_IMAGE` to a generated version for rollback
+(subject to schema compatibility). Keep the same deployment directory so
+Compose reuses the existing named data volume.
 
 Migrations run automatically at startup. Do not assume an older binary can
 read a newer schema; keep the previous source/image and a pre-upgrade backup.
@@ -144,8 +216,9 @@ docker compose start pandadays
 ```
 
 `docker compose cp` requires an existing service container. On a fresh host,
-build and create it first with `docker compose build` and
-`docker compose create pandadays` (do not start it before restoring).
+transfer the deployment files and load the prebuilt image as described above,
+then run `docker compose create --no-build pandadays` (do not start it before
+restoring). Keep the same Compose project name if restoring an existing volume.
 Ensure copied restore files are readable by UID 10001. If a command fails,
 inspect the error and recovery files before starting the service.
 
@@ -222,6 +295,13 @@ Use `panda help` for CLI commands. To validate changes:
 ```sh
 go test ./...
 go vet ./...
+```
+
+Test automatic container versioning and build command wiring without a running
+container engine (PowerShell):
+
+```powershell
+.\scripts\build_test.ps1
 ```
 
 See [the specification](docs/SPEC.md) and [task list](docs/TASKS.md).

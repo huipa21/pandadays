@@ -4,8 +4,9 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-ARG VERSION=dev
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/panda ./cmd/panda
+ARG VERSION
+RUN test -n "$VERSION" \
+    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/panda ./cmd/panda
 
 FROM alpine:3.23
 
@@ -25,6 +26,6 @@ WORKDIR /data
 VOLUME ["/data"]
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -q -T 4 -O /dev/null "http://127.0.0.1:${PANDA_ADDR##*:}/healthz" || exit 1
+    CMD wget -q -T 4 -O /dev/null "http://127.0.0.1:$(printf '%s' "$PANDA_ADDR" | sed 's/.*://')/healthz" || exit 1
 ENTRYPOINT ["panda"]
 CMD ["serve"]
