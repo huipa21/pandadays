@@ -48,7 +48,11 @@ func TestHealthz(t *testing.T) {
 }
 
 func TestHomeRendersLayout(t *testing.T) {
-	rr := do(t, newTestServer(t).Handler(), http.MethodGet, "/")
+	h := newTestServer(t).Handler()
+	if rr := do(t, h, http.MethodGet, "/"); rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/login" {
+		t.Fatalf("anonymous home: status = %d, location = %q", rr.Code, rr.Header().Get("Location"))
+	}
+	rr := do(t, h, http.MethodGet, "/login")
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d", rr.Code)
 	}

@@ -9,7 +9,7 @@ import (
 	"pandadays/internal/db/dbtest"
 )
 
-func getHome(t *testing.T, s *Server, path, acceptLang string) string {
+func getPage(t *testing.T, s *Server, path, acceptLang string) string {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
 	if acceptLang != "" {
@@ -50,10 +50,10 @@ func assertLang(t *testing.T, body, lang string) {
 
 func TestLayoutRendersInBothLanguages(t *testing.T) {
 	s := newTestServer(t)
-	assertLang(t, getHome(t, s, "/?lang=en", ""), "en")
-	assertLang(t, getHome(t, s, "/?lang=zh", ""), "zh")
-	assertLang(t, getHome(t, s, "/?lang=zh-CN", "en"), "zh")
-	assertLang(t, getHome(t, s, "/?lang=fr", "zh"), "zh")
+	assertLang(t, getPage(t, s, "/login?lang=en", ""), "en")
+	assertLang(t, getPage(t, s, "/login?lang=zh", ""), "zh")
+	assertLang(t, getPage(t, s, "/login?lang=zh-CN", "en"), "zh")
+	assertLang(t, getPage(t, s, "/login?lang=fr", "zh"), "zh")
 }
 
 func TestLangResolution(t *testing.T) {
@@ -66,25 +66,25 @@ func TestLangResolution(t *testing.T) {
 	}
 
 	t.Run("default en", func(t *testing.T) {
-		assertLang(t, getHome(t, newTestServer(t), "/", ""), "en")
+		assertLang(t, getPage(t, newTestServer(t), "/login", ""), "en")
 	})
 	t.Run("accept-language when no site lang", func(t *testing.T) {
-		assertLang(t, getHome(t, newTestServer(t), "/", "zh-CN,zh;q=0.9,en;q=0.8"), "zh")
+		assertLang(t, getPage(t, newTestServer(t), "/login", "zh-CN,zh;q=0.9,en;q=0.8"), "zh")
 	})
 	t.Run("explicit PANDA_LANG beats accept-language", func(t *testing.T) {
-		assertLang(t, getHome(t, newTestServerWith(t, zhEnv, nil), "/", "en-US"), "zh")
+		assertLang(t, getPage(t, newTestServerWith(t, zhEnv, nil), "/login", "en-US"), "zh")
 	})
 	t.Run("site_lang setting beats PANDA_LANG and accept-language", func(t *testing.T) {
 		database := dbtest.Open(t)
 		if _, err := database.Exec(`INSERT INTO settings (key, value) VALUES ('site_lang', 'en')`); err != nil {
 			t.Fatal(err)
 		}
-		assertLang(t, getHome(t, newTestServerWith(t, zhEnv, database), "/", "zh"), "en")
+		assertLang(t, getPage(t, newTestServerWith(t, zhEnv, database), "/login", "zh"), "en")
 	})
 	t.Run("no site_lang row falls through to accept-language", func(t *testing.T) {
-		assertLang(t, getHome(t, newTestServerWith(t, noenv, dbtest.Open(t)), "/", "zh"), "zh")
+		assertLang(t, getPage(t, newTestServerWith(t, noenv, dbtest.Open(t)), "/login", "zh"), "zh")
 	})
 	t.Run("query override beats site setting", func(t *testing.T) {
-		assertLang(t, getHome(t, newTestServerWith(t, zhEnv, nil), "/?lang=en", "zh"), "en")
+		assertLang(t, getPage(t, newTestServerWith(t, zhEnv, nil), "/login?lang=en", "zh"), "en")
 	})
 }

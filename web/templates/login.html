@@ -1,0 +1,21 @@
+{{define "title"}}{{t "login.title"}} · {{t "app.name"}}{{end}}
+{{define "content"}}
+<section class="card auth-card">
+  <h1>{{t "login.title"}}</h1>
+  <p class="tagline">{{t "app.tagline"}}</p>
+  {{with .Error}}<p class="alert" role="alert">{{t .}}</p>{{end}}
+  <form method="post" action="/login" class="form">
+    {{template "csrf-field" .}}
+    <label>{{t "login.account"}}
+      <input type="text" name="account" value="{{.Account}}" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus>
+    </label>
+    <label>{{t "login.password"}}
+      <input type="password" name="password" autocomplete="current-password" required>
+    </label>
+    <label class="check">
+      <input type="checkbox" name="remember" value="1"{{if .Remember}} checked{{end}}> {{t "login.remember"}}
+    </label>
+    <button type="submit" class="btn">{{t "login.submit"}}</button>
+  </form>
+</section>
+{{end}}

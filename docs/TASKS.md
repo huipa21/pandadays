@@ -41,11 +41,12 @@ Status legend: `[ ]` todo, `[x]` done.
 - Integration: `auth.Service.CreateUser` creates users and reserved defaults in one transaction; `Authenticate` applies IP+account backoff. HTTP guards use `web.CurrentUser` / `web.CurrentSession`.
 - Forms use `{{template "csrf-field" .}}` with `pageData.CSRFToken`; the layout supplies `X-CSRF-Token` to htmx. Streaming multipart/JS requests must send that header. Signed anonymous CSRF cookies support the upcoming login/setup forms and expire on server restart. Health/static routes are exempt from CSRF and forced-password redirects; the placeholder home remains public until the auth pages are implemented in T05.
 
-### [ ] T05 Login / logout / change password pages
+### [x] T05 Login / logout / change password pages
 - `/login` (username or email, "Keep me signed in"), `/logout`, `/password`.
 - Changing password clears `must_change_password` and deletes other sessions.
 - Timezone auto-capture: after login, if user timezone empty, JS posts browser timezone to `/settings/timezone`.
 - **Done when**: handler tests for login success/failure, inactive user rejected, forced-change flow.
+- Integration: `GET /` now requires login. Handlers live in `internal/web/account.go`; `auth.Service.ChangePassword` (shares login backoff per user) and `SetTimezoneIfEmpty` / `ValidateTimezone` (reuse in T15 for explicit timezone changes). Pages build data via `newPageData(r)`, which exposes `.User` for the header nav and sets `CaptureTimezone` (loads `static/timezone.js`) only for logged-in users with no timezone who are not forced to change their password. Use `renderStatus` to render forms with validation errors.
 
 ### [ ] T06 Setup token flow
 - On `serve` start: if no admin and no unexpired token → generate, store hash + expiry (1h), print token to stdout with clear banner.

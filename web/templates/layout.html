@@ -8,10 +8,16 @@
 <title>{{block "title" .}}{{t "app.name"}}{{end}}</title>
 <link rel="stylesheet" href="/static/app.css">
 <script src="/static/htmx.min.js" defer></script>
+{{if .CaptureTimezone}}<script src="/static/timezone.js" defer></script>{{end}}
 </head>
 <body hx-headers='{"X-CSRF-Token":"{{.CSRFToken}}"}'>
 <header class="site-header">
   <a class="brand" href="/">🐼 {{t "app.name"}}</a>
+  {{with .User}}<nav class="nav">
+    <span class="nav-user">{{.Username}}</span>
+    <a href="/password">{{t "nav.password"}}</a>
+    <form method="post" action="/logout" class="inline-form">{{template "csrf-field" $}}<button type="submit" class="link-button">{{t "nav.logout"}}</button></form>
+  </nav>{{end}}
 </header>
 <main class="container">
 {{block "content" .}}{{end}}

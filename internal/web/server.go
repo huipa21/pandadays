@@ -86,7 +86,13 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
 	mux.Handle("GET /static/", http.StripPrefix("/static/", staticHandler(s.static)))
-	mux.HandleFunc("GET /{$}", s.handleHome)
+	mux.Handle("GET /{$}", RequireLogin(http.HandlerFunc(s.handleHome)))
+	mux.HandleFunc("GET /login", s.handleLoginForm)
+	mux.HandleFunc("POST /login", s.handleLogin)
+	mux.HandleFunc("POST /logout", s.handleLogout)
+	mux.Handle("GET /password", RequireLogin(http.HandlerFunc(s.handlePasswordForm)))
+	mux.Handle("POST /password", RequireLogin(http.HandlerFunc(s.handlePassword)))
+	mux.Handle("POST /settings/timezone", RequireLogin(http.HandlerFunc(s.handleTimezone)))
 
 	return chain(mux,
 		recoverPanics(s.log),
@@ -149,13 +155,30 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 type pageData struct {
 	Lang      string
 	CSRFToken string
+	User      *auth.User
+	// CaptureTimezone loads the script that posts the browser timezone (SPEC §4.5).
+	CaptureTimezone bool
+}
+
+func newPageData(r *http.Request) pageData {
+	user := CurrentUser(r.Context())
+	return pageData{
+		Lang:            i18n.LangFrom(r.Context()),
+		CSRFToken:       CSRFToken(r.Context()),
+		User:            user,
+		CaptureTimezone: user != nil && user.Timezone == "" && !user.MustChangePassword,
+	}
 }
 
 func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, "home.html", pageData{Lang: i18n.LangFrom(r.Context()), CSRFToken: CSRFToken(r.Context())})
+	s.render(w, r, "home.html", newPageData(r))
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, page string, data any) {
+	s.renderStatus(w, r, page, http.StatusOK, data)
+}
+
+func (s *Server) renderStatus(w http.ResponseWriter, r *http.Request, page string, status int, data any) {
 	base, ok := s.pages[page]
 	if !ok {
 		s.log.Error("template not found", "page", page)
@@ -177,6 +200,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, page string, dat
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
 	_, _ = buf.WriteTo(w)
 }
 
