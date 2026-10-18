@@ -54,9 +54,10 @@ Status legend: `[ ]` todo, `[x]` done.
 - **Done when**: tests for valid, expired, reused, and post-admin 404.
 - Integration: `auth.EnsureSetupToken` (called from `cmdServe` via `issueSetupToken`) and `auth.Service.CompleteSetup` (token check + admin insert + token delete in one transaction; failures share login backoff per IP). `CreateUser` now delegates to the internal `insertUser(tx, …)` so other flows can create users inside their own transaction. `Service.HasAdmin` gates `/setup`; `GET /login` redirects to `/setup` while no admin exists. Setup signs the new admin in.
 
-### [ ] T07 CLI `reset-admin-password`
+### [x] T07 CLI `reset-admin-password`
 - `panda reset-admin-password --username <name>`: opens DB, verifies user is admin, sets random password, `must_change_password=1`, deletes sessions, prints password.
 - **Done when**: test invokes the command function against a temp DB.
+- Integration: `auth.ResetAdminPassword(ctx, db, username, now)` (exact username match, case-insensitive; returns `ErrUserNotFound` / `ErrNotAdmin`; password update + session delete in one transaction). `cmdResetAdminPassword` in `cmd/panda` refuses to run if `<PANDA_DATA_DIR>/pandadays.db` does not exist (never creates a fresh DB), prints the password to stdout only, and warns if the admin is deactivated. Reuse the same pattern for admin-initiated user resets in T16.
 
 ---
 

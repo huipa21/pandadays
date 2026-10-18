@@ -4,12 +4,15 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 	_ "time/tzdata"
@@ -26,9 +29,11 @@ var version = "dev"
 const usage = `Usage: panda <command> [options]
 
 Commands:
-  serve      Start the web server (default)
-  version    Print the version
-  help       Show this help
+  serve                                 Start the web server (default)
+  reset-admin-password --username NAME  Set a random password for an admin
+                                        and sign them out everywhere
+  version                               Print the version
+  help                                  Show this help
 `
 
 func main() {
@@ -44,6 +49,8 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 	switch cmd {
 	case "serve":
 		return cmdServe(args, getenv, stdout, stderr)
+	case "reset-admin-password":
+		return cmdResetAdminPassword(args, getenv, stdout, stderr)
 	case "version", "--version", "-v":
 		fmt.Fprintf(stdout, "panda %s\n", version)
 		return 0
@@ -126,6 +133,61 @@ func issueSetupToken(ctx context.Context, database *sql.DB, stdout io.Writer, lo
 			"expires_at", expires)
 	}
 	return nil
+}
+
+// cmdResetAdminPassword implements SPEC §4.4. The new password goes to stdout
+// only; it is never logged.
+func cmdResetAdminPassword(args []string, getenv func(string) string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("reset-admin-password", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	username := fs.String("username", "", "username of the admin account to reset")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+	if fs.NArg() > 0 || strings.TrimSpace(*username) == "" {
+		fmt.Fprintf(stderr, "Usage: panda reset-admin-password --username <name>\n")
+		return 2
+	}
+
+	cfg, err := config.Load(getenv)
+	if err != nil {
+		fmt.Fprintf(stderr, "panda reset-admin-password: invalid configuration: %v\n", err)
+		return 1
+	}
+	// Refuse to create a fresh database when pointed at the wrong data dir.
+	if _, err := os.Stat(filepath.Join(cfg.DataDir, db.FileName)); err != nil {
+		fmt.Fprintf(stderr, "panda reset-admin-password: no database in %s: %v\n", cfg.DataDir, err)
+		return 1
+	}
+
+	ctx := context.Background()
+	database, err := openDatabase(ctx, cfg.DataDir)
+	if err != nil {
+		fmt.Fprintf(stderr, "panda reset-admin-password: open database: %v\n", err)
+		return 1
+	}
+	defer database.Close()
+
+	u, password, err := auth.ResetAdminPassword(ctx, database, *username, time.Now())
+	switch {
+	case errors.Is(err, auth.ErrUserNotFound), errors.Is(err, auth.ErrNotAdmin):
+		fmt.Fprintf(stderr, "panda reset-admin-password: %q: %v\n", strings.TrimSpace(*username), err)
+		return 1
+	case err != nil:
+		fmt.Fprintf(stderr, "panda reset-admin-password: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(stdout, "Password for admin %q has been reset.\n\n    %s\n\n"+
+		"All of this account's sessions were signed out. A password change is required at next login.\n",
+		u.Username, password)
+	if !u.IsActive {
+		fmt.Fprintln(stderr, "warning: this account is deactivated and cannot sign in until reactivated.")
+	}
+	return 0
 }
 
 // openDatabase opens <dataDir>/pandadays.db and applies pending migrations.
