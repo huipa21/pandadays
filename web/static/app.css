@@ -183,24 +183,101 @@ img, video, audio { max-width: 100%; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 0.375rem; }
 
-.day-detail { display: grid; gap: 0.75rem; }
-.day-detail > * { margin: 0; }
-.day-heading { overflow-wrap: anywhere; }
-.day-heading .swatch { width: 1.125rem; height: 1.125rem; vertical-align: -0.125rem; }
+.day-heading { overflow-wrap: anywhere; margin: 0; font-size: 1.375rem; }
 a.btn { text-decoration: none; }
-.day-icon { font-size: 1.5rem; }
-.day-label { font-size: 1.5rem; font-weight: 700; }
-.day-future, .day-today { color: #b7791f; }
-.day-past { color: #2b6cb0; }
 .day-facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.5rem 1rem; margin: 0; align-items: center; }
 .day-facts dt { color: var(--muted); font-size: 0.875rem; }
 .day-facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .day-comment { white-space: pre-wrap; overflow-wrap: anywhere; padding-top: 0.75rem; border-top: 1px solid var(--border); }
 
+/* Day visual states (SPEC §3.5). --state colors the default accent; a custom
+   style color is an SVG fill attribute, which wins over the :not([fill]) rule. */
+.day-future, .day-today { --state: #dd6b20; --state-text: #b7791f; }
+.day-past { --state: #3182ce; --state-text: #2b6cb0; }
+.day-archived { --state: #a0aec0; --state-text: var(--muted); }
+.day-shared { border-style: dashed; }
+.day-accent { position: absolute; display: block; pointer-events: none; }
+.day-accent rect:not([fill]) { fill: var(--state); }
+
 @media (prefers-color-scheme: dark) {
-  .day-future, .day-today { color: #f6ad55; }
-  .day-past { color: #90cdf4; }
+  .day-future, .day-today { --state: #f6ad55; --state-text: #f6ad55; }
+  .day-past { --state: #63b3ed; --state-text: #90cdf4; }
+  .day-archived { --state: #4a5568; }
 }
+
+.badge-archived, .badge-shared { color: var(--fg); background: var(--bg); white-space: nowrap; }
+
+.home-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; }
+.home-head .tagline { margin: 0; }
+
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.segmented a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border-radius: 8px;
+  color: var(--fg);
+  text-decoration: none;
+  font-weight: 500;
+}
+.segmented a[aria-current="page"] { background: var(--accent); color: #fff; }
+.segmented a:not([aria-current]):hover { background: var(--bg); }
+
+.day-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.empty-list { margin: 0; padding: 2rem var(--space); text-align: center; color: var(--muted); }
+
+.day-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 64px;
+  padding: 0.75rem 0.875rem 0.75rem 1.125rem;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--fg);
+  text-decoration: none;
+}
+.day-item:hover, .day-item:focus-visible { border-color: var(--state); }
+.day-item .day-accent { left: 0; top: 0; bottom: 0; width: 6px; height: 100%; }
+.day-item-icon { flex: none; width: 2rem; font-size: 1.5rem; text-align: center; }
+.day-item-main { flex: 1; min-width: 0; display: grid; gap: 0.125rem; }
+.day-item-title { font-weight: 600; overflow-wrap: anywhere; }
+.day-item-date { color: var(--muted); font-size: 0.875rem; }
+.day-item-label { flex: none; max-width: 40%; text-align: right; font-weight: 700; color: var(--state-text); }
+.day-archived .day-item-title, .day-archived .day-item-label { color: var(--muted); }
+.chips-small { gap: 0.25rem; margin-top: 0.25rem; }
+.chip.chip-small { min-height: 0; padding: 0 0.5rem; font-size: 0.75rem; }
+.chip-small .swatch { width: 0.75rem; height: 0.75rem; }
+
+.day-card { position: relative; overflow: hidden; display: grid; gap: 0.875rem; padding-top: calc(var(--space) + 8px); }
+.day-card > * { margin: 0; }
+.day-card .day-accent { left: 0; top: 0; width: 100%; height: 8px; }
+.day-card-head { display: grid; justify-items: center; gap: 0.375rem; text-align: center; }
+.day-card-icon { font-size: 2.5rem; line-height: 1; }
+.day-card.day-archived .day-card-icon, .day-card.day-archived .countdown { opacity: 0.7; }
+.countdown { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 0.25rem 0.5rem; text-align: center; color: var(--state-text); }
+.countdown-big { font-size: clamp(3rem, 18vw, 5.5rem); font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.countdown-caption { font-size: 1.25rem; font-weight: 600; }
+.breakdown { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.375rem; margin: 0; padding: 0; list-style: none; }
+.breakdown li { padding: 0.25rem 0.625rem; border-radius: 8px; background: var(--bg); }
+.breakdown-small li { font-size: 0.875rem; }
+.day-ordinal { text-align: center; font-weight: 600; }
+.day-since { display: grid; gap: 0.375rem; justify-items: center; text-align: center; }
+.day-attachments { display: grid; gap: 0.5rem; }
+.day-attachments > * { margin: 0; }
+.day-attachments h2 { font-size: 1.125rem; }
 
 .form label.check {
   display: flex;

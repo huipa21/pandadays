@@ -167,18 +167,13 @@ type rowsQuerier interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
-func (s *Days) get(ctx context.Context, q rowsQuerier, ownerID, id int64) (Day, error) {
+func scanDay(sc scanner) (Day, error) {
 	var d Day
 	var archived sql.NullInt64
 	var created, updated int64
-	err := q.QueryRowContext(ctx, `SELECT `+dayColumns+` FROM days WHERE owner_id = ? AND id = ?`, ownerID, id).Scan(
-		&d.ID, &d.OwnerID, &d.CollectionID, &d.Title, &d.Date, &d.Time, &d.Repeat, &d.Comment,
-		&d.StyleColor, &d.StyleIcon, &d.StyleBgAttachmentID, &archived, &created, &updated)
-	if errors.Is(err, sql.ErrNoRows) {
-		return Day{}, ErrNotFound
-	}
-	if err != nil {
-		return Day{}, fmt.Errorf("get day: %w", err)
+	if err := sc.Scan(&d.ID, &d.OwnerID, &d.CollectionID, &d.Title, &d.Date, &d.Time, &d.Repeat, &d.Comment,
+		&d.StyleColor, &d.StyleIcon, &d.StyleBgAttachmentID, &archived, &created, &updated); err != nil {
+		return Day{}, err
 	}
 	if archived.Valid {
 		t := time.Unix(archived.Int64, 0).UTC()
@@ -186,6 +181,17 @@ func (s *Days) get(ctx context.Context, q rowsQuerier, ownerID, id int64) (Day, 
 	}
 	d.CreatedAt = time.Unix(created, 0).UTC()
 	d.UpdatedAt = time.Unix(updated, 0).UTC()
+	return d, nil
+}
+
+func (s *Days) get(ctx context.Context, q rowsQuerier, ownerID, id int64) (Day, error) {
+	d, err := scanDay(q.QueryRowContext(ctx, `SELECT `+dayColumns+` FROM days WHERE owner_id = ? AND id = ?`, ownerID, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Day{}, ErrNotFound
+	}
+	if err != nil {
+		return Day{}, fmt.Errorf("get day: %w", err)
+	}
 	rows, err := q.QueryContext(ctx, `SELECT tag_id FROM day_tags WHERE day_id = ? ORDER BY tag_id`, d.ID)
 	if err != nil {
 		return Day{}, fmt.Errorf("get day tags: %w", err)

@@ -42,8 +42,13 @@ type dayFormPage struct {
 type dayPage struct {
 	pageData
 	Day        days.Day
-	Label      string
 	State      days.Classification
+	Target     time.Time // effective target in the user's timezone
+	Big        string    // countdown figure
+	Caption    string    // countdown unit and direction, empty for "Today"
+	Breakdown  []breakdownPart
+	Ordinal    string // repeating days from the first repeat on
+	Since      []breakdownPart
 	Collection days.Group
 	Tags       []days.Group
 }
@@ -199,7 +204,7 @@ func (s *Server) handleDayNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	form := dayForm{
-		Date:         time.Now().In(userLocation(u)).Format(time.DateOnly),
+		Date:         s.now().In(userLocation(u)).Format(time.DateOnly),
 		Repeat:       string(days.RepeatNone),
 		CollectionID: col,
 		TagIDs:       []int64{tag},
@@ -244,31 +249,32 @@ func (s *Server) handleDayView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page := dayPage{pageData: newPageData(r), Day: d}
-	calc, err := days.Calculate(d.Schedule(), time.Now(), userLocation(u))
+	calc, err := days.Calculate(d.Schedule(), s.now(), userLocation(u))
 	if err != nil {
 		s.dayFail(w, r, "calculate", err)
 		return
 	}
-	page.State = calc.Classification
-	page.Label = s.i18n.T(i18n.LangFrom(r.Context()), calc.ListLabel.Key, calc.ListLabel.Args...)
+	lang := i18n.LangFrom(r.Context())
+	timed := d.Time != ""
+	page.State, page.Target = calc.Classification, calc.Target
+	page.Big, page.Caption = s.countdown(lang, calc.ListLabel)
+	page.Breakdown = s.breakdownParts(lang, calc.Breakdown, timed)
+	if d.Repeat != days.RepeatNone && calc.OccurrenceOrdinal > 0 {
+		page.Ordinal = s.i18n.T(lang, "days.card.ordinal."+string(d.Repeat), ordinalNumber(lang, calc.OccurrenceOrdinal))
+	}
+	if calc.SinceOriginal != nil {
+		page.Since = s.breakdownParts(lang, *calc.SinceOriginal, timed)
+	}
 	if page.Collection, err = s.collections.Get(r.Context(), u.ID, d.CollectionID); err != nil {
 		s.dayFail(w, r, "get collection for", err)
 		return
 	}
-	tags, err := s.tags.List(r.Context(), u.ID)
+	groups, err := s.loadGroupIndex(r, u.ID)
 	if err != nil {
 		s.dayFail(w, r, "list tags for", err)
 		return
 	}
-	onDay := make(map[int64]bool, len(d.TagIDs))
-	for _, t := range d.TagIDs {
-		onDay[t] = true
-	}
-	for _, t := range tags {
-		if onDay[t.ID] {
-			page.Tags = append(page.Tags, t)
-		}
-	}
+	page.Tags = groups.dayTags(d)
 	s.render(w, r, "day.html", page)
 }
 

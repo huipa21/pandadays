@@ -39,3 +39,18 @@
   {{template "csrf-field" .}}
   <button type="submit" class="btn btn-danger">{{t "days.delete"}}</button>
 </form>{{end}}
+{{/* Custom accent color is an SVG fill because the CSP forbids inline styles; CSS supplies state defaults. */}}
+{{define "day-accent"}}<svg class="day-accent" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true"><rect width="1" height="1"{{with .}} fill="{{.}}"{{end}}/></svg>{{end}}
+{{define "day-icon"}}{{if .Day.StyleIcon}}{{.Day.StyleIcon}}{{else if .Day.ArchivedAt}}📦{{else if eq .State "past"}}✓{{else}}⏳{{end}}{{end}}
+{{define "day-badges"}}{{if .Day.ArchivedAt}}<span class="badge badge-archived">📦 {{t "days.archived"}}</span>{{end}}{{end}}
+{{define "day-when"}}<time datetime="{{.Target.Format "2006-01-02"}}">{{.Target.Format "2006-01-02"}}</time>{{if .Day.Time}} {{.Target.Format "15:04"}}{{end}}{{end}}
+{{define "day-item"}}<li><a class="day-item day-{{.State}}{{if .Day.ArchivedAt}} day-archived{{end}}" href="/days/{{.Day.ID}}">
+  {{template "day-accent" .Day.StyleColor}}
+  <span class="day-item-icon" aria-hidden="true">{{template "day-icon" .}}</span>
+  <span class="day-item-main">
+    <span class="day-item-title">{{.Day.Title}}</span>
+    <span class="day-item-date">{{template "day-when" .}}{{if ne .Day.Repeat "none"}} · ↻ {{t (printf "days.repeat.%s" .Day.Repeat)}}{{end}}</span>
+    {{if or .Collection .Tags .Day.ArchivedAt}}<span class="chips chips-small">{{template "day-badges" .}}{{with .Collection}}<span class="chip chip-small" title="{{t "days.field.collection"}}">📚 {{if .Color}}{{template "swatch" .Color}} {{end}}{{template "group-name" .}}</span>{{end}}{{range .Tags}}<span class="chip chip-small">{{template "swatch" .Color}} {{template "group-name" .}}</span>{{end}}</span>{{end}}
+  </span>
+  <span class="day-item-label">{{.Label}}</span>
+</a></li>{{end}}

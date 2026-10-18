@@ -1,0 +1,159 @@
+package web
+
+import (
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"pandadays/internal/days"
+	"pandadays/internal/i18n"
+)
+
+// dayItem is one row of a day list (Home now; archive and group pages in T12).
+type dayItem struct {
+	Day    days.Day
+	State  days.Classification
+	Label  string
+	Target time.Time // effective target in the user's timezone
+	// Collection and Tags are only set for the viewer's own days.
+	Collection *days.Group
+	Tags       []days.Group
+}
+
+type homePage struct {
+	pageData
+	When  days.When
+	Items []dayItem
+}
+
+// groupIndex resolves the owner's collections and tags by ID for list chips.
+type groupIndex struct {
+	collections map[int64]days.Group
+	tags        []days.Group
+}
+
+func (s *Server) loadGroupIndex(r *http.Request, owner int64) (groupIndex, error) {
+	cols, err := s.collections.List(r.Context(), owner)
+	if err != nil {
+		return groupIndex{}, err
+	}
+	tags, err := s.tags.List(r.Context(), owner)
+	if err != nil {
+		return groupIndex{}, err
+	}
+	idx := groupIndex{collections: make(map[int64]days.Group, len(cols)), tags: tags}
+	for _, c := range cols {
+		idx.collections[c.ID] = c
+	}
+	return idx, nil
+}
+
+// dayTags returns the day's tags in the owner's tag-list order.
+func (g groupIndex) dayTags(d days.Day) []days.Group {
+	on := make(map[int64]bool, len(d.TagIDs))
+	for _, id := range d.TagIDs {
+		on[id] = true
+	}
+	var out []days.Group
+	for _, t := range g.tags {
+		if on[t.ID] {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
+	u := CurrentUser(r.Context())
+	when := days.ParseWhen(r.URL.Query().Get("when"))
+	list, err := s.days.ListActive(r.Context(), u.ID)
+	if err != nil {
+		s.dayFail(w, r, "list", err)
+		return
+	}
+	groups, err := s.loadGroupIndex(r, u.ID)
+	if err != nil {
+		s.dayFail(w, r, "list groups for", err)
+		return
+	}
+	lang := i18n.LangFrom(r.Context())
+	page := homePage{pageData: newPageData(r), When: when}
+	for _, e := range days.HomeList(list, when, s.now(), userLocation(u)) {
+		item := dayItem{Day: e.Day, State: e.Calc.Classification, Target: e.Calc.Target,
+			Label: s.i18n.T(lang, e.Calc.ListLabel.Key, e.Calc.ListLabel.Args...), Tags: groups.dayTags(e.Day)}
+		if c, ok := groups.collections[e.Day.CollectionID]; ok {
+			item.Collection = &c
+		}
+		page.Items = append(page.Items, item)
+	}
+	w.Header().Add("Vary", "HX-Request")
+	if isHTMX(r) && r.Header.Get("HX-History-Restore-Request") == "" {
+		s.renderPartial(w, r, "home.html", "home-days", page)
+		return
+	}
+	s.render(w, r, "home.html", page)
+}
+
+func isHTMX(r *http.Request) bool { return r.Header.Get("HX-Request") == "true" }
+
+// breakdownPart is one "N unit" piece of a calendar breakdown.
+type breakdownPart struct {
+	Value int
+	Unit  string
+}
+
+func (s *Server) breakdownParts(lang string, b days.Breakdown, timed bool) []breakdownPart {
+	type unitValue struct {
+		n    int
+		unit string
+	}
+	values := []unitValue{{b.Years, "year"}, {b.Months, "month"}, {b.Days, "day"}}
+	if timed {
+		values = append(values, unitValue{b.Hours, "hour"}, unitValue{b.Minutes, "minute"})
+	}
+	var parts []breakdownPart
+	for _, v := range values {
+		if v.n == 0 {
+			continue
+		}
+		plural := "other"
+		if v.n == 1 {
+			plural = "one"
+		}
+		parts = append(parts, breakdownPart{Value: v.n, Unit: s.i18n.T(lang, "days.unit."+v.unit+"."+plural)})
+	}
+	return parts
+}
+
+// countdown splits a list label into the card's big figure and its caption.
+func (s *Server) countdown(lang string, m days.Message) (big, caption string) {
+	switch {
+	case strings.HasPrefix(m.Key, "days.count.") && len(m.Args) == 1:
+		if n, ok := m.Args[0].(int); ok {
+			return strconv.Itoa(n), s.i18n.T(lang, "days.card."+strings.TrimPrefix(m.Key, "days."))
+		}
+	case strings.HasPrefix(m.Key, "days.time.") && len(m.Args) == 2:
+		return s.i18n.T(lang, "days.card.hm", m.Args...), s.i18n.T(lang, "days.card."+strings.TrimPrefix(m.Key, "days."))
+	}
+	return s.i18n.T(lang, m.Key, m.Args...), ""
+}
+
+// ordinalNumber formats n as an ordinal figure for lang ("3rd" in English, "3" otherwise).
+func ordinalNumber(lang string, n int) string {
+	s := strconv.Itoa(n)
+	if lang != "en" {
+		return s
+	}
+	switch {
+	case n%100 >= 11 && n%100 <= 13:
+		return s + "th"
+	case n%10 == 1:
+		return s + "st"
+	case n%10 == 2:
+		return s + "nd"
+	case n%10 == 3:
+		return s + "rd"
+	}
+	return s + "th"
+}

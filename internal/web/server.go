@@ -37,6 +37,9 @@ type Server struct {
 	collections *days.Groups
 	tags        *days.Groups
 	days        *days.Days
+
+	// now is the clock used for date calculations; tests may replace it.
+	now func() time.Time
 }
 
 // New builds a Server. database may be nil (e.g. in tests that need no storage).
@@ -49,7 +52,7 @@ func New(cfg config.Config, logger *slog.Logger, database *sql.DB) (*Server, err
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{cfg: cfg, log: logger, db: database, i18n: bundle, pages: pages, static: assets.Static()}
+	s := &Server{cfg: cfg, log: logger, db: database, i18n: bundle, pages: pages, static: assets.Static(), now: time.Now}
 	if _, err := rand.Read(s.csrfKey[:]); err != nil {
 		return nil, fmt.Errorf("initialize CSRF key: %w", err)
 	}
@@ -185,15 +188,20 @@ func newPageData(r *http.Request) pageData {
 	}
 }
 
-func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, "home.html", newPageData(r))
-}
-
 func (s *Server) render(w http.ResponseWriter, r *http.Request, page string, data any) {
 	s.renderStatus(w, r, page, http.StatusOK, data)
 }
 
 func (s *Server) renderStatus(w http.ResponseWriter, r *http.Request, page string, status int, data any) {
+	s.execute(w, r, page, "layout", status, data)
+}
+
+// renderPartial renders one named template of a page set without the layout (htmx swaps).
+func (s *Server) renderPartial(w http.ResponseWriter, r *http.Request, page, name string, data any) {
+	s.execute(w, r, page, name, http.StatusOK, data)
+}
+
+func (s *Server) execute(w http.ResponseWriter, r *http.Request, page, name string, status int, data any) {
 	base, ok := s.pages[page]
 	if !ok {
 		s.log.Error("template not found", "page", page)
@@ -209,7 +217,7 @@ func (s *Server) renderStatus(w http.ResponseWriter, r *http.Request, page strin
 	t.Funcs(template.FuncMap{"t": s.i18n.Func(i18n.LangFrom(r.Context()))})
 
 	var buf bytes.Buffer
-	if err := t.ExecuteTemplate(&buf, "layout", data); err != nil {
+	if err := t.ExecuteTemplate(&buf, name, data); err != nil {
 		s.log.Error("render template", "page", page, "path", r.URL.Path, "err", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
