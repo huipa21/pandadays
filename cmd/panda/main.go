@@ -96,11 +96,12 @@ func cmdServe(args []string, getenv func(string) string, stdout, stderr io.Write
 		return 1
 	}
 
-	srv, err := web.New(cfg, logger, database)
+	srv, err := web.New(cfg, logger, database, version)
 	if err != nil {
 		logger.Error("init server", "err", err)
 		return 1
 	}
+	defer srv.Close()
 
 	logger.Info("starting panda", "version", version, "addr", cfg.Addr, "data_dir", cfg.DataDir)
 	if err := srv.Run(ctx); err != nil {

@@ -14,9 +14,11 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"pandadays/internal/auth"
+	"pandadays/internal/backup"
 	"pandadays/internal/config"
 	"pandadays/internal/days"
 	"pandadays/internal/i18n"
@@ -38,19 +40,26 @@ type Server struct {
 	auth    *auth.Service
 	csrfKey [32]byte
 
-	collections *days.Groups
-	tags        *days.Groups
-	days        *days.Days
-	media       *media.Store
-	shares      *share.Store
-	portability *portability.Service
+	collections     *days.Groups
+	tags            *days.Groups
+	days            *days.Days
+	media           *media.Store
+	shares          *share.Store
+	portability     *portability.Service
+	backup          *backup.Service
+	handler         http.Handler
+	gate            sync.Mutex
+	active          int
+	maintenance     bool
+	drained         chan struct{}
+	maintenanceLang string
 
 	// now is the clock used for date calculations; tests may replace it.
 	now func() time.Time
 }
 
 // New builds a Server. database may be nil (e.g. in tests that need no storage).
-func New(cfg config.Config, logger *slog.Logger, database *sql.DB) (*Server, error) {
+func New(cfg config.Config, logger *slog.Logger, database *sql.DB, appVersion ...string) (*Server, error) {
 	bundle, err := i18n.LoadEmbedded()
 	if err != nil {
 		return nil, err
@@ -63,19 +72,42 @@ func New(cfg config.Config, logger *slog.Logger, database *sql.DB) (*Server, err
 	if _, err := rand.Read(s.csrfKey[:]); err != nil {
 		return nil, fmt.Errorf("initialize CSRF key: %w", err)
 	}
-	if database != nil {
-		s.auth, err = auth.NewService(database)
-		if err != nil {
-			return nil, err
-		}
-		s.collections = days.NewCollections(database)
-		s.tags = days.NewTags(database)
-		s.days = days.NewDays(database)
-		s.media = media.New(database, filepath.Join(cfg.DataDir, "media"))
-		s.shares = share.New(database)
-		s.portability = portability.New(database, filepath.Join(cfg.DataDir, "media"), filepath.Join(cfg.DataDir, "tmp"))
+	version := "dev"
+	if len(appVersion) > 0 {
+		version = appVersion[0]
 	}
+	s.backup = backup.New(cfg.DataDir, version)
+	if err := s.bindDatabase(database); err != nil {
+		return nil, err
+	}
+	s.handler = s.routes()
 	return s, nil
+}
+
+func (s *Server) bindDatabase(database *sql.DB) error {
+	if database == nil {
+		return nil
+	}
+	service, err := auth.NewService(database)
+	if err != nil {
+		return err
+	}
+	s.db, s.auth = database, service
+	s.collections = days.NewCollections(database)
+	s.tags = days.NewTags(database)
+	s.days = days.NewDays(database)
+	s.media = media.New(database, filepath.Join(s.cfg.DataDir, "media"))
+	s.shares = share.New(database)
+	s.portability = portability.New(database, filepath.Join(s.cfg.DataDir, "media"), filepath.Join(s.cfg.DataDir, "tmp"))
+	return nil
+}
+
+// Close releases the current database handle after serving has stopped.
+func (s *Server) Close() error {
+	if s.db != nil {
+		return s.db.Close()
+	}
+	return nil
 }
 
 // templateFuncs are placeholders for parsing; render rebinds "t" to the request language.
@@ -105,6 +137,12 @@ func parsePages(tfs fs.FS) (map[string]*template.Template, error) {
 }
 
 func (s *Server) Handler() http.Handler {
+	return chain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.handler.ServeHTTP(w, r)
+	}), recoverPanics(s.log), requestLogger(s.log), securityHeaders, s.maintenanceGate)
+}
+
+func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
 	mux.Handle("GET /static/", http.StripPrefix("/static/", staticHandler(s.static)))
@@ -127,12 +165,10 @@ func (s *Server) Handler() http.Handler {
 		s.registerShareRoutes(mux)
 		s.registerAdminRoutes(mux)
 		s.registerPortabilityRoutes(mux)
+		s.registerBackupRoutes(mux)
 	}
 
 	return chain(mux,
-		recoverPanics(s.log),
-		requestLogger(s.log),
-		securityHeaders,
 		s.loadCurrentUser,
 		s.resolveLang,
 		forcePasswordChange,

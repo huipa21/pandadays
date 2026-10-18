@@ -66,7 +66,7 @@ func (s *Service) Restore(ctx context.Context, r io.Reader, now time.Time) (err 
 		}
 		if rollbackErr != nil {
 			cleanup = false
-			err = errors.Join(err, fmt.Errorf("rollback failed; recovery files retained in %s: %w", stage, rollbackErr))
+			err = errors.Join(err, fmt.Errorf("%w; recovery files retained in %s: %w", ErrRollback, stage, rollbackErr))
 		}
 	}()
 

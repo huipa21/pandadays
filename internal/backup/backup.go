@@ -28,6 +28,7 @@ var (
 	ErrUnsafeArchive  = errors.New("backup contains unsafe paths or links")
 	ErrChecksum       = errors.New("backup checksum mismatch")
 	ErrSchema         = errors.New("backup schema is not supported")
+	ErrRollback       = errors.New("rollback failed")
 )
 
 const manifestName = "manifest.json"

@@ -104,6 +104,7 @@ img, video, audio { max-width: 100%; }
 .admin-users { display: grid; gap: 1rem; margin-top: 1rem; }
 .admin-users > .card { min-width: 0; }
 .admin-identity { overflow-wrap: anywhere; margin: 0; }
+.backup-entry + .backup-entry { border-top: 1px solid var(--border); padding-top: 1rem; }
 
 @media (min-width: 720px) {
   .admin-users { grid-template-columns: repeat(2, minmax(0, 1fr)); }

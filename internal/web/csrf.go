@@ -10,6 +10,7 @@ import (
 	"errors"
 	"mime"
 	"net/http"
+	"os"
 	"strings"
 
 	"pandadays/internal/media"
@@ -47,6 +48,28 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 			return
 		}
 		safe := r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions
+		if r.Method == http.MethodPost && r.URL.Path == "/admin/backup/restore" {
+			user := CurrentUser(r.Context())
+			if user == nil {
+				authRedirect(w, r, "/login")
+				return
+			}
+			if !user.IsAdmin {
+				http.NotFound(w, r)
+				return
+			}
+			filename, err := s.stageRestoreForm(r)
+			if err != nil {
+				s.log.Warn("stage restore upload", "err", err)
+				s.authError(w, r, "backup.error.upload", http.StatusBadRequest)
+				return
+			}
+			defer func() {
+				if err := os.Remove(filename); err != nil {
+					s.log.Error("remove restore upload", "err", err)
+				}
+			}()
+		}
 		token := ""
 		if session := CurrentSession(r.Context()); session != nil {
 			token = session.CSRFToken

@@ -220,12 +220,36 @@ title,date,time,repeat,collection,tags,comment,archived,style_color,style_icon,s
 **Restore**
 1. Admin uploads archive (streamed to `/data/tmp`, no size cap at app level) and re-enters password.
 2. Validate: manifest present, checksums match, schema version ≤ current, no unsafe paths/links, free disk space sufficient.
-3. Auto-create pre-restore snapshot `/data/backups/pre-restore-<ts>.tar.gz`.
-4. Enter maintenance mode: new requests get localized 503; drain in-flight requests; close DB.
+3. Enter maintenance mode: new requests get localized 503; drain in-flight requests; close DB.
+4. Auto-create pre-restore snapshot `/data/backups/pre-restore-<ts>-<unique>.tar.gz`.
 5. Atomic swap via `rename` on the same volume (`pandadays.db`, `media/`); old copies kept as `*.old` until success.
 6. Reopen DB, run migrations, delete all sessions, exit maintenance.
 7. Admin redirected to login (credentials from restored data).
-8. On any failure: rename old files back, keep snapshot, exit maintenance, show error.
+8. On failure: rename old files back, keep snapshot, reopen the original database, exit maintenance, show error. If rollback or reopening fails, remain in maintenance and log recovery details rather than serve potentially inconsistent data.
+
+The admin navigation links to `/admin/backup`. Creation is a CSRF-protected
+POST, with an optional retained server copy. The completed archive is staged
+on the data volume before streaming the download so creation errors can be
+reported without a partial archive. Allow disk space for the database snapshot
+and compressed archive. Maintenance also pauses requests during creation and
+download, keeping database and media consistent.
+
+Retained ordinary backups are pruned newest-first to `backup_retention` after
+creation and when site settings are saved. Zero disables ordinary retention.
+Pre-restore recovery snapshots are listed and downloadable but excluded from
+automatic pruning; delete them explicitly using the confirmation checkbox.
+Retained archive names are validated and only regular files are served.
+
+Restore uploads stream to `<data>/tmp` without a payload byte limit; small text
+fields are bounded. Both form-field and header CSRF tokens are supported.
+Password re-entry uses the existing authentication backoff. Archive validation
+finishes before maintenance begins. All requests, including health checks and
+static files, receive a non-cacheable localized 503 with `Retry-After` during
+maintenance; those responses never access the database. Once admitted requests
+have drained, the engine takes its recovery snapshot and performs the swap.
+The server replaces all database-backed services and routes, clears the session
+cookie, and redirects to login. A disconnected browser does not cancel a swap
+that has started. Do not stop the server during restore.
 
 CLI `panda backup` / `panda restore` share the same `internal/backup` package.
 
@@ -265,7 +289,8 @@ directory, which is preserved for manual recovery. Individual renames are
 atomic; the pair is not a crash-recovery transaction, so do not interrupt a
 restore. Existing retained backups and unrelated temporary files are preserved.
 Restart the server and sign in using the restored credentials.
-Web maintenance mode, request draining, and live DB handle replacement are T19.
+The Web UI supplies maintenance mode, request draining, and live DB handle
+replacement; the offline CLI still requires the server to be stopped.
 
 ---
 

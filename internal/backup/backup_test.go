@@ -407,7 +407,7 @@ func TestRollbackFailureRetainsRecoveryFiles(t *testing.T) {
 		return os.Rename(from, to)
 	}
 	err := service.Restore(context.Background(), bytes.NewReader(archive), testNow)
-	if !errors.Is(err, injected) || !strings.Contains(err.Error(), "recovery files retained") {
+	if !errors.Is(err, injected) || !errors.Is(err, ErrRollback) || !strings.Contains(err.Error(), "recovery files retained") {
 		t.Fatalf("rollback failure not surfaced: %v", err)
 	}
 	stages, err := filepath.Glob(filepath.Join(target, "tmp", "backup-*"))

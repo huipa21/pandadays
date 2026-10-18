@@ -184,6 +184,10 @@ func (s *Server) saveAdminSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		*field.dst = n.Int64
 	}
+	if !s.beginMaintenance(w, r) {
+		return
+	}
+	defer s.endMaintenance()
 	err := s.auth.AdminSaveSettings(r.Context(), CurrentUser(r.Context()).ID, v)
 	if errors.Is(err, auth.ErrSettingInvalid) {
 		s.renderStatus(w, r, "admin_settings.html", http.StatusUnprocessableEntity,
@@ -192,6 +196,10 @@ func (s *Server) saveAdminSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		s.adminError(w, r, err)
+		return
+	}
+	if err := s.backup.Prune(v.BackupRetention); err != nil {
+		s.backupError(w, r, err)
 		return
 	}
 	http.Redirect(w, r, "/admin/settings", http.StatusSeeOther)

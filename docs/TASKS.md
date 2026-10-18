@@ -158,10 +158,11 @@ Status legend: `[ ]` todo, `[x]` done.
 - **Done when**: tests for create→restore equality, checksum mismatch rejected, tar-slip rejected, simulated failure mid-swap rolls back.
 - Integration: `backup.New(dataDir, appVersion)` exposes `Create(ctx, database, writer, now)`, `Validate(ctx, reader)` (returns `Manifest`), and `Restore(ctx, reader, now)`. Pause writes during create; close all DB handles and stop filesystem access before restore. Restore stages in `<data>/tmp`, validates checksums/schema/SQLite integrity, retains a pre-restore archive, swaps DB/media with rollback, migrates, and clears sessions. CLI commands are offline and require the server stopped; T19 must supply maintenance/draining and reopen its own handles afterward. See SPEC §6.3 for archive limits and recovery behavior.
 
-### [ ] T19 Admin backup/restore Web UI
+### [x] T19 Admin backup/restore Web UI
 - `/admin/backup`: create & download, retained backups list (download/delete, retention pruning), restore upload with password re-entry.
 - Maintenance mode middleware (localized 503, drain in-flight), DB handle swap/reopen, session wipe, redirect to login.
 - **Done when**: integration test performing restore through HTTP; other requests receive 503 during restore.
+- Integration: `/admin/backup` supports create/download with optional retention, retained download and confirmed deletion, and streamed restore uploads with password re-entry. The request gate drains all admitted requests before closing DB handles; replacement services/routes are published before normal traffic resumes. Recovery snapshots are excluded from ordinary retention pruning and require explicit deletion. Failed rollback/reopen leaves maintenance enabled with recovery details in the server log. Web server owners must call `Server.Close` after serving to close the current (possibly replaced) handle.
 
 ---
 

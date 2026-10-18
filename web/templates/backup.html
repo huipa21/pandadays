@@ -1,0 +1,35 @@
+{{define "title"}}{{t "backup.title"}} · {{t "app.name"}}{{end}}
+{{define "content"}}
+<h1>{{t "backup.title"}}</h1>
+<form method="post" action="/admin/backup" class="card form">
+  {{template "csrf-field" .}}
+  <h2>{{t "backup.create"}}</h2>
+  <p class="hint">{{t "backup.sensitive"}}</p>
+  <p class="hint">{{t "backup.retention" .Retention}}</p>
+  <label class="check"><input type="checkbox" name="retain" value="1"{{if gt .Retention 0}} checked{{else}} disabled{{end}}> {{t "backup.retain"}}</label>
+  <button type="submit" class="btn">{{t "backup.create"}}</button>
+</form>
+<section class="card form">
+  <h2>{{t "backup.retained"}}</h2>
+  <p class="hint">{{t "backup.recovery"}}</p>
+  {{range .Files}}
+  <article class="backup-entry">
+    <p class="admin-identity"><a href="/admin/backup/{{.Name}}">{{.Name}}</a></p>
+    <p class="hint"><time datetime="{{.Modified.UTC.Format "2006-01-02T15:04:05Z"}}">{{.Modified.UTC.Format "2006-01-02 15:04 UTC"}}</time> · {{bytes .Size}}</p>
+    <form method="post" action="/admin/backup/{{.Name}}/delete" class="form">
+      {{template "csrf-field" $}}
+      <label class="check"><input type="checkbox" name="confirm" value="1" required> {{t "backup.delete_confirm"}}</label>
+      <button type="submit" class="btn btn-danger">{{t "groups.delete"}}</button>
+    </form>
+  </article>
+  {{else}}<p>{{t "backup.empty"}}</p>{{end}}
+</section>
+<form method="post" action="/admin/backup/restore" enctype="multipart/form-data" class="card form danger-zone">
+  {{template "csrf-field" .}}
+  <h2>{{t "backup.restore"}}</h2>
+  <p>{{t "backup.warning"}}</p>
+  <label>{{t "backup.file"}} <input type="file" name="file" accept=".tar.gz,application/gzip" required></label>
+  <label>{{t "backup.password"}} <input type="password" name="password" autocomplete="current-password" required></label>
+  <button type="submit" class="btn btn-danger">{{t "backup.restore"}}</button>
+</form>
+{{end}}
