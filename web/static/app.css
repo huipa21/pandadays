@@ -1,0 +1,93 @@
+/* PandaDays — mobile-first base styles */
+:root {
+  --bg: #f7f7f5;
+  --fg: #1f2328;
+  --muted: #6b7280;
+  --surface: #ffffff;
+  --border: #e5e7eb;
+  --accent: #2f855a;
+  --radius: 12px;
+  --space: 1rem;
+  --maxw: 960px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+  line-height: 1.5;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111315;
+    --fg: #e6e6e6;
+    --muted: #9ca3af;
+    --surface: #1b1e21;
+    --border: #2d3135;
+    --accent: #68d391;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 100vh;
+  -webkit-text-size-adjust: 100%;
+}
+
+a { color: var(--accent); }
+
+img, video, audio { max-width: 100%; }
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space);
+  padding: 0.75rem var(--space);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 1.125rem;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.container {
+  width: 100%;
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: var(--space);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space);
+}
+
+.btn {
+  display: inline-block;
+  min-height: 44px;
+  padding: 0.625rem 1rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.empty { min-height: 40vh; }
+
+@media (min-width: 768px) {
+  :root { --space: 1.5rem; }
+  .brand { font-size: 1.25rem; }
+}

@@ -1,0 +1,28 @@
+# Go build and test artifacts
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+
+# Local Go workspace
+go.work
+
+# Local runtime data, databases, and backups
+/data/
+*.db
+*.db-shm
+*.db-wal
+*.tar.gz
+
+# Local environment and logs
+.env
+.env.*
+!.env.example
+*.log
+
+# Editor and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
