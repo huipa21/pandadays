@@ -36,6 +36,7 @@ type Server struct {
 
 	collections *days.Groups
 	tags        *days.Groups
+	days        *days.Days
 }
 
 // New builds a Server. database may be nil (e.g. in tests that need no storage).
@@ -59,6 +60,7 @@ func New(cfg config.Config, logger *slog.Logger, database *sql.DB) (*Server, err
 		}
 		s.collections = days.NewCollections(database)
 		s.tags = days.NewTags(database)
+		s.days = days.NewDays(database)
 	}
 	return s, nil
 }
@@ -104,6 +106,7 @@ func (s *Server) Handler() http.Handler {
 	if s.db != nil {
 		s.registerGroupRoutes(mux, s.collections, "collections")
 		s.registerGroupRoutes(mux, s.tags, "tags")
+		s.registerDayRoutes(mux)
 	}
 
 	return chain(mux,

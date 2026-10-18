@@ -1,0 +1,19 @@
+{{define "title"}}{{.Day.Title}} · {{t "app.name"}}{{end}}
+{{define "content"}}
+<section class="stack">
+  <p><a href="/">← {{t "nav.home"}}</a></p>
+  <article class="card day-detail">
+    <h1 class="day-heading">{{with .Day.StyleColor}}{{template "swatch" .}} {{end}}{{with .Day.StyleIcon}}<span class="day-icon" aria-hidden="true">{{.}}</span> {{end}}{{.Day.Title}}</h1>
+    <p class="day-label day-{{.State}}">{{.Label}}</p>
+    <dl class="day-facts">
+      <dt>{{t "days.field.date"}}</dt><dd><time datetime="{{.Day.Date}}">{{.Day.Date}}</time>{{with .Day.Time}} {{.}}{{else}} · {{t "days.all_day"}}{{end}}</dd>
+      <dt>{{t "days.field.repeat"}}</dt><dd>{{t (printf "days.repeat.%s" .Day.Repeat)}}</dd>
+      <dt>{{t "days.field.collection"}}</dt><dd><a class="chip" href="/collections/{{.Collection.ID}}">{{template "swatch" .Collection.Color}} {{template "group-name" .Collection}}</a></dd>
+      <dt>{{t "days.field.tags"}}</dt><dd class="chips">{{range .Tags}}<a class="chip" href="/tags/{{.ID}}">{{template "swatch" .Color}} {{template "group-name" .}}</a>{{end}}</dd>
+    </dl>
+    {{with .Day.Comment}}<p class="day-comment">{{.}}</p>{{end}}
+    <p><a class="btn" href="/days/{{.Day.ID}}/edit">{{t "days.edit"}}</a></p>
+  </article>
+  {{template "day-delete" .}}
+</section>
+{{end}}

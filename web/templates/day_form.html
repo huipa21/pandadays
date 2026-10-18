@@ -1,0 +1,52 @@
+{{define "title"}}{{if .Day.ID}}{{t "days.edit"}}{{else}}{{t "days.new"}}{{end}} · {{t "app.name"}}{{end}}
+{{define "content"}}
+<section class="stack">
+  {{if .Day.ID}}<p><a href="/days/{{.Day.ID}}">← {{.Day.Title}}</a></p>{{else}}<p><a href="/">← {{t "nav.home"}}</a></p>{{end}}
+  <h1>{{if .Day.ID}}{{t "days.edit"}}{{else}}{{t "days.new"}}{{end}}</h1>
+  {{with .Error}}<p class="alert" role="alert">{{t .}}</p>{{end}}
+  <form method="post" action="{{if .Day.ID}}/days/{{.Day.ID}}/edit{{else}}/days{{end}}" class="card form">
+    {{template "csrf-field" .}}
+    <label>{{t "days.field.title"}}
+      <input type="text" name="title" value="{{.Form.Title}}" maxlength="200" required>
+    </label>
+    <div class="field-row">
+      <label>{{t "days.field.date"}}
+        <input type="date" name="date" value="{{.Form.Date}}" min="0001-01-01" max="9999-12-31" required>
+      </label>
+      <label>{{t "days.field.time"}}
+        <input type="time" name="time" value="{{.Form.Time}}">
+        <span class="hint">{{t "days.field.time_hint"}}</span>
+      </label>
+    </div>
+    <label>{{t "days.field.repeat"}}
+      <select name="repeat">
+        {{range .Repeats}}<option value="{{.}}"{{if eq (print .) $.Form.Repeat}} selected{{end}}>{{t (printf "days.repeat.%s" .)}}</option>{{end}}
+      </select>
+    </label>
+    <label>{{t "days.field.collection"}}
+      <select name="collection">
+        {{range .Collections}}<option value="{{.Group.ID}}"{{if .Selected}} selected{{end}}>{{template "group-name" .Group}}</option>{{end}}
+      </select>
+    </label>
+    <fieldset class="choice-group">
+      <legend>{{t "days.field.tags"}}</legend>
+      {{range .Tags}}<label class="chip-check"><input type="checkbox" name="tags" value="{{.Group.ID}}"{{if .Selected}} checked{{end}}>
+        {{template "swatch" .Group.Color}} {{template "group-name" .Group}}</label>{{end}}
+      <p class="hint">{{t "days.field.tags_hint"}}</p>
+    </fieldset>
+    <label>{{t "days.field.comment"}}
+      <textarea name="comment" rows="4" maxlength="10000">{{.Form.Comment}}</textarea>
+      <span class="hint">{{t "days.field.comment_hint"}}</span>
+    </label>
+    <fieldset class="choice-group">
+      <legend>{{t "days.field.style"}}</legend>
+      {{template "group-color-fields" .Form}}
+      <label>{{t "days.field.icon"}}
+        <input type="text" name="icon" value="{{.Form.Icon}}" maxlength="16" placeholder="🎉" class="icon-input">
+      </label>
+    </fieldset>
+    <button type="submit" class="btn">{{if .Day.ID}}{{t "days.save"}}{{else}}{{t "days.create"}}{{end}}</button>
+  </form>
+  {{if .Day.ID}}{{template "day-delete" .}}{{end}}
+</section>
+{{end}}

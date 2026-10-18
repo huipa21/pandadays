@@ -34,3 +34,8 @@
   <label class="color-label">{{t "groups.color"}} <input type="color" name="color" value="{{.Color}}"></label>
   <label class="check"><input type="checkbox" name="no_color" value="1"{{if .NoColor}} checked{{end}}> {{t "groups.no_color"}}</label>
 </div>{{end}}
+{{define "day-delete"}}<form method="post" action="/days/{{.Day.ID}}/delete" class="card form danger-zone"
+      hx-post="/days/{{.Day.ID}}/delete" hx-confirm="{{t "days.delete_confirm"}}">
+  {{template "csrf-field" .}}
+  <button type="submit" class="btn btn-danger">{{t "days.delete"}}</button>
+</form>{{end}}

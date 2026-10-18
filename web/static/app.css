@@ -124,7 +124,11 @@ img, video, audio { max-width: 100%; }
 
 .form input[type="text"],
 .form input[type="email"],
-.form input[type="password"] {
+.form input[type="password"],
+.form input[type="date"],
+.form input[type="time"],
+.form select,
+.form textarea {
   width: 100%;
   min-height: 44px;
   padding: 0.5rem 0.75rem;
@@ -134,6 +138,68 @@ img, video, audio { max-width: 100%; }
   color: var(--fg);
   font: inherit;
   font-size: 1rem;
+  font-weight: 400;
+}
+
+.form textarea { resize: vertical; }
+
+.form label .hint { font-weight: 400; }
+
+.form .icon-input { max-width: 8rem; }
+
+.field-row { display: grid; gap: 0.875rem; }
+.form .field-row label { align-content: start; }
+
+.choice-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.choice-group legend { padding: 0; margin-bottom: 0.25rem; font-weight: 500; }
+.choice-group > .hint, .choice-group > .color-row, .choice-group > label:not(.chip-check) { flex-basis: 100%; }
+
+.form label.chip-check, .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 44px;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--fg);
+  font-weight: 400;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.form label.chip-check:has(input:checked) { border-color: var(--accent); }
+.chip-check input { width: 1.125rem; height: 1.125rem; margin: 0; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 0.375rem; }
+
+.day-detail { display: grid; gap: 0.75rem; }
+.day-detail > * { margin: 0; }
+.day-heading { overflow-wrap: anywhere; }
+.day-heading .swatch { width: 1.125rem; height: 1.125rem; vertical-align: -0.125rem; }
+a.btn { text-decoration: none; }
+.day-icon { font-size: 1.5rem; }
+.day-label { font-size: 1.5rem; font-weight: 700; }
+.day-future, .day-today { color: #b7791f; }
+.day-past { color: #2b6cb0; }
+.day-facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.5rem 1rem; margin: 0; align-items: center; }
+.day-facts dt { color: var(--muted); font-size: 0.875rem; }
+.day-facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.day-comment { white-space: pre-wrap; overflow-wrap: anywhere; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+
+@media (prefers-color-scheme: dark) {
+  .day-future, .day-today { color: #f6ad55; }
+  .day-past { color: #90cdf4; }
 }
 
 .form label.check {
@@ -226,4 +292,5 @@ img, video, audio { max-width: 100%; }
 @media (min-width: 768px) {
   :root { --space: 1.5rem; }
   .brand { font-size: 1.25rem; }
+  .field-row { grid-template-columns: 1fr 1fr; }
 }
