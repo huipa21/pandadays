@@ -13,6 +13,23 @@
   let stream;
   let chunks = [];
 
+  // Browsers support different recorder formats: Chrome/Firefox WebM or Ogg
+  // Opus, Safari MP4/AAC. The server sniffs the content to classify it.
+  const preferredTypes = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus", "audio/ogg"];
+  const mimeType = preferredTypes.find((type) => MediaRecorder.isTypeSupported?.(type));
+  const extensions = { "audio/webm": "webm", "video/webm": "webm", "audio/mp4": "m4a", "video/mp4": "m4a", "audio/ogg": "ogg", "audio/aac": "aac" };
+
+  function voiceFilename(type) {
+    const ext = extensions[(type || "").split(";")[0].trim().toLowerCase()] || "webm";
+    const stamp = new Date().toISOString().replace(/\.\d+Z$/, "").replace(/[-:]/g, "").replace("T", "-");
+    return `voice-${stamp}.${ext}`;
+  }
+
+  function resetButton() {
+    button.disabled = false;
+    button.textContent = controls.dataset.recordStart;
+  }
+
   button.addEventListener("click", async () => {
     if (recorder?.state === "recording") {
       recorder.stop();
@@ -22,28 +39,35 @@
     button.disabled = true;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      recorder = new MediaRecorder(stream);
+      recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       chunks = [];
       recorder.addEventListener("dataavailable", (event) => {
         if (event.data.size) chunks.push(event.data);
       });
       recorder.addEventListener("stop", async () => {
         stream.getTracks().forEach((track) => track.stop());
-        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+        const type = recorder.mimeType || mimeType || "audio/webm";
+        const blob = new Blob(chunks, { type });
         const data = new FormData();
-        data.append("file", blob, "voice.webm");
+        data.append("file", blob, voiceFilename(type));
+        status.textContent = controls.dataset.uploading;
+        let serverText = "";
         try {
           const response = await fetch(form.action, {
             method: "POST",
             headers: { "X-CSRF-Token": csrf },
             body: data,
           });
-          if (!response.ok) throw new Error("upload");
+          if (!response.ok) {
+            if ((response.headers.get("Content-Type") || "").startsWith("text/plain")) {
+              serverText = (await response.text()).trim();
+            }
+            throw new Error("upload");
+          }
           window.location.reload();
         } catch {
-          status.textContent = controls.dataset.uploadError;
-          button.disabled = false;
-          button.textContent = controls.dataset.recordStart;
+          status.textContent = serverText || controls.dataset.uploadError;
+          resetButton();
         }
       }, { once: true });
       recorder.start();
@@ -51,8 +75,9 @@
       button.textContent = controls.dataset.recordStop;
       button.disabled = false;
     } catch {
+      stream?.getTracks().forEach((track) => track.stop());
       status.textContent = controls.dataset.recordError;
-      button.disabled = false;
+      resetButton();
     }
   });
 })();

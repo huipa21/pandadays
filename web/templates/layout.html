@@ -6,14 +6,16 @@
 <meta name="htmx-config" content='{"includeIndicatorStyles":false}'>
 <meta name="csrf-token" content="{{.CSRFToken}}">
 <title>{{block "title" .}}{{t "app.name"}}{{end}}</title>
-<link rel="stylesheet" href="/static/app.css">
-<script src="/static/htmx.min.js" defer></script>
-{{if .CaptureTimezone}}<script src="/static/timezone.js" defer></script>{{end}}
+<link rel="stylesheet" href="{{asset "app.css"}}">
+<script src="{{asset "htmx.min.js"}}" defer></script>
+<script src="{{asset "app.js"}}" defer></script>
+{{if .CaptureTimezone}}<script src="{{asset "timezone.js"}}" defer></script>{{end}}
 </head>
 <body hx-headers='{"X-CSRF-Token":"{{.CSRFToken}}"}'>
+<a class="skip-link" href="#main">{{t "nav.skip"}}</a>
 <header class="site-header">
-  <a class="brand" href="/">🐼 {{t "app.name"}}</a>
-  {{with .User}}<nav class="nav">
+  <a class="brand" href="/"><span aria-hidden="true">🐼</span> {{t "app.name"}}</a>
+  {{with .User}}<nav class="nav" aria-label="{{t "nav.main"}}">
     <span class="nav-user">{{.Username}}</span>
     <a href="/archive">{{t "nav.archive"}}</a>
     <a href="/shared">{{t "sharing.title"}}</a>
@@ -27,7 +29,8 @@
     <form method="post" action="/logout" class="inline-form">{{template "csrf-field" $}}<button type="submit" class="link-button">{{t "nav.logout"}}</button></form>
   </nav>{{end}}
 </header>
-<main class="container">
+<main class="container" id="main" tabindex="-1">
+<p class="alert" id="flash" role="alert" hidden data-error-network="{{t "error.network"}}" data-error-generic="{{t "error.internal"}}"></p>
 {{block "content" .}}{{end}}
 </main>
 </body>
@@ -48,15 +51,15 @@
 {{/* Custom accent color is an SVG fill because the CSP forbids inline styles; CSS supplies state defaults. */}}
 {{define "day-accent"}}<svg class="day-accent" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true"><rect width="1" height="1"{{with .}} fill="{{.}}"{{end}}/></svg>{{end}}
 {{define "day-icon"}}{{if .Day.StyleIcon}}{{.Day.StyleIcon}}{{else if .Day.ArchivedAt}}📦{{else if eq .State "past"}}✓{{else}}⏳{{end}}{{end}}
-{{define "day-badges"}}{{if .Day.ArchivedAt}}<span class="badge badge-archived">📦 {{t "days.archived"}}</span>{{end}}{{end}}
+{{define "day-badges"}}{{if .Day.ArchivedAt}}<span class="badge badge-archived"><span aria-hidden="true">📦</span> {{t "days.archived"}}</span>{{end}}{{end}}
 {{define "day-when"}}<time datetime="{{.Target.Format "2006-01-02"}}">{{.Target.Format "2006-01-02"}}</time>{{if .Day.Time}} {{.Target.Format "15:04"}}{{end}}{{end}}
 {{define "day-item"}}<li{{if .Shared}} class="shared-list-item"{{end}}><a class="day-item day-{{.State}}{{if .Shared}} day-shared{{end}}{{if .Day.ArchivedAt}} day-archived{{end}}" href="/days/{{.Day.ID}}">
   {{template "day-accent" .Day.StyleColor}}
   <span class="day-item-icon" aria-hidden="true">{{template "day-icon" .}}</span>
   <span class="day-item-main">
     <span class="day-item-title">{{.Day.Title}}</span>
-    <span class="day-item-date">{{template "day-when" .}}{{if ne .Day.Repeat "none"}} · ↻ {{t (printf "days.repeat.%s" .Day.Repeat)}}{{end}}</span>
-    {{if or .Collection .Tags .Day.ArchivedAt .Shared}}<span class="chips chips-small">{{template "day-badges" .}}{{if .Shared}}<span class="badge badge-shared">{{t "sharing.from" .ShareOwner}}</span>{{end}}{{with .Collection}}<span class="chip chip-small" title="{{t "days.field.collection"}}">📚 {{if .Color}}{{template "swatch" .Color}} {{end}}{{template "group-name" .}}</span>{{end}}{{range .Tags}}<span class="chip chip-small">{{template "swatch" .Color}} {{template "group-name" .}}</span>{{end}}</span>{{end}}
+    <span class="day-item-date">{{template "day-when" .}}{{if ne .Day.Repeat "none"}} · <span aria-hidden="true">↻</span> {{t (printf "days.repeat.%s" .Day.Repeat)}}{{end}}</span>
+    {{if or .Collection .Tags .Day.ArchivedAt .Shared}}<span class="chips chips-small">{{template "day-badges" .}}{{if .Shared}}<span class="badge badge-shared">{{t "sharing.from" .ShareOwner}}</span>{{end}}{{with .Collection}}<span class="chip chip-small" title="{{t "days.field.collection"}}"><span aria-hidden="true">📚</span><span class="visually-hidden">{{t "days.field.collection"}}:</span> {{if .Color}}{{template "swatch" .Color}} {{end}}{{template "group-name" .}}</span>{{end}}{{range $i, $g := .Tags}}<span class="chip chip-small">{{if not $i}}<span class="visually-hidden">{{t "days.field.tags"}}:</span> {{end}}{{template "swatch" $g.Color}} {{template "group-name" $g}}</span>{{end}}</span>{{end}}
   </span>
   <span class="day-item-label">{{.Label}}</span>
 </a>{{if .HideAction}}<form method="post" action="{{.HideAction}}" class="inline-form shared-hide-form">

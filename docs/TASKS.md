@@ -168,15 +168,17 @@ Status legend: `[ ]` todo, `[x]` done.
 
 ## Phase 8 — Delivery
 
-### [ ] T20 Docker & docs
+### [x] T20 Docker & docs
 - Multi-stage `Dockerfile` (CGO disabled, static binary, non-root user, `/data` volume, `HEALTHCHECK`), `compose.yaml` (service `pandadays`, volume, env vars, restart policy).
 - `README.md`: install, first-run setup token (`docker compose logs pandadays`), reset admin password command, backup/restore, reverse proxy note (TLS, large body size for restore uploads), env vars.
 - **Done when**: `docker compose up` → setup via token → create user → login works; `docker compose exec pandadays panda reset-admin-password --username admin` works.
+- Integration: multi-stage CGO-free image runs as UID/GID 10001 with `/data` as its only persistent volume and `/healthz` health checks (also declared in `compose.yaml`, since Podman's OCI-format builds drop the image `HEALTHCHECK`). Compose defaults to localhost HTTP; set `PANDA_BASE_URL` and `PANDA_COOKIE_SECURE=true` behind TLS. README covers setup, account recovery, environment variables, storage, updates, reverse proxy limits, and online/offline backup/restore. Validated with Docker Compose v2.40 against Podman 5.8 via a scripted run: `up --build` → healthy, UID 10001, static binary → setup token from `docker compose logs` → setup → create user → both logins → `docker compose exec pandadays panda reset-admin-password --username admin` (old password rejected, new accepted) → restart persistence → offline CLI backup, `down -v`, fresh-volume restore, restored logins.
 
-### [ ] T21 Final polish & QA
+### [x] T21 Final polish & QA
 - Accessibility pass (labels, contrast, focus, badges not color-only).
 - zh translations complete.
 - Manual QA matrix: iOS Safari, Android Chrome, desktop Chrome/Firefox; voice recording; large video upload; restore.
+- Integration: QA matrix and a11y checklist live in [QA.md](QA.md). Uploads are sniffed over the first 64 KiB (`media.Sniff`) so MediaRecorder WebM/MP4/Ogg voice notes are stored as audio. `web/static/app.js` shows localized htmx error/network messages in `#flash` and upload progress. Templates must reference static files via `{{asset "name"}}` (content-hashed `?v=`), and every `t "key"` must exist in all locales (enforced by `internal/web/polish_test.go`). Generic 400/500 responses are localized via `authError`. Header is sticky only at ≥768px. iPhone `.mov` uploads (`ftyp qt  `) are sniffed as `video/quicktime` and play inline. Screen-reader text: home has a visually hidden `h1`; day-list collection/tag chips carry a hidden field prefix (`a11y_list_test.go`). Every matrix row passed on 2026-10-18 via a Playwright harness. The harness used WebKit with iPhone emulation, Chromium with Pixel emulation, desktop Chromium and desktop Firefox, together with axe-core and accessibility-tree audits. On WebKit, AAC/H.264 playback could not be verified because that WebKit build has no codecs. Before each release, re-check recording and playback, and do a VoiceOver/TalkBack walkthrough, on real iOS/Android devices (see QA.md).
 
 ---
 

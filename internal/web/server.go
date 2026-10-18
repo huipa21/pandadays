@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"html/template"
@@ -31,14 +33,16 @@ import (
 const shutdownTimeout = 10 * time.Second
 
 type Server struct {
-	cfg     config.Config
-	log     *slog.Logger
-	db      *sql.DB
-	i18n    *i18n.Bundle
-	pages   map[string]*template.Template
-	static  fs.FS
-	auth    *auth.Service
-	csrfKey [32]byte
+	cfg    config.Config
+	log    *slog.Logger
+	db     *sql.DB
+	i18n   *i18n.Bundle
+	pages  map[string]*template.Template
+	static fs.FS
+	// assetVersion is appended to static URLs to bust browser caches on upgrade.
+	assetVersion string
+	auth         *auth.Service
+	csrfKey      [32]byte
 
 	collections     *days.Groups
 	tags            *days.Groups
@@ -69,6 +73,9 @@ func New(cfg config.Config, logger *slog.Logger, database *sql.DB, appVersion ..
 		return nil, err
 	}
 	s := &Server{cfg: cfg, log: logger, db: database, i18n: bundle, pages: pages, static: assets.Static(), now: time.Now}
+	if s.assetVersion, err = staticVersion(s.static); err != nil {
+		return nil, err
+	}
 	if _, err := rand.Read(s.csrfKey[:]); err != nil {
 		return nil, fmt.Errorf("initialize CSRF key: %w", err)
 	}
@@ -110,10 +117,34 @@ func (s *Server) Close() error {
 	return nil
 }
 
-// templateFuncs are placeholders for parsing; render rebinds "t" to the request language.
+// templateFuncs are placeholders for parsing; execute rebinds "t" to the request language
+// and "asset" to the content-versioned static URL.
 var templateFuncs = template.FuncMap{
 	"t":     func(key string, _ ...any) string { return key },
+	"asset": func(name string) string { return "/static/" + name },
 	"bytes": formatBytes,
+}
+
+// staticVersion hashes every static file so asset URLs change whenever their
+// content does, preventing stale cached CSS/JS after an upgrade.
+func staticVersion(fsys fs.FS) (string, error) {
+	h := sha256.New()
+	err := fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		data, err := fs.ReadFile(fsys, path)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(h, "%s\x00%d\x00", path, len(data))
+		h.Write(data)
+		return nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("hash static assets: %w", err)
+	}
+	return hex.EncodeToString(h.Sum(nil))[:12], nil
 }
 
 // parsePages builds one template set per page, each combining layout.html with the page file.
@@ -258,21 +289,24 @@ func (s *Server) execute(w http.ResponseWriter, r *http.Request, page, name stri
 	base, ok := s.pages[page]
 	if !ok {
 		s.log.Error("template not found", "page", page)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		s.authError(w, r, "error.internal", http.StatusInternalServerError)
 		return
 	}
 	t, err := base.Clone()
 	if err != nil {
 		s.log.Error("clone template", "page", page, "err", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		s.authError(w, r, "error.internal", http.StatusInternalServerError)
 		return
 	}
-	t.Funcs(template.FuncMap{"t": s.i18n.Func(i18n.LangFrom(r.Context()))})
+	t.Funcs(template.FuncMap{
+		"t":     s.i18n.Func(i18n.LangFrom(r.Context())),
+		"asset": func(name string) string { return "/static/" + name + "?v=" + s.assetVersion },
+	})
 
 	var buf bytes.Buffer
 	if err := t.ExecuteTemplate(&buf, name, data); err != nil {
 		s.log.Error("render template", "page", page, "path", r.URL.Path, "err", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		s.authError(w, r, "error.internal", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

@@ -5,7 +5,10 @@
   --muted: #6b7280;
   --surface: #ffffff;
   --border: #e5e7eb;
-  --accent: #2f855a;
+  --control-border: #858b94;
+  --accent: #276749;
+  --on-accent: #ffffff;
+  --focus: #276749;
   --radius: 12px;
   --space: 1rem;
   --maxw: 960px;
@@ -21,11 +24,44 @@
     --muted: #9ca3af;
     --surface: #1b1e21;
     --border: #2d3135;
+    --control-border: #6b7280;
     --accent: #68d391;
+    --on-accent: #111315;
+    --focus: #68d391;
   }
 }
 
 *, *::before, *::after { box-sizing: border-box; }
+
+[hidden] { display: none !important; }
+
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+#main:focus { outline: none; }
+
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -10rem;
+  z-index: 10;
+  padding: 0.625rem 1rem;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+.skip-link:focus { top: 0.5rem; }
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 html, body { margin: 0; padding: 0; }
 
@@ -49,8 +85,6 @@ img, video, audio { max-width: 100%; }
   padding: 0.75rem var(--space);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
 }
 
 .brand {
@@ -81,10 +115,12 @@ img, video, audio { max-width: 100%; }
   border: 0;
   border-radius: var(--radius);
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font: inherit;
   cursor: pointer;
 }
+
+.btn:disabled { opacity: 0.6; cursor: progress; }
 
 .empty { min-height: 40vh; }
 
@@ -142,7 +178,7 @@ img, video, audio { max-width: 100%; }
   width: 100%;
   min-height: 44px;
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: 8px;
   background: var(--bg);
   color: var(--fg);
@@ -209,10 +245,11 @@ a.btn { text-decoration: none; }
 .voice-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
 .voice-controls[hidden] { display: none; }
 .attachment-upload { margin-top: 1rem; }
+.day-attachments .upload-progress { margin: 0; }
 
 /* Day visual states (SPEC §3.5). --state colors the default accent; a custom
    style color is an SVG fill attribute, which wins over the :not([fill]) rule. */
-.day-future, .day-today { --state: #dd6b20; --state-text: #b7791f; }
+.day-future, .day-today { --state: #dd6b20; --state-text: #975a16; }
 .day-past { --state: #3182ce; --state-text: #2b6cb0; }
 .day-archived { --state: #a0aec0; --state-text: var(--muted); }
 .day-shared { border-style: dashed; }
@@ -249,7 +286,7 @@ a.btn { text-decoration: none; }
   text-decoration: none;
   font-weight: 500;
 }
-.segmented a[aria-current="page"] { background: var(--accent); color: #fff; }
+.segmented a[aria-current="page"] { background: var(--accent); color: var(--on-accent); font-weight: 700; }
 .segmented a:not([aria-current]):hover { background: var(--bg); }
 
 .day-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
@@ -363,12 +400,12 @@ a.btn { text-decoration: none; }
   width: 3rem;
   height: 44px;
   padding: 0.125rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: 8px;
   background: var(--bg);
 }
 
-.btn-danger { background: #c53030; }
+.btn-danger { background: #c53030; color: #fff; }
 .danger-zone { border-color: #f5c2c2; }
 
 @media (prefers-color-scheme: dark) {
@@ -392,6 +429,9 @@ a.btn { text-decoration: none; }
 
 @media (min-width: 768px) {
   :root { --space: 1.5rem; }
+  /* Only sticky when the nav fits on one or two rows; on phones it would cover much of the screen. */
+  html { scroll-padding-top: 6rem; }
+  .site-header { position: sticky; top: 0; z-index: 5; }
   .brand { font-size: 1.25rem; }
   .field-row { grid-template-columns: 1fr 1fr; }
 }

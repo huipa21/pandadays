@@ -463,7 +463,7 @@ func (x *extractor) extract(f *zip.File) (*extracted, error) {
 	}
 	defer rc.Close()
 	var prefix bytes.Buffer
-	n, err := io.Copy(temp, io.TeeReader(io.LimitReader(rc, e.size+1), &limitedBuffer{&prefix, 512}))
+	n, err := io.Copy(temp, io.TeeReader(io.LimitReader(rc, e.size+1), &limitedBuffer{&prefix, media.SniffLen}))
 	if closeErr := temp.Close(); err == nil && closeErr != nil {
 		return nil, fmt.Errorf("write import file: %w", closeErr)
 	}

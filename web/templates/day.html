@@ -13,7 +13,7 @@
     </header>
     <p class="countdown"><span class="countdown-big">{{.Big}}</span>{{with .Caption}} <span class="countdown-caption">{{.}}</span>{{end}}</p>
     {{with .Breakdown}}<ul class="breakdown">{{range .}}<li><strong>{{.Value}}</strong> {{.Unit}}</li>{{end}}</ul>{{end}}
-    {{with .Ordinal}}<p class="day-ordinal">🎉 {{.}}</p>{{end}}
+    {{with .Ordinal}}<p class="day-ordinal"><span aria-hidden="true">🎉</span> {{.}}</p>{{end}}
     {{with .Since}}<div class="day-since">
       <p class="hint">{{t "days.card.since" $.Day.Date}}</p>
       <ul class="breakdown breakdown-small">{{range .}}<li><strong>{{.Value}}</strong> {{.Unit}}</li>{{end}}</ul>
@@ -75,7 +75,7 @@
         <div class="attachment-preview">
           {{if eq .Kind "image"}}<a href="/attachments/{{.ID}}"><img src="/attachments/{{.ID}}" alt="{{.Filename}}" loading="lazy"></a>
           {{else if eq .Kind "audio"}}<audio controls preload="metadata" src="/attachments/{{.ID}}"></audio>
-          {{else if eq .Kind "video"}}<video controls preload="metadata" src="/attachments/{{.ID}}"></video>{{end}}
+          {{else if eq .Kind "video"}}<video controls playsinline preload="metadata" src="/attachments/{{.ID}}"></video>{{end}}
           <a href="/attachments/{{.ID}}">{{.Filename}}</a>
           <span class="hint">{{bytes .Size}}</span>
         </div>
@@ -97,21 +97,23 @@
     </ul>
     {{else}}<p class="hint">{{t "days.attachments_empty"}}</p>{{end}}
     {{if not .Shared}}<form method="post" action="/days/{{.Day.ID}}/attachments" enctype="multipart/form-data"
-          class="form attachment-upload" hx-post="/days/{{.Day.ID}}/attachments" hx-encoding="multipart/form-data">
+          class="form attachment-upload" hx-post="/days/{{.Day.ID}}/attachments" hx-encoding="multipart/form-data" hx-disabled-elt="find button">
       {{template "csrf-field" .}}
       <label>{{t "attachments.choose_file"}}<input type="file" name="file" required></label>
+      <progress class="upload-progress" max="100" hidden aria-label="{{t "attachments.uploading"}}" data-upload-progress></progress>
       <button type="submit" class="btn">{{t "attachments.upload"}}</button>
     </form>
     <div class="voice-controls" hidden data-record-start="{{t "attachments.record_start"}}"
          data-record-stop="{{t "attachments.record_stop"}}" data-recording="{{t "attachments.recording"}}"
-         data-record-error="{{t "attachments.record_error"}}" data-upload-error="{{t "attachments.upload_error"}}">
+         data-record-error="{{t "attachments.record_error"}}" data-upload-error="{{t "attachments.upload_error"}}"
+         data-uploading="{{t "attachments.uploading_status"}}">
       <button type="button" class="btn" data-record-button>{{t "attachments.record_start"}}</button>
       <span role="status" aria-live="polite" data-record-status></span>
     </div>
     {{end}}
   </section>
   {{if not .Shared}}
-  <script src="/static/attachments.js" defer></script>
+  <script src="{{asset "attachments.js"}}" defer></script>
   {{template "day-delete" .}}
   {{end}}
 </section>

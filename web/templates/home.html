@@ -1,16 +1,17 @@
 {{define "content"}}
 <section class="stack">
+  <h1 class="visually-hidden">{{t "nav.home"}}</h1>
   <div class="home-head">
     <p class="tagline">{{t "app.tagline"}}</p>
-    <a class="btn" href="/days/new">+ {{t "days.new"}}</a>
+    <a class="btn" href="/days/new"><span aria-hidden="true">+</span> {{t "days.new"}}</a>
   </div>
   {{template "home-days" .}}
 </section>
 {{end}}
 {{define "home-days"}}<div id="home-days" class="stack">
   <nav class="segmented" aria-label="{{t "home.when"}}">
-    <a href="/?when=future" hx-get="/?when=future" hx-target="#home-days" hx-swap="outerHTML" hx-push-url="true"{{if eq .When "future"}} aria-current="page"{{end}}>⏳ {{t "home.future"}}</a>
-    <a href="/?when=past" hx-get="/?when=past" hx-target="#home-days" hx-swap="outerHTML" hx-push-url="true"{{if eq .When "past"}} aria-current="page"{{end}}>✓ {{t "home.past"}}</a>
+    <a href="/?when=future" hx-get="/?when=future" hx-target="#home-days" hx-swap="outerHTML" hx-push-url="true"{{if eq .When "future"}} aria-current="page"{{end}}><span aria-hidden="true">⏳</span> {{t "home.future"}}</a>
+    <a href="/?when=past" hx-get="/?when=past" hx-target="#home-days" hx-swap="outerHTML" hx-push-url="true"{{if eq .When "past"}} aria-current="page"{{end}}><span aria-hidden="true">✓</span> {{t "home.past"}}</a>
   </nav>
   {{if .Items}}<ul class="day-list">{{range .Items}}{{template "day-item" .}}{{end}}</ul>
   {{else}}<p class="empty-list">{{if eq .When "past"}}{{t "home.empty_past"}}{{else}}{{t "home.empty_future"}}{{end}}</p>{{end}}

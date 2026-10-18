@@ -280,7 +280,7 @@ func TestChangePasswordWrongCurrent(t *testing.T) {
 func TestTimezoneCapture(t *testing.T) {
 	s, db, u, token := authenticatedServer(t)
 	h := s.Handler()
-	if !strings.Contains(get(h, "/", token).Body.String(), `src="/static/timezone.js"`) {
+	if !strings.Contains(get(h, "/", token).Body.String(), `src="/static/timezone.js?v=`) {
 		t.Fatal("timezone script missing for user without timezone")
 	}
 	if rr := get(h, "/static/timezone.js", ""); rr.Code != 200 || !strings.Contains(rr.Body.String(), "/settings/timezone") {

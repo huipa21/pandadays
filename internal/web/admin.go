@@ -66,7 +66,7 @@ func (s *Server) adminError(w http.ResponseWriter, r *http.Request, err error) {
 
 func (s *Server) createAdminUser(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 		return
 	}
 	u, password, err := s.auth.AdminCreateUser(r.Context(), CurrentUser(r.Context()).ID, auth.CreateUserParams{
@@ -103,7 +103,7 @@ func (s *Server) adminUserAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 		return
 	}
 	actor := CurrentUser(r.Context()).ID
@@ -164,7 +164,7 @@ func (s *Server) handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) saveAdminSettings(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 		return
 	}
 	v := auth.SiteSettings{Language: r.PostForm.Get("site_lang")}

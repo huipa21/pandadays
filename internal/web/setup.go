@@ -46,7 +46,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 		return
 	}
 	page := setupPage{pageData: newPageData(r),

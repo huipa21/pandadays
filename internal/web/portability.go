@@ -160,7 +160,7 @@ func (s *Server) importFile(w http.ResponseWriter, r *http.Request, limit int64)
 		files := r.MultipartForm.File["file"]
 		if len(files) != 1 {
 			r.MultipartForm.RemoveAll()
-			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 			return nil, nil, false
 		}
 		f, err := files[0].Open()
@@ -173,7 +173,7 @@ func (s *Server) importFile(w http.ResponseWriter, r *http.Request, limit int64)
 	}
 	mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mediaType != "multipart/form-data" || params["boundary"] == "" {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 		return nil, nil, false
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, multipartBodyLimit(limit))
@@ -181,7 +181,7 @@ func (s *Server) importFile(w http.ResponseWriter, r *http.Request, limit int64)
 	for {
 		part, err := reader.NextPart()
 		if errors.Is(err, io.EOF) {
-			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 			return nil, nil, false
 		}
 		if err != nil {
@@ -200,7 +200,7 @@ func (s *Server) importFile(w http.ResponseWriter, r *http.Request, limit int64)
 
 func (s *Server) handleImportConfirm(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 		return
 	}
 	user := CurrentUser(r.Context())

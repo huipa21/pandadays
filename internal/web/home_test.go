@@ -96,7 +96,7 @@ func TestHomeToggleFilteringAndOrdering(t *testing.T) {
 		`<span class="day-item-label">2 days left</span>`,
 		`<span class="day-item-label">8h 0m left</span>`,
 		// Repeating days show the effective (next) target, not the original date.
-		`<time datetime="2026-11-01">2026-11-01</time> · ↻ Every year`,
+		`<time datetime="2026-11-01">2026-11-01</time> · <span aria-hidden="true">↻</span> Every year`,
 		`class="day-item day-today"`,
 		`class="day-item day-future"`,
 		`<a class="btn" href="/days/new">`,
@@ -208,7 +208,7 @@ func TestDayCardView(t *testing.T) {
 	for _, want := range []string{
 		`<span class="countdown-big">7</span> <span class="countdown-caption">days left</span>`,
 		`<li><strong>6</strong> days</li><li><strong>21</strong> hours</li><li><strong>30</strong> minutes</li>`,
-		"🎉 3rd anniversary",
+		`<span aria-hidden="true">🎉</span> 3rd anniversary`,
 		"Since the original date (2023-10-25)",
 		`<li><strong>2</strong> years</li><li><strong>11</strong> months</li>`,
 		`Next occurrence</dt><dd><time datetime="2026-10-25">2026-10-25</time> 09:30</dd>`,
@@ -226,7 +226,7 @@ func TestDayCardView(t *testing.T) {
 	}
 	body = get(s.Handler(), dayPath(past.ID), token).Body.String()
 	for _, want := range []string{`class="card day-card day-past day-archived"`, `<span class="countdown-big">1</span> <span class="countdown-caption">day ago</span>`,
-		`<span class="badge badge-archived">📦 Archived</span>`} {
+		`<span class="badge badge-archived"><span aria-hidden="true">📦</span> Archived</span>`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("archived card missing %q", want)
 		}
@@ -242,7 +242,7 @@ func TestDayCardView(t *testing.T) {
 		t.Fatal(err)
 	}
 	body = get(s.Handler(), dayPath(bday.ID), token).Body.String()
-	for _, want := range []string{`<span class="countdown-caption">天后</span>`, "🎉 3 周年", `<strong>21</strong> 小时`} {
+	for _, want := range []string{`<span class="countdown-caption">天后</span>`, `<span aria-hidden="true">🎉</span> 3 周年`, `<strong>21</strong> 小时`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("zh card missing %q", want)
 		}

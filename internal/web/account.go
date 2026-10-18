@@ -40,7 +40,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 		return
 	}
 	page := loginPage{pageData: newPageData(r), Account: r.PostForm.Get("account"),
@@ -106,7 +106,7 @@ func (s *Server) handlePasswordForm(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handlePassword(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 		return
 	}
 	page := passwordPage{pageData: newPageData(r)}
@@ -143,12 +143,12 @@ func (s *Server) handlePassword(w http.ResponseWriter, r *http.Request) {
 // handleTimezone stores the browser timezone once, when the user has none.
 func (s *Server) handleTimezone(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 		return
 	}
 	_, err := s.auth.SetTimezoneIfEmpty(r.Context(), CurrentUser(r.Context()).ID, r.PostForm.Get("timezone"), time.Now())
 	if errors.Is(err, auth.ErrTimezone) {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 		return
 	}
 	if err != nil {

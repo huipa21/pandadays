@@ -55,7 +55,7 @@ func (s *Server) handleAttachmentUpload(w http.ResponseWriter, r *http.Request) 
 		defer r.MultipartForm.RemoveAll()
 		files := r.MultipartForm.File["file"]
 		if len(files) != 1 {
-			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 			return
 		}
 		file, err := files[0].Open()
@@ -70,14 +70,14 @@ func (s *Server) handleAttachmentUpload(w http.ResponseWriter, r *http.Request) 
 
 	mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mediaType != "multipart/form-data" || params["boundary"] == "" {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 		return
 	}
 	reader := multipart.NewReader(r.Body, params["boundary"])
 	for {
 		part, err := reader.NextPart()
 		if errors.Is(err, io.EOF) {
-			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 			return
 		}
 		if err != nil {
@@ -94,7 +94,7 @@ func (s *Server) handleAttachmentUpload(w http.ResponseWriter, r *http.Request) 
 		filename := part.FileName()
 		if filename == "" {
 			part.Close()
-			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 			return
 		}
 		s.saveAttachment(w, r, ownerID, dayID, remaining, filename, part)
@@ -125,7 +125,7 @@ func (s *Server) saveAttachment(w http.ResponseWriter, r *http.Request, ownerID,
 			return
 		}
 		if errors.Is(err, media.ErrUploadStream) {
-			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 			return
 		}
 		if errors.Is(err, media.ErrNotFound) {
@@ -144,7 +144,7 @@ func (s *Server) uploadReadError(w http.ResponseWriter, r *http.Request, err err
 		s.authError(w, r, "attachments.error.limit", http.StatusRequestEntityTooLarge)
 		return
 	}
-	http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+	s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 }
 
 func (s *Server) handleAttachmentDelete(w http.ResponseWriter, r *http.Request) {

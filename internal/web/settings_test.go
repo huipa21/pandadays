@@ -54,7 +54,7 @@ func TestSaveSettings(t *testing.T) {
 	}
 	rr = get(s.Handler(), "/settings", token)
 	if !strings.Contains(rr.Body.String(), `<html lang="zh">`) ||
-		!strings.Contains(rr.Body.String(), `value="zh" selected`) ||
+		!strings.Contains(rr.Body.String(), `value="zh" lang="zh" selected`) ||
 		!strings.Contains(rr.Body.String(), `value="Asia/Shanghai" selected`) {
 		t.Fatalf("saved preferences not reflected: %s", rr.Body.String())
 	}

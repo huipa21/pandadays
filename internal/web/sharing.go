@@ -38,7 +38,7 @@ func (s *Server) createCollectionShare(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) createShare(w http.ResponseWriter, r *http.Request, targetType share.TargetType, targetID int64) {
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 		return
 	}
 	_, err := s.shares.Create(r.Context(), CurrentUser(r.Context()).ID, targetType, targetID,
@@ -68,7 +68,7 @@ func (s *Server) updateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 		return
 	}
 	if err := s.shares.Update(r.Context(), owner, id, parseShareRecipients(r.Form.Get("recipients")),

@@ -247,7 +247,7 @@ func (s *Server) handleDayNew(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDayCreate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 		return
 	}
 	form := parseDayForm(r)
@@ -371,7 +371,7 @@ func (s *Server) handleDayUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 		return
 	}
 	owner := CurrentUser(r.Context()).ID

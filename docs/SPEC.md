@@ -175,7 +175,7 @@ Other subcommands:
 
 ## 5. Attachments
 
-- Kinds: `image`, `audio`, `video`, `file`. Kind is derived from sniffed content type (`http.DetectContentType` on first 512 bytes), not the client header.
+- Kinds: `image`, `audio`, `video`, `file`. Kind is derived from sniffed content type, not the client header: `http.DetectContentType` on the first 512 bytes, refined from container metadata in the first 64 KiB (audio-only WebM/MP4/Ogg MediaRecorder voice notes → audio; QuickTime `.mov` → `video/quicktime`).
 - Voice: in-browser recording via `MediaRecorder`, uploaded as audio.
 - Stored at `/data/media/{user_id}/{uuid}` (no original filename on disk). Original filename kept in DB for download.
 - Served only via `/attachments/{id}` with authorization (owner or valid share recipient). Headers: `X-Content-Type-Options: nosniff`; images/audio/video inline with sniffed type; everything else (and any HTML/SVG/XML) as `Content-Disposition: attachment` with `application/octet-stream`. Support HTTP range requests (`http.ServeContent`) for media playback.

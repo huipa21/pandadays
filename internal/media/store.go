@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"mime"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -138,7 +137,7 @@ func (s *Store) Upload(ctx context.Context, ownerID, dayID int64, filename strin
 	tempName := temp.Name()
 	defer os.Remove(tempName)
 
-	prefix := make([]byte, 512)
+	prefix := make([]byte, SniffLen)
 	n, readErr := io.ReadFull(src, prefix)
 	if readErr != nil && !errors.Is(readErr, io.EOF) && !errors.Is(readErr, io.ErrUnexpectedEOF) {
 		temp.Close()
@@ -167,8 +166,7 @@ func (s *Store) Upload(ctx context.Context, ownerID, dayID int64, filename strin
 		return Attachment{}, fmt.Errorf("close temporary attachment: %w", err)
 	}
 
-	contentType := http.DetectContentType(prefix)
-	kind := detectedKind(contentType)
+	contentType, kind := Sniff(prefix)
 	uuid, err := newUUID()
 	if err != nil {
 		return Attachment{}, err
@@ -208,13 +206,6 @@ func (s *Store) Upload(ctx context.Context, ownerID, dayID int64, filename strin
 	}
 	return Attachment{ID: attachmentID, DayID: dayID, UUID: uuid, Kind: kind,
 		OwnerID: ownerID, Filename: safeFilename(filename), MIME: contentType, Size: size, CreatedAt: now}, nil
-}
-
-// Sniff returns the sniffed content type and attachment kind for the first
-// bytes (up to 512) of a file.
-func Sniff(prefix []byte) (contentType, kind string) {
-	contentType = http.DetectContentType(prefix)
-	return contentType, detectedKind(contentType)
 }
 
 // SafeFilename strips directories and control characters from a display filename.

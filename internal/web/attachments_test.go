@@ -276,6 +276,52 @@ func TestAttachmentSVGIsDownloadAndBackgroundCleanup(t *testing.T) {
 	}
 }
 
+func TestVoiceRecordingIsAudioAndLargeVideoUploads(t *testing.T) {
+	s, owner, token, day := attachmentServer(t)
+	voice := append([]byte("\x1a\x45\xdf\xa3\x9f\x42\x86\x81\x01\x42\x82\x84webm\x16\x54\xae\x6b\xae\x88\x86\x86A_OPUS"), make([]byte, 256)...)
+	if rr := uploadAttachment(t, s, token, day.ID, "voice-20261018.webm", voice); rr.Code != http.StatusSeeOther {
+		t.Fatalf("upload voice: %d %s", rr.Code, rr.Body.String())
+	}
+	video := append([]byte("\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isommp41"), bytes.Repeat([]byte{0xab}, 3<<20)...)
+	if rr := uploadAttachment(t, s, token, day.ID, "clip.mp4", video); rr.Code != http.StatusSeeOther {
+		t.Fatalf("upload video: %d %s", rr.Code, rr.Body.String())
+	}
+	movie := append([]byte("\x00\x00\x00\x14ftypqt  \x00\x00\x00\x00qt  \x00\x00\x00\x08wide"), bytes.Repeat([]byte{0xcd}, 1<<20)...)
+	if rr := uploadAttachment(t, s, token, day.ID, "IMG_0001.MOV", movie); rr.Code != http.StatusSeeOther {
+		t.Fatalf("upload mov: %d %s", rr.Code, rr.Body.String())
+	}
+	files, err := s.media.ListDay(context.Background(), owner, day.ID)
+	if err != nil || len(files) != 3 {
+		t.Fatalf("files: %v %v", files, err)
+	}
+	for _, f := range files {
+		want := map[string]struct{ kind, mime string }{
+			"voice-20261018.webm": {"audio", "audio/webm"},
+			"clip.mp4":            {"video", "video/mp4"},
+			"IMG_0001.MOV":        {"video", "video/quicktime"},
+		}[f.Filename]
+		if f.Kind != want.kind || f.MIME != want.mime {
+			t.Errorf("%s stored as %s/%s, want %s/%s", f.Filename, f.Kind, f.MIME, want.kind, want.mime)
+		}
+		if f.Filename == "clip.mp4" && f.Size != int64(len(video)) {
+			t.Errorf("video size = %d, want %d", f.Size, len(video))
+		}
+		if stat, err := os.Stat(s.media.Path(owner, f)); err != nil || stat.Size() != f.Size {
+			t.Errorf("%s on disk: %v %v", f.Filename, stat, err)
+		}
+		served := attachmentRequest(s, http.MethodGet, "/attachments/"+strconv.FormatInt(f.ID, 10), token, "")
+		if served.Header().Get("Content-Type") != want.mime || !strings.HasPrefix(served.Header().Get("Content-Disposition"), "inline") {
+			t.Errorf("%s served as %v", f.Filename, served.Header())
+		}
+	}
+	page := get(s.Handler(), dayPath(day.ID), token).Body.String()
+	for _, want := range []string{`<audio controls preload="metadata" src="/attachments/`, `<video controls playsinline preload="metadata" src="/attachments/`} {
+		if !strings.Contains(page, want) {
+			t.Errorf("card missing %q", want)
+		}
+	}
+}
+
 func TestDeletingDayRemovesAttachmentFilesAndUsage(t *testing.T) {
 	s, owner, token, day := attachmentServer(t)
 	if rr := uploadAttachment(t, s, token, day.ID, "note.txt", []byte("note")); rr.Code != http.StatusSeeOther {

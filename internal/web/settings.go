@@ -80,7 +80,7 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, page set
 
 func (s *Server) saveSettings(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 		return
 	}
 	user := CurrentUser(r.Context())

@@ -8,8 +8,8 @@
     <label>{{t "settings.language"}}
       <select name="lang">
         <option value=""{{if eq .Language ""}} selected{{end}}>{{t "settings.language_auto"}}</option>
-        <option value="en"{{if eq .Language "en"}} selected{{end}}>{{t "lang.en"}}</option>
-        <option value="zh"{{if eq .Language "zh"}} selected{{end}}>{{t "lang.zh"}}</option>
+        <option value="en" lang="en"{{if eq .Language "en"}} selected{{end}}>{{t "lang.en"}}</option>
+        <option value="zh" lang="zh"{{if eq .Language "zh"}} selected{{end}}>{{t "lang.zh"}}</option>
       </select>
     </label>
     <label>{{t "settings.timezone"}}
