@@ -38,6 +38,13 @@
   "setup.error.rate_limited": "Too many attempts. Please wait a moment and try again.",
   "setup.error.policy": "The password must be 8–32 characters.",
   "setup.error.identity": "Username and email are required and must not already be in use.",
+  "days.today": "Today",
+  "days.count.left.one": "%d day left",
+  "days.count.left.other": "%d days left",
+  "days.count.ago.one": "%d day ago",
+  "days.count.ago.other": "%d days ago",
+  "days.time.left": "%dh %dm left",
+  "days.time.ago": "%dh %dm ago",
   "error.csrf": "This form has expired or could not be verified. Reload the page and try again.",
   "error.session": "The session cookie could not be read.",
   "error.internal": "An internal error occurred. Please try again later."

@@ -63,11 +63,12 @@ Status legend: `[ ]` todo, `[x]` done.
 
 ## Phase 3 — Core Days
 
-### [ ] T08 Date engine (pure functions)
+### [x] T08 Date engine (pure functions)
 - `internal/days/calc.go`: effective target (next occurrence for weekly/monthly/yearly with month-end and Feb 29 clamping), classification (future/today/past), list label, card breakdown (y/m/d/h/m), occurrence ordinal.
 - All functions take `now time.Time` and `*time.Location` explicitly.
 - **Done when**: table-driven tests incl. leap years, month-end, DST transitions, all-day vs timed, today edge.
 - Parallelizable with T04–T07.
+- Integration: `days.Calculate(Schedule{Date, Time, Repeat}, now, loc)` returns original/effective targets, classification, localized list-message key/args, calendar breakdown, repeat ordinal (original = 0), and optional time since original. Render labels via `bundle.T(lang, result.ListLabel.Key, result.ListLabel.Args...)`. Empty time means all-day; empty repeat means none; invalid inputs return `ErrInvalidSchedule`. See SPEC §3.4 for recurrence, rounding, and DST conventions. No persistence or authorization surface is introduced.
 
 ### [ ] T09 Collections & tags CRUD
 - Repos + handlers + pages: list, create, rename, recolor, delete.

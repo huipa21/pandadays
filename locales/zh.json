@@ -38,6 +38,13 @@
   "setup.error.rate_limited": "尝试次数过多，请稍后再试。",
   "setup.error.policy": "密码长度须为 8–32 个字符。",
   "setup.error.identity": "用户名和邮箱为必填项，且不能已被使用。",
+  "days.today": "今天",
+  "days.count.left.one": "还剩 %d 天",
+  "days.count.left.other": "还剩 %d 天",
+  "days.count.ago.one": "%d 天前",
+  "days.count.ago.other": "%d 天前",
+  "days.time.left": "还剩 %d 小时 %d 分钟",
+  "days.time.ago": "%d 小时 %d 分钟前",
   "error.csrf": "表单已过期或无法验证。请刷新页面后重试。",
   "error.session": "无法读取会话 Cookie。",
   "error.internal": "发生内部错误，请稍后重试。"

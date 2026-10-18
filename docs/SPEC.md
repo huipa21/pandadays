@@ -78,6 +78,12 @@ Reserved names are displayed localized ("Default" / "默认") but stored with `i
   - List: `N days left` / `N days ago` / `Today`. With time: also hours/minutes when < 1 day.
   - Card: large number + breakdown in years/months/days (+h/m if time set). For repeating days, also show occurrence ordinal (e.g. "3rd anniversary") and time since the original date.
 - Classification: **future** (target > now or repeating), **today**, **past** (target < now, non-repeating).
+- Date-engine conventions:
+  - All-day comparisons and day counts use local civil dates, not elapsed 24-hour periods. An all-day repeat remains on today until local midnight. A timed repeat advances as soon as its scheduled instant has passed; exact equality still selects that occurrence.
+  - Repeat schedules never select an occurrence before the original date. Monthly/yearly clamping always uses the original day, so a shorter month does not permanently shift later occurrences.
+  - A nonexistent local clock time shifts forward by the DST gap; an ambiguous clock time uses its first occurrence. Later repeats return to the originally requested clock time.
+  - Card breakdowns count whole clamped calendar years, then months, then local calendar days; remaining hours/minutes use elapsed time, truncated to whole minutes. All-day breakdowns omit hours/minutes. Timed list labels use elapsed hours/minutes below 24 hours and civil day counts otherwise.
+  - The original occurrence has ordinal 0; the first repeat/anniversary has ordinal 1. Time since the original is absent until the original arrives. Repeating days classify as future even when their list label is Today.
 
 ### 3.5 Visual states (defaults; user style overrides color/icon/bg)
 | State | Default look | Always-on marker |
