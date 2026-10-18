@@ -4,6 +4,7 @@
   <p><a href="/">← {{t "nav.home"}}</a></p>
   <article class="card day-card day-{{.State}}{{if .Day.ArchivedAt}} day-archived{{end}}">
     {{template "day-accent" .Day.StyleColor}}
+    {{range .Attachments}}{{if eq $.Day.StyleBgAttachmentID .ID}}<img class="day-background" src="/attachments/{{.ID}}" alt="">{{end}}{{end}}
     <header class="day-card-head">
       <span class="day-card-icon" aria-hidden="true">{{template "day-icon" .}}</span>
       <h1 class="day-heading">{{.Day.Title}}</h1>
@@ -35,8 +36,49 @@
   </article>
   <section class="card day-attachments" id="attachments">
     <h2>{{t "days.attachments"}}</h2>
-    <p class="hint">{{t "days.attachments_empty"}}</p>
+    <p class="hint">{{t "attachments.card_usage" (bytes .Usage.CardUsed) (bytes .Usage.CardLimit)}}</p>
+    <progress aria-label="{{t "attachments.card_usage" (bytes .Usage.CardUsed) (bytes .Usage.CardLimit)}}" max="{{if gt .Usage.CardLimit 0}}{{.Usage.CardLimit}}{{else}}1{{end}}" value="{{.Usage.CardUsed}}"></progress>
+    <p class="hint">{{t "attachments.user_usage" (bytes .Usage.UserUsed) (bytes .Usage.UserLimit)}}</p>
+    <progress aria-label="{{t "attachments.user_usage" (bytes .Usage.UserUsed) (bytes .Usage.UserLimit)}}" max="{{if gt .Usage.UserLimit 0}}{{.Usage.UserLimit}}{{else}}1{{end}}" value="{{.Usage.UserUsed}}"></progress>
+    {{if .Attachments}}
+    <ul class="attachment-list">
+      {{range .Attachments}}<li class="attachment-item">
+        <div class="attachment-preview">
+          {{if eq .Kind "image"}}<a href="/attachments/{{.ID}}"><img src="/attachments/{{.ID}}" alt="{{.Filename}}" loading="lazy"></a>
+          {{else if eq .Kind "audio"}}<audio controls preload="metadata" src="/attachments/{{.ID}}"></audio>
+          {{else if eq .Kind "video"}}<video controls preload="metadata" src="/attachments/{{.ID}}"></video>{{end}}
+          <a href="/attachments/{{.ID}}">{{.Filename}}</a>
+          <span class="hint">{{bytes .Size}}</span>
+        </div>
+        <div class="chips">
+          {{if eq .Kind "image"}}<form method="post" action="/days/{{$.Day.ID}}/attachments/{{.ID}}/background" class="inline-form"
+                hx-post="/days/{{$.Day.ID}}/attachments/{{.ID}}/background">
+            {{template "csrf-field" $}}
+            <button type="submit" class="link-button">{{if eq $.Day.StyleBgAttachmentID .ID}}{{t "attachments.background"}}{{else}}{{t "attachments.set_background"}}{{end}}</button>
+          </form>{{end}}
+          <form method="post" action="/attachments/{{.ID}}/delete" class="inline-form"
+                hx-post="/attachments/{{.ID}}/delete" hx-confirm="{{t "attachments.delete_confirm"}}">
+            {{template "csrf-field" $}}
+            <button type="submit" class="link-button">{{t "attachments.delete"}}</button>
+          </form>
+        </div>
+      </li>{{end}}
+    </ul>
+    {{else}}<p class="hint">{{t "days.attachments_empty"}}</p>{{end}}
+    <form method="post" action="/days/{{.Day.ID}}/attachments" enctype="multipart/form-data"
+          class="form attachment-upload" hx-post="/days/{{.Day.ID}}/attachments" hx-encoding="multipart/form-data">
+      {{template "csrf-field" .}}
+      <label>{{t "attachments.choose_file"}}<input type="file" name="file" required></label>
+      <button type="submit" class="btn">{{t "attachments.upload"}}</button>
+    </form>
+    <div class="voice-controls" hidden data-record-start="{{t "attachments.record_start"}}"
+         data-record-stop="{{t "attachments.record_stop"}}" data-recording="{{t "attachments.recording"}}"
+         data-record-error="{{t "attachments.record_error"}}" data-upload-error="{{t "attachments.upload_error"}}">
+      <button type="button" class="btn" data-record-button>{{t "attachments.record_start"}}</button>
+      <span role="status" aria-live="polite" data-record-status></span>
+    </div>
   </section>
+  <script src="/static/attachments.js" defer></script>
   {{template "day-delete" .}}
 </section>
 {{end}}

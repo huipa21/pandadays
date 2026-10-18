@@ -13,12 +13,14 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"pandadays/internal/auth"
 	"pandadays/internal/config"
 	"pandadays/internal/days"
 	"pandadays/internal/i18n"
+	"pandadays/internal/media"
 	assets "pandadays/web"
 )
 
@@ -37,6 +39,7 @@ type Server struct {
 	collections *days.Groups
 	tags        *days.Groups
 	days        *days.Days
+	media       *media.Store
 
 	// now is the clock used for date calculations; tests may replace it.
 	now func() time.Time
@@ -64,13 +67,15 @@ func New(cfg config.Config, logger *slog.Logger, database *sql.DB) (*Server, err
 		s.collections = days.NewCollections(database)
 		s.tags = days.NewTags(database)
 		s.days = days.NewDays(database)
+		s.media = media.New(database, filepath.Join(cfg.DataDir, "media"))
 	}
 	return s, nil
 }
 
 // templateFuncs are placeholders for parsing; render rebinds "t" to the request language.
 var templateFuncs = template.FuncMap{
-	"t": func(key string, _ ...any) string { return key },
+	"t":     func(key string, _ ...any) string { return key },
+	"bytes": formatBytes,
 }
 
 // parsePages builds one template set per page, each combining layout.html with the page file.
@@ -110,6 +115,7 @@ func (s *Server) Handler() http.Handler {
 		s.registerGroupRoutes(mux, s.collections, "collections")
 		s.registerGroupRoutes(mux, s.tags, "tags")
 		s.registerDayRoutes(mux)
+		s.registerAttachmentRoutes(mux)
 	}
 
 	return chain(mux,

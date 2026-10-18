@@ -7,8 +7,12 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"errors"
+	"mime"
 	"net/http"
 	"strings"
+
+	"pandadays/internal/media"
 )
 
 const csrfCookieName = "panda_csrf"
@@ -52,9 +56,29 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 		if !safe {
 			provided := r.Header.Get("X-CSRF-Token")
 			if provided == "" {
+				if isAttachmentUpload(r) {
+					if CurrentUser(r.Context()) == nil {
+						authRedirect(w, r, "/login")
+						return
+					}
+					if !s.limitAttachmentForm(w, r) {
+						return
+					}
+				}
 				// ParseForm does not accept query parameters as CSRF proof.
 				// Multipart handlers can send the header to preserve streaming.
-				if err := r.ParseForm(); err != nil {
+				var parseErr error
+				if isAttachmentUpload(r) {
+					parseErr = r.ParseMultipartForm(32 << 20)
+				} else {
+					parseErr = r.ParseForm()
+				}
+				if parseErr != nil {
+					var maxErr *http.MaxBytesError
+					if errors.As(parseErr, &maxErr) {
+						s.authError(w, r, "attachments.error.limit", http.StatusRequestEntityTooLarge)
+						return
+					}
 					s.authError(w, r, "error.csrf", http.StatusForbidden)
 					return
 				}
@@ -79,4 +103,37 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), csrfContextKey{}, token)))
 	})
+}
+
+func isAttachmentUpload(r *http.Request) bool {
+	if r.Method != http.MethodPost {
+		return false
+	}
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || !strings.EqualFold(mediaType, "multipart/form-data") {
+		return false
+	}
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	return len(parts) == 3 && parts[0] == "days" && parts[2] == "attachments"
+}
+
+func (s *Server) limitAttachmentForm(w http.ResponseWriter, r *http.Request) bool {
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	dayID := parseID(parts[1])
+	if dayID <= 0 {
+		http.NotFound(w, r)
+		return false
+	}
+	remaining, err := s.media.Remaining(r.Context(), CurrentUser(r.Context()).ID, dayID)
+	if errors.Is(err, media.ErrNotFound) {
+		http.NotFound(w, r)
+		return false
+	}
+	if err != nil {
+		s.log.Error("check attachment form allowance", "err", err)
+		s.authError(w, r, "error.internal", http.StatusInternalServerError)
+		return false
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, multipartBodyLimit(remaining))
+	return true
 }

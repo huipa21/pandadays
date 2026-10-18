@@ -189,6 +189,16 @@ a.btn { text-decoration: none; }
 .day-facts dt { color: var(--muted); font-size: 0.875rem; }
 .day-facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .day-comment { white-space: pre-wrap; overflow-wrap: anywhere; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+.day-background { display: block; width: 100%; max-height: 16rem; object-fit: cover; border-radius: 8px; margin-bottom: 1rem; }
+.day-attachments progress { display: block; width: 100%; height: 0.75rem; margin: -0.5rem 0 0.75rem; accent-color: var(--accent); }
+.attachment-list { list-style: none; display: grid; gap: 0.75rem; margin: 1rem 0; padding: 0; }
+.attachment-item { min-width: 0; display: grid; gap: 0.5rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; }
+.attachment-preview { min-width: 0; display: grid; gap: 0.5rem; overflow-wrap: anywhere; }
+.attachment-preview img { display: block; max-height: 18rem; object-fit: contain; border-radius: 6px; }
+.attachment-preview audio, .attachment-preview video { width: 100%; }
+.voice-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
+.voice-controls[hidden] { display: none; }
+.attachment-upload { margin-top: 1rem; }
 
 /* Day visual states (SPEC §3.5). --state colors the default accent; a custom
    style color is an SVG fill attribute, which wins over the :not([fill]) rule. */

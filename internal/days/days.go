@@ -397,28 +397,57 @@ func (s *Days) SetArchived(ctx context.Context, ownerID, id int64, archived bool
 }
 
 // Delete removes the day and shares targeting it. Tags, attachment rows and
-// recipient hide markers cascade; attachment files are removed by T13.
+// recipient hide markers cascade. Use DeleteWithAttachments when media files
+// need to be removed from storage as well.
 func (s *Days) Delete(ctx context.Context, ownerID, id int64) error {
+	_, err := s.DeleteWithAttachments(ctx, ownerID, id)
+	return err
+}
+
+// DeleteWithAttachments atomically removes the owned day and returns the
+// attachment file IDs that must be removed from disk after the commit.
+func (s *Days) DeleteWithAttachments(ctx context.Context, ownerID, id int64) ([]string, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("delete day: %w", err)
+		return nil, fmt.Errorf("delete day: %w", err)
 	}
 	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx, `SELECT uuid FROM attachments WHERE day_id = ? AND owner_id = ?`,
+		id, ownerID)
+	if err != nil {
+		return nil, fmt.Errorf("list day attachments for deletion: %w", err)
+	}
+	var attachmentUUIDs []string
+	for rows.Next() {
+		var uuid string
+		if err := rows.Scan(&uuid); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan day attachment for deletion: %w", err)
+		}
+		attachmentUUIDs = append(attachmentUUIDs, uuid)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, fmt.Errorf("list day attachments for deletion: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close day attachment list: %w", err)
+	}
 	res, err := tx.ExecContext(ctx, `DELETE FROM days WHERE owner_id = ? AND id = ?`, ownerID, id)
 	if err != nil {
-		return fmt.Errorf("delete day: %w", err)
+		return nil, fmt.Errorf("delete day: %w", err)
 	}
 	if n, err := res.RowsAffected(); err != nil {
-		return fmt.Errorf("delete day: %w", err)
+		return nil, fmt.Errorf("delete day: %w", err)
 	} else if n == 0 {
-		return ErrNotFound
+		return nil, ErrNotFound
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM shares WHERE owner_id = ? AND target_type = 'day' AND target_id = ?`,
 		ownerID, id); err != nil {
-		return fmt.Errorf("delete day shares: %w", err)
+		return nil, fmt.Errorf("delete day shares: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("delete day: %w", err)
+		return nil, fmt.Errorf("delete day: %w", err)
 	}
-	return nil
+	return attachmentUUIDs, nil
 }

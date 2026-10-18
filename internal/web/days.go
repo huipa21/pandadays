@@ -9,6 +9,7 @@ import (
 	"pandadays/internal/auth"
 	"pandadays/internal/days"
 	"pandadays/internal/i18n"
+	"pandadays/internal/media"
 )
 
 type dayForm struct {
@@ -41,16 +42,18 @@ type dayFormPage struct {
 
 type dayPage struct {
 	pageData
-	Day        days.Day
-	State      days.Classification
-	Target     time.Time // effective target in the user's timezone
-	Big        string    // countdown figure
-	Caption    string    // countdown unit and direction, empty for "Today"
-	Breakdown  []breakdownPart
-	Ordinal    string // repeating days from the first repeat on
-	Since      []breakdownPart
-	Collection days.Group
-	Tags       []days.Group
+	Day         days.Day
+	State       days.Classification
+	Target      time.Time // effective target in the user's timezone
+	Big         string    // countdown figure
+	Caption     string    // countdown unit and direction, empty for "Today"
+	Breakdown   []breakdownPart
+	Ordinal     string // repeating days from the first repeat on
+	Since       []breakdownPart
+	Collection  days.Group
+	Tags        []days.Group
+	Attachments []media.Attachment
+	Usage       media.Usage
 }
 
 var repeatOptions = []days.Repeat{days.RepeatNone, days.RepeatWeekly, days.RepeatMonthly, days.RepeatYearly}
@@ -298,6 +301,16 @@ func (s *Server) handleDayView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page.Tags = groups.dayTags(d)
+	page.Attachments, err = s.media.ListDay(r.Context(), u.ID, d.ID)
+	if err != nil {
+		s.dayFail(w, r, "list attachments for", err)
+		return
+	}
+	page.Usage, err = s.media.Usage(r.Context(), u.ID, d.ID)
+	if err != nil {
+		s.dayFail(w, r, "read attachment usage for", err)
+		return
+	}
 	s.render(w, r, "day.html", page)
 }
 
@@ -351,9 +364,13 @@ func (s *Server) handleDayDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	owner := CurrentUser(r.Context()).ID
-	if err := s.days.Delete(r.Context(), owner, id); err != nil {
+	files, err := s.days.DeleteWithAttachments(r.Context(), owner, id)
+	if err != nil {
 		s.dayFail(w, r, "delete", err)
 		return
+	}
+	if err := s.media.RemoveFiles(owner, files); err != nil {
+		s.log.Error("remove attachment files for deleted day", "user_id", owner, "day_id", id, "err", err)
 	}
 	s.log.Info("deleted day", "user_id", owner, "id", id)
 	authRedirect(w, r, "/")
