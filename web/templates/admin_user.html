@@ -1,0 +1,22 @@
+{{define "title"}}{{t "admin.manage"}} - {{t "app.name"}}{{end}}
+{{define "content"}}
+{{template "back-users" .}}
+{{template "password-notice" .}}
+{{range .Users}}
+<section class="card form settings-card">
+  <div class="page-heading"><h1 class="admin-identity">{{.Username}}</h1>{{template "user-actions" ($.Actions .)}}</div>
+  {{template "user-details" .}}
+  <h2>{{t "profile.quotas"}}</h2>
+  {{if .IsAdmin}}<p class="hint">{{t "profile.admin_quota"}}</p>{{else}}
+  <p class="hint">{{t "admin.days_usage" .UsedDays .EffectiveDays}}<br>{{t "admin.storage_usage" (megabytes .UsedBytes) (megabytes .EffectiveBytes)}}<br>{{t "admin.card_limit" (printf "%s M" (megabytes .EffectiveCardBytes))}}</p>
+  <form method="post" action="/admin/users/{{.ID}}/quotas" class="form">
+    {{template "csrf-field" $}}<input type="hidden" name="return_to" value="/admin/users/{{.ID}}">
+    <p>{{t "admin.quota_hint"}}</p>
+    <label>{{t "admin.quota_days"}}<input type="number" name="quota_days" min="0" step="1" value="{{if .Days.Valid}}{{.Days.Int64}}{{end}}"></label>
+    <label>{{t "admin.quota_mb"}}<input type="number" name="quota_mb" min="0" step="any" value="{{if .Bytes.Valid}}{{megabytes .Bytes.Int64}}{{end}}"></label>
+    <label>{{t "admin.max_card_mb"}}<input type="number" name="max_card_mb" min="0" step="any" value="{{if .CardBytes.Valid}}{{megabytes .CardBytes.Int64}}{{end}}"></label>
+    <button class="btn" type="submit">{{t "settings.save"}}</button>
+  </form>{{end}}
+</section>
+{{end}}
+{{end}}

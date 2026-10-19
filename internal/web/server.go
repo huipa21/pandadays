@@ -120,9 +120,25 @@ func (s *Server) Close() error {
 // templateFuncs are placeholders for parsing; execute rebinds "t" to the request language
 // and "asset" to the content-versioned static URL.
 var templateFuncs = template.FuncMap{
-	"t":     func(key string, _ ...any) string { return key },
-	"asset": func(name string) string { return "/static/" + name },
-	"bytes": formatBytes,
+	"t":         func(key string, _ ...any) string { return key },
+	"asset":     func(name string) string { return "/static/" + name },
+	"bytes":     formatBytes,
+	"megabytes": formatMegabytes,
+	"localtime": func(time.Time) template.HTML { return "" },
+}
+
+// localTime renders t in the viewer's timezone. Without a saved timezone the
+// element is marked so app.js re-renders it in the browser's timezone.
+func localTime(viewer *auth.User) func(time.Time) template.HTML {
+	return func(t time.Time) template.HTML {
+		attr := ""
+		if viewer == nil || viewer.Timezone == "" {
+			attr = " data-local-time"
+		}
+		t = t.In(userLocation(viewer))
+		return template.HTML(`<time datetime="` + t.Format(time.RFC3339) + `"` + attr + `>` +
+			template.HTMLEscapeString(t.Format("2006-01-02 15:04 MST")) + `</time>`)
+	}
 }
 
 // staticVersion hashes every static file so asset URLs change whenever their
@@ -187,6 +203,8 @@ func (s *Server) routes() http.Handler {
 	mux.Handle("POST /password", RequireLogin(http.HandlerFunc(s.handlePassword)))
 	mux.Handle("GET /settings", RequireLogin(http.HandlerFunc(s.handleSettings)))
 	mux.Handle("POST /settings", RequireLogin(http.HandlerFunc(s.saveSettings)))
+	mux.Handle("POST /settings/language", RequireLogin(http.HandlerFunc(s.saveLanguage)))
+	mux.Handle("GET /users/{id}/avatar", RequireLogin(http.HandlerFunc(s.handleAvatar)))
 	mux.Handle("POST /settings/timezone", RequireLogin(http.HandlerFunc(s.handleTimezone)))
 	if s.db != nil {
 		s.registerGroupRoutes(mux, s.collections, "collections")
@@ -203,6 +221,7 @@ func (s *Server) routes() http.Handler {
 		s.loadCurrentUser,
 		s.resolveLang,
 		forcePasswordChange,
+		adminSiteOnly,
 		s.csrf,
 	)
 }
@@ -255,19 +274,31 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 }
 
 type pageData struct {
-	Lang      string
-	CSRFToken string
-	User      *auth.User
+	Lang        string
+	CSRFToken   string
+	User        *auth.User
+	ReturnTo    string
+	LanguageURL string
 	// CaptureTimezone loads the script that posts the browser timezone (SPEC §4.5).
 	CaptureTimezone bool
 }
 
 func newPageData(r *http.Request) pageData {
 	user := CurrentUser(r.Context())
+	u := *r.URL
+	q := u.Query()
+	nextLang := "zh"
+	if i18n.LangFrom(r.Context()) == "zh" {
+		nextLang = "en"
+	}
+	q.Set("lang", nextLang)
+	u.RawQuery = q.Encode()
 	return pageData{
 		Lang:            i18n.LangFrom(r.Context()),
 		CSRFToken:       CSRFToken(r.Context()),
 		User:            user,
+		ReturnTo:        r.URL.RequestURI(),
+		LanguageURL:     u.RequestURI(),
 		CaptureTimezone: user != nil && user.Timezone == "" && !user.MustChangePassword,
 	}
 }
@@ -299,8 +330,9 @@ func (s *Server) execute(w http.ResponseWriter, r *http.Request, page, name stri
 		return
 	}
 	t.Funcs(template.FuncMap{
-		"t":     s.i18n.Func(i18n.LangFrom(r.Context())),
-		"asset": func(name string) string { return "/static/" + name + "?v=" + s.assetVersion },
+		"t":         s.i18n.Func(i18n.LangFrom(r.Context())),
+		"asset":     func(name string) string { return "/static/" + name + "?v=" + s.assetVersion },
+		"localtime": localTime(CurrentUser(r.Context())),
 	})
 
 	var buf bytes.Buffer

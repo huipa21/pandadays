@@ -75,7 +75,7 @@ func TestLayoutAccessibilityLandmarks(t *testing.T) {
 			"zh": {`<a class="skip-link" href="#main">跳到主要内容</a>`, `<nav class="nav" aria-label="主导航">`},
 		}[lang]
 		want = append(want, `<main class="container" id="main" tabindex="-1">`, `id="flash" role="alert" hidden`,
-			`<script src="/static/app.js?v=`, `<option value="zh" lang="zh"`)
+			`<script src="/static/app.js?v=`, `action="/settings/language"`, `id="theme-toggle"`)
 		for _, w := range want {
 			if !strings.Contains(body, w) {
 				t.Errorf("%s layout missing %q", lang, w)

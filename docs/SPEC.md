@@ -48,7 +48,7 @@ neither needs a deployment environment setting.
 
 ## 2. Roles
 
-- **Admin**: manages users, quotas, site settings, backup/restore. Also a normal user with own space.
+- **Admin**: site administration only: Users, Backup/Restore, and Site Settings. The avatar/username menu contains Profile and Sign out. Admins land on Users and cannot access personal days, archive, sharing, collections, tags, attachments, or import/export routes. Existing owned data is preserved.
 - **User**: manages own days, collections, tags, attachments, shares; views days shared with them.
 - **No self-registration.** Only admin creates users.
 
@@ -135,6 +135,12 @@ Badges are never removed by custom styles so states remain distinguishable witho
 Site-wide defaults live in `settings`; each user row may override (`NULL` = use site default). Enforcement on create day, upload, and import. Server uses `http.MaxBytesReader` sized to remaining card allowance.
 
 Admins manage accounts and usage at `/admin/users` and defaults at `/admin/settings`.
+The users page is a searchable list (username/display name/email); Create user opens a separate
+form, and each user has a separate management page. Personal password changes
+are linked from Profile and the administrator's own action menu, not the main navigation.
+Storage quota inputs and user usage use M (1 M = 1,048,576 bytes); fractional
+values are accepted when they represent an exact whole number of bytes.
+Storage remains integer bytes internally, including inherited and zero limits.
 Blank user quota fields restore inheritance; zero is an explicit limit that blocks new
 days or uploads. Lowering a limit preserves existing data. Quotas and backup retention
 must be nonnegative integers; session duration must be 1–106751 days. Site language
@@ -165,7 +171,7 @@ themselves or the last active admin; these checks run inside the write transacti
 ### 4.3 Passwords
 - Length 8–32 characters (Unicode allowed; counted in runes, bcrypt input ≤ 72 bytes enforced).
 - Admin-created users and all resets get a **random 16-char password**, shown once, with `must_change_password=1`.
-- While `must_change_password=1`, every route except change-password and logout redirects to change-password.
+- While `must_change_password=1`, application routes redirect to change-password except password change, logout, language switching, and authorized avatar retrieval; static assets and health checks remain available.
 - Changing password invalidates all other sessions of that user.
 
 ### 4.4 CLI — `panda`
@@ -182,7 +188,15 @@ Other subcommands:
 
 ### 4.5 Timezone & language
 - Timezone: per-user setting, detected from the browser's `Intl.DateTimeFormat().resolvedOptions().timeZone` during setup, editable before submission and later in Settings. If empty, the browser timezone is posted on first page load after login and saved. Validated with `time.LoadLocation` (embed `time/tzdata`). Server timezone (UTC in the image) is only a fallback until capture succeeds.
-- Language: `en` or `zh`, selectable during setup and later in Settings. Resolution order: user setting → site setting → `Accept-Language` → `en`. Setup defaults to browser language; there is no language environment variable.
+- Language: `en` or `zh`, selectable during setup and later with the header toggle. Resolution order: user setting → site setting → `Accept-Language` → `en`. Setup defaults to browser language; there is no language environment variable.
+
+### 4.6 Profile and account controls
+- The header has a light/dark icon toggle and a globe-icon Chinese/English toggle of the same size, placed to the left of the navigation links for every user. Theme defaults to the browser preference and persists in a browser cookie; switching language saves the signed-in user's preference and stays on the current page, preserving filters. Language is not a profile dropdown.
+- Profile has no "User settings" subtitle. It edits username, display name, email, timezone, and avatar; the password is a fixed mask with a reset button on the right that opens the authenticated password-change form. Actual passwords and hashes are never rendered.
+- Display names are at most 100 characters; optional administrative comments are at most 10,000. Avatars are optional validated PNG/JPEG uploads, at most 1 MiB and 2048 × 2048 pixels, stored in SQLite and included in full backups. They are separate from day-attachment quotas and accessible only to the account owner or an administrator.
+- Users has a reusable, fixed-style search field with an inset magnifier, Enter-to-search, and an adjacent plus-icon create link. Search matches username, display name, or email case-insensitively.
+- Creation fields are username, display name, optional avatar, email, and optional comment. The compact list shows username, display name, created time, days used, and active/inactive status. Times display in the viewing admin's saved timezone, or the browser timezone when none is saved. Clicking a row opens its detail page.
+- List rows and the detail page share a three-dot menu with Edit, Enable/Disable, Reset password, and Delete. Delete opens a modal dialog (loaded from `GET /admin/users/{id}/delete`, which is also a no-JS confirmation page) showing all of the user's details and usage before the confirmed delete; self-disable/delete remain unavailable. Detail shows identity, avatar, timezone, language, role, status, creation time, comment, password-change requirement, and effective quota/usage with editable quota overrides for regular users. A back-arrow icon returns to Users.
 
 ---
 
@@ -228,10 +242,10 @@ title,date,time,repeat,collection,tags,comment,archived,style_color,style_icon,s
   - `pandadays.db` (consistent snapshot via `VACUUM INTO`)
   - `media/…`
   - `manifest.json` (app version, schema version, created_at, file list with SHA-256)
-- Streamed as a download; optionally retained in `/data/backups` (retention count setting, default 5). Admin can list/download/delete retained backups.
+- Created into `/data/backups` and listed (retention count setting, default 5). Admin can download, restore, or delete listed backups. The legacy create-and-download API can optionally retain a copy.
 
 **Restore**
-1. Admin uploads archive (streamed to `/data/tmp`, no size cap at app level) and re-enters password.
+1. Admin selects a retained archive or uploads one (streamed to `/data/tmp`, no size cap at app level) and re-enters password.
 2. Validate: manifest present, checksums match, schema version ≤ current, no unsafe paths/links, free disk space sufficient.
 3. Enter maintenance mode: new requests get localized 503; drain in-flight requests; close DB.
 4. Auto-create pre-restore snapshot `/data/backups/pre-restore-<ts>-<unique>.tar.gz`.
@@ -240,8 +254,13 @@ title,date,time,repeat,collection,tags,comment,archived,style_color,style_icon,s
 7. Admin redirected to login (credentials from restored data).
 8. On failure: rename old files back, keep snapshot, reopen the original database, exit maintenance, show error. If rollback or reopening fails, remain in maintenance and log recovery details rather than serve potentially inconsistent data.
 
-The admin navigation links to `/admin/backup`. Creation is a CSRF-protected
-POST, with an optional retained server copy. The completed archive is staged
+The admin navigation links to `/admin/backup`, a list with Create backup and
+Restore buttons. Create backup retains the archive and returns to the list
+(requires nonzero retention). Each entry has a three-dot menu with Download,
+Restore, and confirmed Delete actions. Restore opens a separate confirmation
+form and always requires the current admin password, for both a retained archive
+and a new upload. The existing download-only POST API remains supported.
+Creation is a CSRF-protected POST. The completed archive is staged
 on the data volume before streaming the download so creation errors can be
 reported without a partial archive. Allow disk space for the database snapshot
 and compressed archive. Maintenance also pauses requests during creation and
@@ -250,7 +269,7 @@ download, keeping database and media consistent.
 Retained ordinary backups are pruned newest-first to `backup_retention` after
 creation and when site settings are saved. Zero disables ordinary retention.
 Pre-restore recovery snapshots are listed and downloadable but excluded from
-automatic pruning; delete them explicitly using the confirmation checkbox.
+automatic pruning; delete them explicitly using the menu's Delete confirmation.
 Retained archive names are validated and only regular files are served.
 
 Restore uploads stream to `<data>/tmp` without a payload byte limit; small text
@@ -316,6 +335,7 @@ users(
   is_admin INTEGER NOT NULL DEFAULT 0, is_active INTEGER NOT NULL DEFAULT 1,
   must_change_password INTEGER NOT NULL DEFAULT 0,
   lang TEXT NULL, timezone TEXT NULL,
+  display_name TEXT NOT NULL DEFAULT '', comment TEXT NOT NULL DEFAULT '', avatar BLOB NULL,
   quota_days INTEGER NULL, quota_bytes INTEGER NULL, max_card_bytes INTEGER NULL,
   used_bytes INTEGER NOT NULL DEFAULT 0,
   created_at, updated_at)

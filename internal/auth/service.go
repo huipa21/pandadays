@@ -24,6 +24,10 @@ type User struct {
 	MustChangePassword bool
 	Lang               string
 	Timezone           string
+	DisplayName        string
+	Comment            string
+	CreatedAt          time.Time
+	HasAvatar          bool
 }
 
 type Service struct {
@@ -48,6 +52,9 @@ type CreateUserParams struct {
 	MustChangePassword bool
 	Lang               string
 	Timezone           string
+	DisplayName        string
+	Comment            string
+	Avatar             []byte
 }
 
 // CreateUser atomically creates an active account and its reserved defaults.
@@ -82,6 +89,9 @@ func (s *Service) CreateUser(ctx context.Context, p CreateUserParams, now time.T
 // insertUser expects trimmed, nonempty identities and an already computed
 // hash, so callers avoid running bcrypt while holding the write lock.
 func insertUser(ctx context.Context, tx *sql.Tx, p CreateUserParams, hash string, now time.Time) (*User, error) {
+	if err := validateProfile(p.DisplayName, p.Comment, p.Avatar); err != nil {
+		return nil, err
+	}
 	// Also prevent username/email cross-collisions, so login is unambiguous.
 	var exists bool
 	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(
@@ -93,9 +103,11 @@ func insertUser(ctx context.Context, tx *sql.Tx, p CreateUserParams, hash string
 		return nil, ErrIdentity
 	}
 	res, err := tx.ExecContext(ctx, `INSERT INTO users
-		(username, email, password_hash, is_admin, must_change_password, lang, timezone, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?)`,
-		p.Username, p.Email, hash, p.IsAdmin, p.MustChangePassword, p.Lang, p.Timezone, now.Unix(), now.Unix())
+		(username, email, password_hash, is_admin, must_change_password, lang, timezone, created_at, updated_at,
+		display_name, comment, avatar)
+		VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?, ?)`,
+		p.Username, p.Email, hash, p.IsAdmin, p.MustChangePassword, p.Lang, p.Timezone, now.Unix(), now.Unix(),
+		strings.TrimSpace(p.DisplayName), strings.TrimSpace(p.Comment), p.Avatar)
 	if err != nil {
 		return nil, fmt.Errorf("insert user: %w", err)
 	}
@@ -112,7 +124,9 @@ func insertUser(ctx context.Context, tx *sql.Tx, p CreateUserParams, hash string
 		}
 	}
 	return &User{ID: id, Username: p.Username, Email: p.Email, IsAdmin: p.IsAdmin,
-		IsActive: true, MustChangePassword: p.MustChangePassword, Lang: p.Lang, Timezone: p.Timezone}, nil
+		IsActive: true, MustChangePassword: p.MustChangePassword, Lang: p.Lang, Timezone: p.Timezone,
+		DisplayName: strings.TrimSpace(p.DisplayName), Comment: strings.TrimSpace(p.Comment),
+		HasAvatar: len(p.Avatar) > 0, CreatedAt: now.UTC()}, nil
 }
 
 // Authenticate applies the same error and bcrypt work to unknown and inactive users.

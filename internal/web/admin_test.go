@@ -264,8 +264,10 @@ func TestAdminQuotaOverrideResolutionAndEnforcement(t *testing.T) {
 	if err := s.days.SetArchived(ctx, target.ID, d.ID, true, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	rr := get(s.Handler(), "/admin/users", token)
-	for _, text := range []string{"1 of 3 days used (including archived)", "3 B of 20 B used", "Attachment limit per day: 12 B"} {
+	rr := get(s.Handler(), "/admin/users/"+strconv.FormatInt(target.ID, 10), token)
+	for _, text := range []string{"1 of 3 days used (including archived)",
+		formatMegabytes(3) + " M of " + formatMegabytes(20) + " M used",
+		"Attachment limit per day: " + formatMegabytes(12) + " M"} {
 		if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), text) {
 			t.Errorf("usage page missing %q status=%d", text, rr.Code)
 		}

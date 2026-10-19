@@ -187,6 +187,23 @@ Status legend: `[ ]` todo, `[x]` done.
 
 ---
 
+### [x] T22 Site-only administration
+- Admin-only navigation and landing page; personal-content routes unavailable to admins without deleting existing data.
+- Searchable users list, separate create/manage pages, avatar/username menu with Profile and Sign out, personal password change in Profile.
+- Backup list with create/upload-restore buttons and per-entry download/restore/delete menu; password re-entry for every restore.
+- Storage quotas and usage in M with exact byte conversion; inherited and zero limits preserved.
+- **Done when**: authorization, search, creation, quota conversion, retained/upload restore, localization, and responsive UI verified; full Go tests and vet pass.
+- Verified: full `go test ./...` and `go vet ./...`; CGO-free build; browser checks across nine screens in English/Chinese at 375px and 1280px without horizontal overflow. Exercised user creation/search, backup creation/download/deletion/retained restore, restored login, recovery snapshot, profile menu, and sign out on isolated data.
+
+### [x] T23 Profile and user-management controls
+- Header light/dark and Chinese/English icon toggles; saved theme/language preferences.
+- Profile identity, timezone, optional avatar, masked password with right-aligned reset; no language dropdown or settings subtitle.
+- Shared magnifier search field, Enter submission, adjacent create icon; creation/editing of display names, avatars, and comments.
+- Compact clickable user rows and shared three-dot action menus; complete account detail with quotas and icon-only back navigation.
+- New profile migration, bounded validated avatar uploads, identity/authorization tests, bilingual strings, and mobile/desktop checks.
+- **Done when**: requested flows work at 375px/1280px; full tests, vet, and CGO-free build pass.
+- Verified: full `go test ./...`, `go vet ./...`, CGO-free build, and JavaScript syntax checks pass. Chromium checks at 375px/1280px covered light/dark persistence, saved English/Chinese switching with search preserved, Enter search, create/edit/detail flows, enable/disable, temporary password reset, avatar upload/display, and cancel/confirm deletion without horizontal overflow.
+
 ## Dependency Graph
 
 ```mermaid

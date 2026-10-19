@@ -1,0 +1,18 @@
+{{define "title"}}{{if .Edit}}{{t "admin.edit"}}{{else}}{{t "admin.create"}}{{end}} - {{t "app.name"}}{{end}}
+{{define "content"}}
+{{template "back-users" .}}
+<section class="card form settings-card">
+  <h1>{{if .Edit}}{{t "admin.edit"}}{{else}}{{t "admin.create"}}{{end}}</h1>
+  {{if .Error}}<p class="alert" role="alert">{{t .Error}}</p>{{end}}
+  <form method="post" action="/admin/users{{if .Edit}}/{{.TargetID}}/edit{{end}}" enctype="multipart/form-data" class="form">
+    {{template "csrf-field" .}}
+    <label>{{t "admin.username"}}<input type="text" name="username" value="{{.Fields.Username}}" required autocomplete="off"></label>
+    <label>{{t "profile.display_name"}}<input type="text" name="display_name" value="{{.Fields.DisplayName}}" maxlength="100"></label>
+    <label>{{t "profile.avatar"}}<input type="file" name="avatar" accept="image/png,image/jpeg"><span class="hint">{{t "profile.avatar_hint"}}</span></label>
+    {{if .Fields.HasAvatar}}<div class="avatar-field">{{template "user-avatar" .Fields}}<label class="check"><input type="checkbox" name="remove_avatar" value="1"> {{t "profile.remove_avatar"}}</label></div>{{end}}
+    <label>{{t "admin.email"}}<input type="email" name="email" value="{{.Fields.Email}}" required autocomplete="off"></label>
+    <label>{{t "profile.comment"}}<textarea name="comment" maxlength="10000" rows="3">{{.Fields.Comment}}</textarea></label>
+    <button class="btn" type="submit">{{if .Edit}}{{t "settings.save"}}{{else}}{{t "admin.create"}}{{end}}</button>
+  </form>
+</section>
+{{end}}

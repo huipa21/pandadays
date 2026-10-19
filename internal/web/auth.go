@@ -80,11 +80,31 @@ func RequireAdmin(next http.Handler) http.Handler {
 	}))
 }
 
+func adminSiteOnly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if user := CurrentUser(r.Context()); user != nil && user.IsAdmin {
+			if r.URL.Path == "/" {
+				authRedirect(w, r, "/admin/users")
+				return
+			}
+			for _, prefix := range []string{"/days", "/archive", "/collections", "/tags", "/shared", "/shares", "/attachments", "/settings/export", "/settings/import"} {
+				if r.URL.Path == prefix || strings.HasPrefix(r.URL.Path, prefix+"/") {
+					http.NotFound(w, r)
+					return
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func forcePasswordChange(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user := CurrentUser(r.Context())
 		// Health checks and assets are infrastructure, not account pages.
 		exempt := r.URL.Path == "/password" || r.URL.Path == "/logout" ||
+			r.URL.Path == "/settings/language" ||
+			(r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/users/") && strings.HasSuffix(r.URL.Path, "/avatar")) ||
 			r.URL.Path == "/healthz" || strings.HasPrefix(r.URL.Path, "/static/")
 		if user != nil && user.MustChangePassword && !exempt {
 			authRedirect(w, r, "/password")

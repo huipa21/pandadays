@@ -1,0 +1,13 @@
+{{define "title"}}{{t "backup.restore"}} · {{t "app.name"}}{{end}}
+{{define "content"}}
+<p><a href="/admin/backup">{{t "backup.title"}}</a></p>
+<form method="post" action="/admin/backup/{{if .RestoreName}}{{.RestoreName}}/restore{{else}}restore{{end}}"{{if not .RestoreName}} enctype="multipart/form-data"{{end}} class="card form danger-zone settings-card">
+  {{template "csrf-field" .}}
+  <h1>{{t "backup.restore"}}</h1>
+  <p>{{t "backup.warning"}}</p>
+  {{if .RestoreName}}<p class="admin-identity">{{.RestoreName}}</p>
+  {{else}}<label>{{t "backup.file"}} <input type="file" name="file" accept=".tar.gz,application/gzip" required></label>{{end}}
+  <label>{{t "backup.password"}} <input type="password" name="password" autocomplete="current-password" required></label>
+  <button type="submit" class="btn btn-danger">{{t "backup.restore"}}</button>
+</form>
+{{end}}

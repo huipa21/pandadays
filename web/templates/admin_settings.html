@@ -1,7 +1,6 @@
 {{define "title"}}{{t "admin.settings"}} - {{t "app.name"}}{{end}}
 {{define "content"}}
 <h1>{{t "admin.settings"}}</h1>
-<p><a href="/admin/users">{{t "admin.users"}}</a></p>
 {{if .Error}}<p class="alert" role="alert">{{t .Error}}</p>{{end}}
 <form method="post" action="/admin/settings" class="card form">
   {{template "csrf-field" .}}
@@ -13,8 +12,8 @@
   <label>{{t "admin.session_days"}}<input type="number" name="session_days" min="1" max="106751" step="1" required value="{{.Settings.SessionDays}}"></label>
   <p>{{t "admin.defaults_hint"}}</p>
   <label>{{t "admin.quota_days"}}<input type="number" name="default_quota_days" min="0" step="1" required value="{{.Settings.QuotaDays}}"></label>
-  <label>{{t "admin.quota_bytes"}}<input type="number" name="default_quota_bytes" min="0" step="1" required value="{{.Settings.QuotaBytes}}"></label>
-  <label>{{t "admin.max_card_bytes"}}<input type="number" name="default_max_card_bytes" min="0" step="1" required value="{{.Settings.MaxCardBytes}}"></label>
+  <label>{{t "admin.quota_mb"}}<input type="number" name="default_quota_mb" min="0" step="any" required value="{{megabytes .Settings.QuotaBytes}}"></label>
+  <label>{{t "admin.max_card_mb"}}<input type="number" name="default_max_card_mb" min="0" step="any" required value="{{megabytes .Settings.MaxCardBytes}}"></label>
   <label>{{t "admin.backup_retention"}}<input type="number" name="backup_retention" min="0" step="1" required value="{{.Settings.BackupRetention}}"></label>
   <button class="btn" type="submit">{{t "settings.save"}}</button>
 </form>

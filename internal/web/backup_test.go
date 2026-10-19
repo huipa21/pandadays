@@ -320,9 +320,14 @@ func TestRestoreHTTPDrainsAndReopens(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Reuse the HTTP server's original handler, not a newly constructed one.
+	_, regularToken := secondUser(t, s)
 	for _, path := range []string{"/collections", "/tags", "/settings", "/shared", "/settings/export", "/admin/backup"} {
 		req, _ := http.NewRequest(http.MethodGet, server.URL+path, nil)
-		req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: fresh})
+		requestToken := regularToken
+		if strings.HasPrefix(path, "/admin/") {
+			requestToken = fresh
+		}
+		req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: requestToken})
 		res, err := client.Do(req)
 		if err != nil {
 			t.Fatal(err)
@@ -388,10 +393,122 @@ func TestRestoreRejectsAndRecovers(t *testing.T) {
 	if _, err := s.auth.LookupSession(context.Background(), token, time.Now()); errors.Is(err, auth.ErrSession) || err != nil {
 		t.Fatalf("failed restore invalidated session: %v", err)
 	}
-	if rr := get(s.Handler(), "/", token); rr.Code != http.StatusOK {
+	if rr := get(s.Handler(), "/admin/users", token); rr.Code != http.StatusOK {
 		t.Fatalf("maintenance did not end: %d %s", rr.Code, rr.Body.String())
 	}
 	assertNoRestoreUploads(t, s)
+}
+
+func TestBackupListCreationAndRetainedRestore(t *testing.T) {
+	s, _, token := backupServer(t)
+	ctx := context.Background()
+	target, regularToken := secondUser(t, s)
+	day, err := s.days.Create(ctx, target.ID, days.DayInput{Title: "Before backup", Date: "2026-10-18"}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := sessionPost(t, s, "/admin/backup", token, url.Values{"mode": {"list"}})
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/admin/backup" {
+		t.Fatalf("list create: %d %s", rr.Code, rr.Body.String())
+	}
+	files, err := s.backup.List()
+	if err != nil || len(files) != 1 {
+		t.Fatalf("list create did not retain archive: %+v %v", files, err)
+	}
+	name := files[0].Name
+	restorePath := "/admin/backup/" + name + "/restore"
+	body := get(s.Handler(), "/admin/backup", token).Body.String()
+	for _, want := range []string{`class="dots"`, `href="/admin/backup/` + name + `" download`,
+		`href="` + restorePath + `"`, `action="/admin/backup/` + name + `/delete"`,
+		`href="/admin/backup/restore"`, "Create backup"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("backup list missing %s", want)
+		}
+	}
+	if strings.Contains(body, `type="file"`) || strings.Contains(body, `type="password"`) {
+		t.Error("backup list still embeds restore form")
+	}
+	for _, path := range []string{restorePath, "/admin/backup/restore"} {
+		if rr := get(s.Handler(), path, regularToken); rr.Code != http.StatusNotFound {
+			t.Errorf("non-admin GET %s: %d", path, rr.Code)
+		}
+		if rr := get(s.Handler(), path, ""); rr.Header().Get("Location") != "/login" {
+			t.Errorf("anonymous GET %s: %d", path, rr.Code)
+		}
+		for _, lang := range []string{"en", "zh"} {
+			rr := get(s.Handler(), path+"?lang="+lang, token)
+			if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `name="password"`) ||
+				strings.Contains(rr.Body.String(), ">backup.") {
+				t.Errorf("restore form %s %s: %d %s", path, lang, rr.Code, rr.Body.String())
+			}
+		}
+	}
+	for _, path := range []string{restorePath, "/admin/backup/restore"} {
+		form := get(s.Handler(), path, token).Body.String()
+		if strings.Contains(form, `type="file"`) != (path == "/admin/backup/restore") {
+			t.Errorf("incorrect upload field on %s", path)
+		}
+	}
+	oldDB := s.db
+	if rr := postForm(s.Handler(), restorePath, url.Values{"password": {"password123"}},
+		&http.Cookie{Name: auth.SessionCookieName, Value: token}); rr.Code != http.StatusForbidden {
+		t.Errorf("retained restore missing CSRF: %d", rr.Code)
+	}
+	if rr := sessionPost(t, s, restorePath, regularToken, url.Values{"password": {"password123"}}); rr.Code != http.StatusNotFound {
+		t.Errorf("non-admin retained restore: %d", rr.Code)
+	}
+	now := time.Now()
+	s.now = func() time.Time { return now }
+	for _, password := range []string{"", "wrong-password"} {
+		rr := sessionPost(t, s, restorePath, token, url.Values{"password": {password}})
+		if rr.Code != http.StatusUnprocessableEntity || s.db != oldDB || s.maintenance {
+			t.Fatalf("unverified retained restore: %d %s", rr.Code, rr.Body.String())
+		}
+		now = now.Add(3 * time.Second)
+	}
+	for _, path := range []string{"/admin/backup/missing.tar.gz/restore", "/admin/backup/not-a-backup/restore"} {
+		if rr := get(s.Handler(), path, token); rr.Code != http.StatusNotFound {
+			t.Errorf("missing restore form: %d", rr.Code)
+		}
+		if rr := sessionPost(t, s, path, token, url.Values{"password": {"password123"}}); rr.Code != http.StatusNotFound {
+			t.Errorf("missing retained archive: %d", rr.Code)
+		}
+	}
+	if _, err := s.db.Exec(`UPDATE days SET title='After backup' WHERE id=? AND owner_id=?`, day.ID, target.ID); err != nil {
+		t.Fatal(err)
+	}
+	rr = sessionPost(t, s, restorePath, token, url.Values{"password": {"password123"}})
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/login" || s.db == oldDB || s.maintenance {
+		t.Fatalf("retained restore: %d %s", rr.Code, rr.Body.String())
+	}
+	restored, err := s.days.Get(ctx, target.ID, day.ID)
+	if err != nil || restored.Title != "Before backup" {
+		t.Fatalf("retained restore did not restore content: %+v %v", restored, err)
+	}
+	var sessions int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM sessions`).Scan(&sessions); err != nil || sessions != 0 {
+		t.Fatalf("retained restore did not clear sessions: %d %v", sessions, err)
+	}
+	files, err = s.backup.List()
+	if err != nil || len(files) != 2 {
+		t.Fatalf("retained restore lost archive or recovery snapshot: %+v %v", files, err)
+	}
+	assertNoRestoreUploads(t, s)
+}
+
+func TestBackupListCreationWithRetentionDisabled(t *testing.T) {
+	s, _, token := backupServer(t)
+	if _, err := s.db.Exec(`UPDATE settings SET value='0' WHERE key='backup_retention'`); err != nil {
+		t.Fatal(err)
+	}
+	rr := sessionPost(t, s, "/admin/backup", token, url.Values{"mode": {"list"}})
+	if rr.Code != http.StatusUnprocessableEntity || !strings.Contains(rr.Body.String(), "retention above zero") || s.maintenance {
+		t.Fatalf("disabled retention not explained: %d %s", rr.Code, rr.Body.String())
+	}
+	files, err := s.backup.List()
+	if err != nil || len(files) != 0 {
+		t.Fatalf("disabled retention created archive: %+v %v", files, err)
+	}
 }
 
 func TestConcurrentMaintenanceDoesNotDeadlock(t *testing.T) {

@@ -1,0 +1,7 @@
+{{define "title"}}{{t "admin.delete"}} - {{t "app.name"}}{{end}}
+{{define "content"}}
+{{template "back-users" .}}
+<section class="card form settings-card" aria-labelledby="dialog-title">
+{{template "delete-user" .}}
+</section>
+{{end}}

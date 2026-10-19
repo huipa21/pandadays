@@ -7,6 +7,7 @@
 <meta name="csrf-token" content="{{.CSRFToken}}">
 <title>{{block "title" .}}{{t "app.name"}}{{end}}</title>
 <link rel="stylesheet" href="{{asset "app.css"}}">
+<script src="{{asset "theme.js"}}"></script>
 <script src="{{asset "htmx.min.js"}}" defer></script>
 <script src="{{asset "app.js"}}" defer></script>
 {{if .CaptureTimezone}}<script src="{{asset "timezone.js"}}" defer></script>{{end}}
@@ -15,28 +16,90 @@
 <a class="skip-link" href="#main">{{t "nav.skip"}}</a>
 <header class="site-header">
   <a class="brand" href="/"><span aria-hidden="true">🐼</span> {{t "app.name"}}</a>
+  <div class="header-controls">
+  {{template "header-toggles" .}}
   {{with .User}}<nav class="nav" aria-label="{{t "nav.main"}}">
-    <span class="nav-user">{{.Username}}</span>
+    {{if not .IsAdmin}}
     <a href="/archive">{{t "nav.archive"}}</a>
     <a href="/shared">{{t "sharing.title"}}</a>
     <a href="/collections">{{t "nav.collections"}}</a>
     <a href="/tags">{{t "nav.tags"}}</a>
-    <a href="/settings">{{t "nav.settings"}}</a>
+    {{end}}
     {{if .IsAdmin}}<a href="/admin/users">{{t "admin.users"}}</a>
-    <a href="/admin/settings">{{t "admin.settings"}}</a>
-    <a href="/admin/backup">{{t "backup.title"}}</a>{{end}}
-    <a href="/password">{{t "nav.password"}}</a>
-    <form method="post" action="/logout" class="inline-form">{{template "csrf-field" $}}<button type="submit" class="link-button">{{t "nav.logout"}}</button></form>
+    <a href="/admin/backup">{{t "backup.title"}}</a>
+    <a href="/admin/settings">{{t "admin.settings"}}</a>{{end}}
+    <details class="dropdown account-menu">
+      <summary>{{template "user-avatar" .}}<span>{{.Username}}</span></summary>
+      <div class="dropdown-panel">
+        <a href="/settings">{{t "nav.profile"}}</a>
+        <form method="post" action="/logout">{{template "csrf-field" $}}<button type="submit" class="link-button">{{t "nav.logout"}}</button></form>
+      </div>
+    </details>
   </nav>{{end}}
+  </div>
 </header>
 <main class="container" id="main" tabindex="-1">
 <p class="alert" id="flash" role="alert" hidden data-error-network="{{t "error.network"}}" data-error-generic="{{t "error.internal"}}"></p>
 {{block "content" .}}{{end}}
 </main>
+{{with .User}}{{if .IsAdmin}}<dialog class="card confirm-dialog" id="app-dialog" aria-labelledby="dialog-title"></dialog>{{end}}{{end}}
 </body>
 </html>
 {{end}}
+{{define "header-toggles"}}<div class="header-toggles">
+    <button type="button" class="icon-button" id="theme-toggle" aria-label="{{t "theme.toggle"}}" title="{{t "theme.toggle"}}" aria-pressed="false"><svg class="icon theme-light" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg><svg class="icon theme-dark" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14A8 8 0 0 1 10 4a8 8 0 1 0 10 10Z"/></svg></button>
+    {{$label := t "language.switch_zh"}}{{if eq .Lang "zh"}}{{$label = t "language.switch_en"}}{{end}}
+    {{if .User}}<form method="post" action="/settings/language">
+      {{template "csrf-field" .}}<input type="hidden" name="return_to" value="{{.ReturnTo}}">
+      <button class="icon-button language-toggle" type="submit" name="lang" value="{{if eq .Lang "zh"}}en{{else}}zh{{end}}" aria-label="{{$label}}" title="{{$label}}">{{template "globe-icon"}}</button>
+    </form>{{else}}<a class="icon-button language-toggle" href="{{.LanguageURL}}" aria-label="{{$label}}" title="{{$label}}">{{template "globe-icon"}}</a>{{end}}
+  </div>{{end}}
+{{define "globe-icon"}}<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 3.75 5.5 3.75 9S14.5 18.5 12 21c-2.5-2.5-3.75-5.5-3.75-9S9.5 5.5 12 3Z"/></svg>{{end}}
+{{define "user-details"}}<dl class="profile-details">
+    <dt>{{t "profile.avatar"}}</dt><dd>{{template "user-avatar" .}}</dd>
+    <dt>{{t "admin.username"}}</dt><dd>{{.Username}}</dd>
+    <dt>{{t "profile.display_name"}}</dt><dd>{{.DisplayName}}</dd>
+    <dt>{{t "admin.email"}}</dt><dd>{{.Email}}</dd>
+    <dt>{{t "settings.timezone"}}</dt><dd>{{if .Timezone}}{{.Timezone}}{{else}}{{t "settings.timezone_auto"}}{{end}}</dd>
+    <dt>{{t "settings.language"}}</dt><dd>{{if .Lang}}{{t (printf "lang.%s" .Lang)}}{{else}}{{t "settings.language_auto"}}{{end}}</dd>
+    <dt>{{t "profile.created"}}</dt><dd>{{localtime .CreatedAt}}</dd>
+    <dt>{{t "profile.status"}}</dt><dd>{{if .IsActive}}{{t "admin.active"}}{{else}}{{t "admin.inactive"}}{{end}}</dd>
+    <dt>{{t "profile.role"}}</dt><dd>{{if .IsAdmin}}{{t "admin.role"}}{{else}}{{t "profile.regular_user"}}{{end}}</dd>
+    <dt>{{t "profile.comment"}}</dt><dd class="profile-comment">{{.Comment}}</dd>
+    <dt>{{t "login.password"}}</dt><dd><span aria-label="{{t "profile.password_masked"}}">••••••••</span>{{if .MustChangePassword}} <span class="hint">{{t "profile.password_pending"}}</span>{{end}}</dd>
+  </dl>{{end}}
 {{define "csrf-field"}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+{{define "user-avatar"}}{{if .HasAvatar}}<img class="avatar" src="/users/{{.ID}}/avatar" alt="">{{else}}<svg class="avatar" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="currentColor" opacity=".15"/><circle cx="16" cy="12" r="5" fill="currentColor"/><path d="M6 27a10 10 0 0 1 20 0" fill="currentColor"/></svg>{{end}}{{end}}
+{{define "back-users"}}<a class="icon-button" href="/admin/users" aria-label="{{t "admin.back"}}" title="{{t "admin.back"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 5-7 7 7 7M5 12h15"/></svg></a>{{end}}
+{{define "user-search"}}<label class="search-field"><span class="visually-hidden">{{t "admin.search"}}</span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input type="search" name="q" value="{{.Query}}" placeholder="{{t "admin.search_hint"}}"></label>{{end}}
+{{define "password-notice"}}{{if .Password}}<section class="card form" role="status">
+  <h2>{{t "admin.password_once"}}</h2>
+  <p>{{.Account}}: <code id="generated-password">{{.Password}}</code></p>
+  <p>{{t "admin.password_hint"}}</p>
+</section>{{end}}{{end}}
+{{define "user-actions"}}<details class="dropdown user-actions">
+  <summary class="dots" aria-label="{{t "admin.actions"}}" title="{{t "admin.actions"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></summary>
+  <div class="dropdown-panel">
+    <a href="/admin/users/{{.Target.ID}}/edit">{{t "admin.edit"}}</a>
+    <form method="post" action="/admin/users/{{.Target.ID}}/{{if .Target.IsActive}}deactivate{{else}}activate{{end}}">
+      {{template "csrf-field" .}}<input type="hidden" name="return_to" value="{{.ReturnTo}}">
+      <button class="link-button" type="submit"{{if eq .Target.ID .User.ID}} disabled title="{{t "admin.error.protected"}}"{{end}}>{{if .Target.IsActive}}{{t "admin.deactivate"}}{{else}}{{t "admin.activate"}}{{end}}</button>
+    </form>
+    {{if eq .Target.ID .User.ID}}<a href="/password">{{t "admin.reset"}}</a>{{else}}<form method="post" action="/admin/users/{{.Target.ID}}/reset-password">
+      {{template "csrf-field" .}}<button class="link-button" type="submit">{{t "admin.reset"}}</button>
+    </form>{{end}}
+    {{if eq .Target.ID .User.ID}}<button class="link-button danger-text" type="button" disabled title="{{t "admin.error.protected"}}">{{t "admin.delete"}}</button>{{else}}<a class="danger-text" href="/admin/users/{{.Target.ID}}/delete" hx-get="/admin/users/{{.Target.ID}}/delete" hx-target="#app-dialog" hx-swap="innerHTML">{{t "admin.delete"}}</a>{{end}}
+  </div>
+</details>{{end}}
+{{define "delete-user"}}{{with index .Users 0}}<h2 id="dialog-title">{{t "admin.delete_title"}}</h2>
+  {{template "user-details" .}}
+  <p class="hint">{{t "admin.days_used" .UsedDays}}{{if not .IsAdmin}}<br>{{t "admin.storage_usage" (megabytes .UsedBytes) (megabytes .EffectiveBytes)}}{{end}}</p>
+  <p class="alert">{{t "admin.delete_confirm"}}</p>
+  <form method="post" action="/admin/users/{{.ID}}/delete" class="page-actions dialog-actions">
+    {{template "csrf-field" $}}<input type="hidden" name="confirm" value="1">
+    <a class="btn btn-secondary" href="/admin/users/{{.ID}}" data-close-dialog>{{t "admin.cancel"}}</a>
+    <button class="btn btn-danger" type="submit">{{t "admin.delete"}}</button>
+  </form>{{end}}{{end}}
 {{define "group-name"}}{{if .Reserved}}{{t "groups.default"}}{{else}}{{.Name}}{{end}}{{end}}
 {{define "swatch"}}<svg class="swatch" viewBox="0 0 16 16" aria-hidden="true">{{if .}}<circle cx="8" cy="8" r="7" fill="{{.}}"/>{{else}}<circle class="swatch-none" cx="8" cy="8" r="6"/>{{end}}</svg>{{end}}
 {{define "group-color-fields"}}<div class="color-row">

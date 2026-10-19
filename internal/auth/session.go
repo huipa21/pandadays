@@ -97,14 +97,17 @@ func (s *Service) LookupSession(ctx context.Context, token string, now time.Time
 	}
 	session := &Session{TokenHash: tokenHash(token), CSRFToken: sessionCSRF(token)}
 	var expires int64
+	var created int64
 	err := s.db.QueryRowContext(ctx, `SELECT u.id, u.username, u.email,
 		u.is_admin, u.is_active, u.must_change_password, COALESCE(u.lang, ''), COALESCE(u.timezone, ''),
+		u.display_name, u.comment, u.created_at, COALESCE(length(u.avatar), 0) > 0,
 		s.persistent, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
 		WHERE s.token_hash = ? AND s.expires_at > ? AND u.is_active = 1`,
 		session.TokenHash, now.Unix()).Scan(
 		&session.User.ID, &session.User.Username, &session.User.Email,
 		&session.User.IsAdmin, &session.User.IsActive, &session.User.MustChangePassword,
-		&session.User.Lang, &session.User.Timezone, &session.Persistent, &expires)
+		&session.User.Lang, &session.User.Timezone, &session.User.DisplayName, &session.User.Comment,
+		&created, &session.User.HasAvatar, &session.Persistent, &expires)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrSession
 	}
@@ -112,6 +115,7 @@ func (s *Service) LookupSession(ctx context.Context, token string, now time.Time
 		return nil, fmt.Errorf("lookup session: %w", err)
 	}
 	session.ExpiresAt = time.Unix(expires, 0).UTC()
+	session.User.CreatedAt = time.Unix(created, 0).UTC()
 	if _, err := s.db.ExecContext(ctx, `UPDATE sessions SET last_seen_at = ?
 		WHERE token_hash = ? AND user_id = ?`, now.Unix(), session.TokenHash, session.User.ID); err != nil {
 		return nil, fmt.Errorf("update session last seen: %w", err)

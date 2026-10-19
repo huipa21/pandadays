@@ -62,7 +62,9 @@ func (s *Service) AdminUsers(ctx context.Context) ([]AdminUser, error) {
 		(SELECT COUNT(*) FROM days d WHERE d.owner_id = u.id),
 		COALESCE(u.quota_days, (SELECT value FROM settings WHERE key = 'default_quota_days')),
 		COALESCE(u.quota_bytes, (SELECT value FROM settings WHERE key = 'default_quota_bytes')),
-		COALESCE(u.max_card_bytes, (SELECT value FROM settings WHERE key = 'default_max_card_bytes'))
+		COALESCE(u.max_card_bytes, (SELECT value FROM settings WHERE key = 'default_max_card_bytes')),
+		u.display_name, u.comment, u.created_at, COALESCE(length(u.avatar), 0) > 0,
+		COALESCE(u.lang, ''), COALESCE(u.timezone, '')
 		FROM users u ORDER BY u.username COLLATE NOCASE`)
 	if err != nil {
 		return nil, fmt.Errorf("list admin users: %w", err)
@@ -71,11 +73,14 @@ func (s *Service) AdminUsers(ctx context.Context) ([]AdminUser, error) {
 	var users []AdminUser
 	for rows.Next() {
 		var u AdminUser
+		var created int64
 		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.IsAdmin, &u.IsActive, &u.MustChangePassword,
 			&u.Days, &u.Bytes, &u.CardBytes, &u.UsedBytes, &u.UsedDays,
-			&u.EffectiveDays, &u.EffectiveBytes, &u.EffectiveCardBytes); err != nil {
+			&u.EffectiveDays, &u.EffectiveBytes, &u.EffectiveCardBytes,
+			&u.DisplayName, &u.Comment, &created, &u.HasAvatar, &u.Lang, &u.Timezone); err != nil {
 			return nil, fmt.Errorf("scan admin user: %w", err)
 		}
+		u.CreatedAt = time.Unix(created, 0).UTC()
 		users = append(users, u)
 	}
 	return users, rows.Err()

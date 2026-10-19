@@ -3,7 +3,8 @@ package web
 import (
 	"errors"
 	"net/http"
-	"time"
+	"net/url"
+	"strings"
 
 	"pandadays/internal/auth"
 )
@@ -84,9 +85,27 @@ func (s *Server) saveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := CurrentUser(r.Context())
-	lang, timezone := r.PostForm.Get("lang"), r.PostForm.Get("timezone")
-	err := s.auth.UpdatePreferences(r.Context(), user.ID, lang, timezone, time.Now())
+	lang, timezone := user.Lang, r.PostForm.Get("timezone")
+	if r.PostForm.Has("lang") {
+		lang = r.PostForm.Get("lang")
+	}
+	p, err := profileParams(r)
+	if !r.PostForm.Has("username") {
+		p.Username = user.Username
+	}
+	if !r.PostForm.Has("email") {
+		p.Email = user.Email
+	}
+	if !r.PostForm.Has("display_name") {
+		p.DisplayName = user.DisplayName
+	}
+	p.Comment = user.Comment
+	if err == nil {
+		err = s.auth.UpdateProfile(r.Context(), user.ID, user.ID, p, lang, timezone, s.now())
+	}
 	switch {
+	case errors.Is(err, auth.ErrIdentity), errors.Is(err, auth.ErrProfile):
+		s.renderSettings(w, r, settingsPage{pageData: newPageData(r), Error: "profile.error", Status: http.StatusUnprocessableEntity})
 	case errors.Is(err, auth.ErrLanguage):
 		page := settingsPage{pageData: newPageData(r), Error: "settings.error.language", Status: http.StatusUnprocessableEntity}
 		s.renderSettings(w, r, page)
@@ -99,4 +118,33 @@ func (s *Server) saveSettings(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 	}
+}
+
+func (s *Server) saveLanguage(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.authError(w, r, "error.bad_request", http.StatusBadRequest)
+		return
+	}
+	lang := r.PostForm.Get("lang")
+	if lang != "en" && lang != "zh" {
+		s.authError(w, r, "settings.error.language", http.StatusUnprocessableEntity)
+		return
+	}
+	user := CurrentUser(r.Context())
+	if err := s.auth.UpdatePreferences(r.Context(), user.ID, lang, user.Timezone, s.now()); err != nil {
+		s.log.Error("update language", "user_id", user.ID, "err", err)
+		s.authError(w, r, "error.internal", http.StatusInternalServerError)
+		return
+	}
+	target := r.PostForm.Get("return_to")
+	u, err := url.Parse(target)
+	if err != nil || u.IsAbs() || u.Host != "" || !strings.HasPrefix(target, "/") || strings.HasPrefix(target, "//") || strings.ContainsAny(target, "\\\r\n") {
+		target = "/"
+	} else {
+		q := u.Query()
+		q.Del("lang")
+		u.RawQuery = q.Encode()
+		target = u.String()
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
 }

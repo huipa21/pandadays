@@ -48,6 +48,28 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 			return
 		}
 		safe := r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions
+		if isProfileForm(r) {
+			if user := CurrentUser(r.Context()); user == nil {
+				authRedirect(w, r, "/login")
+				return
+			} else if r.URL.Path != "/settings" && !user.IsAdmin {
+				http.NotFound(w, r)
+				return
+			}
+			err := parseProfileForm(w, r)
+			if r.MultipartForm != nil {
+				defer r.MultipartForm.RemoveAll()
+			}
+			if err != nil {
+				var maxErr *http.MaxBytesError
+				status := http.StatusBadRequest
+				if errors.As(err, &maxErr) {
+					status = http.StatusRequestEntityTooLarge
+				}
+				s.authError(w, r, "profile.error", status)
+				return
+			}
+		}
 		if r.Method == http.MethodPost && r.URL.Path == "/admin/backup/restore" {
 			user := CurrentUser(r.Context())
 			if user == nil {

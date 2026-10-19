@@ -19,7 +19,7 @@ func TestSettingsRequiresLoginAndShowsUsage(t *testing.T) {
 	rr := get(s.Handler(), "/settings", token)
 	body := rr.Body.String()
 	for _, want := range []string{
-		"User settings", `name="lang"`, `name="timezone"`,
+		"Profile", `action="/settings/language"`, `name="timezone"`, `name="display_name"`, `name="avatar"`,
 		"512 B of 1.0 GiB used", `href="/password"`, `value="Asia/Shanghai"`,
 	} {
 		if rr.Code != http.StatusOK || !strings.Contains(body, want) {
@@ -54,7 +54,7 @@ func TestSaveSettings(t *testing.T) {
 	}
 	rr = get(s.Handler(), "/settings", token)
 	if !strings.Contains(rr.Body.String(), `<html lang="zh">`) ||
-		!strings.Contains(rr.Body.String(), `value="zh" lang="zh" selected`) ||
+		!strings.Contains(rr.Body.String(), `class="icon-button language-toggle" type="submit" name="lang" value="en"`) ||
 		!strings.Contains(rr.Body.String(), `value="Asia/Shanghai" selected`) {
 		t.Fatalf("saved preferences not reflected: %s", rr.Body.String())
 	}

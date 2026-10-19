@@ -201,12 +201,23 @@ a restore.
 
 ### Recommended: admin Web UI
 
-Use `/admin/backup` to create and download a full-site `.tar.gz` archive,
-optionally retaining it on the server. The same page lists retained backups
-for download and confirmed deletion; ordinary retention pruning excludes
-pre-restore recovery snapshots.
+Admins manage the site only; use a regular user account for personal days.
+The admin navigation contains Users, Backup/Restore, and Site Settings.
+Users has a username/email search, a separate Create user form, and per-user
+management pages. Site Settings controls keep-login days, default quotas
+(storage in M, where 1 M = 1,048,576 bytes), and backup retention.
+The avatar/username menu opens Profile or Sign out; change your password
+from Profile.
 
-To restore, upload an archive and re-enter your current admin password.
+Use **Create backup** on `/admin/backup` to create a retained full-site
+`.tar.gz` archive and return to the backup list. Set retention above zero in
+Site Settings first. Each backup's three-dot menu offers **Download**,
+**Restore**, and confirmed **Delete**; ordinary retention pruning excludes
+pre-restore recovery snapshots. Keep an off-host copy using Download.
+
+To restore, choose Restore from a retained backup's menu, or use the top
+Restore button to upload an archive. Both require re-entering your current
+admin password.
 Validation completes before maintenance starts. The server then drains active
 requests, takes a recovery snapshot, replaces the database and media, and
 clears all sessions. Wait for completion and sign in with the **restored**
