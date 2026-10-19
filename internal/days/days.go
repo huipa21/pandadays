@@ -63,6 +63,7 @@ type DayInput struct {
 	Repeat       Repeat
 	CollectionID int64
 	TagIDs       []int64
+	TagNames     []string // resolved or created atomically when saving
 	Comment      string
 	StyleColor   string
 	StyleIcon    string
@@ -115,6 +116,14 @@ func NormalizeDayInput(in DayInput) (DayInput, error) {
 		return in, ErrIconInvalid
 	}
 	in.TagIDs = uniqueIDs(in.TagIDs)
+	in.TagNames = append([]string(nil), in.TagNames...)
+	for i, name := range in.TagNames {
+		name = strings.TrimSpace(name)
+		if err := validateName(name); err != nil && !errors.Is(err, ErrNameReserved) {
+			return in, fmt.Errorf("tag name: %w", err)
+		}
+		in.TagNames[i] = name
+	}
 	return in, nil
 }
 
@@ -237,7 +246,7 @@ func quotaDays(ctx context.Context, q querier, ownerID int64) (int, error) {
 }
 
 // resolveGroups applies the defaults and verifies that the collection and tags belong to the owner.
-func (s *Days) resolveGroups(ctx context.Context, tx *sql.Tx, ownerID int64, in DayInput) (DayInput, error) {
+func (s *Days) resolveGroups(ctx context.Context, tx *sql.Tx, ownerID int64, in DayInput, now time.Time) (DayInput, error) {
 	if in.CollectionID == 0 {
 		id, err := s.collections.defaultID(ctx, tx, ownerID)
 		if err != nil {
@@ -249,6 +258,59 @@ func (s *Days) resolveGroups(ctx context.Context, tx *sql.Tx, ownerID int64, in 
 			return in, ErrCollectionInvalid
 		}
 		return in, err
+	}
+	if len(in.TagNames) > 0 {
+		rows, err := tx.QueryContext(ctx, `SELECT id, name FROM tags WHERE owner_id = ?`, ownerID)
+		if err != nil {
+			return in, fmt.Errorf("resolve tag names: %w", err)
+		}
+		type namedTag struct {
+			id   int64
+			name string
+		}
+		var existing []namedTag
+		for rows.Next() {
+			var tag namedTag
+			if err := rows.Scan(&tag.id, &tag.name); err != nil {
+				rows.Close()
+				return in, fmt.Errorf("resolve tag names: %w", err)
+			}
+			existing = append(existing, tag)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return in, fmt.Errorf("resolve tag names: %w", err)
+		}
+		for _, name := range in.TagNames {
+			var id int64
+			if IsReservedName(name) {
+				id, err = s.tags.defaultID(ctx, tx, ownerID)
+				if err != nil {
+					return in, err
+				}
+			}
+			for _, tag := range existing {
+				if strings.EqualFold(name, tag.name) {
+					id = tag.id
+					break
+				}
+			}
+			if id == 0 {
+				res, err := tx.ExecContext(ctx, `INSERT INTO tags (owner_id, name, created_at) VALUES (?, ?, ?)`,
+					ownerID, name, now.Unix())
+				if err != nil {
+					return in, fmt.Errorf("create day tag: %w", err)
+				}
+				id, err = res.LastInsertId()
+				if err != nil {
+					return in, fmt.Errorf("create day tag: %w", err)
+				}
+				existing = append(existing, namedTag{id: id, name: name})
+			}
+			in.TagIDs = append(in.TagIDs, id)
+		}
+		in.TagIDs = uniqueIDs(in.TagIDs)
 	}
 	if len(in.TagIDs) == 0 {
 		id, err := s.tags.defaultID(ctx, tx, ownerID)
@@ -316,7 +378,7 @@ func (s *Days) Create(ctx context.Context, ownerID int64, in DayInput, now time.
 	if count >= quota {
 		return Day{}, ErrQuotaDays
 	}
-	if in, err = s.resolveGroups(ctx, tx, ownerID, in); err != nil {
+	if in, err = s.resolveGroups(ctx, tx, ownerID, in, now); err != nil {
 		return Day{}, err
 	}
 	res, err := tx.ExecContext(ctx, `INSERT INTO days (owner_id, collection_id, title, date, time, repeat, comment,
@@ -357,7 +419,7 @@ func (s *Days) Update(ctx context.Context, ownerID, id int64, in DayInput, now t
 	if _, err := s.get(ctx, tx, ownerID, id); err != nil {
 		return Day{}, err
 	}
-	if in, err = s.resolveGroups(ctx, tx, ownerID, in); err != nil {
+	if in, err = s.resolveGroups(ctx, tx, ownerID, in, now); err != nil {
 		return Day{}, err
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE days SET collection_id = ?, title = ?, date = ?, time = ?, repeat = ?,

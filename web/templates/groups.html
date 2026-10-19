@@ -1,26 +1,39 @@
 {{define "title"}}{{t (printf "%s.title" .Section.Key)}} · {{t "app.name"}}{{end}}
 {{define "content"}}
 <section class="stack">
-  <h1>{{t (printf "%s.title" .Section.Key)}}</h1>
-  {{with .Error}}<p class="alert" role="alert">{{t .}}</p>{{end}}
-  <ul class="group-list">
+  <header class="groups-toolbar">
+    <h1>{{t (printf "%s.title" .Section.Key)}}</h1>
+    <a href="{{.Section.Base}}?create=1" class="icon-button btn" data-open-dialog="group-create" aria-label="{{t (printf "%s.new" .Section.Key)}}" title="{{t (printf "%s.new" .Section.Key)}}"><span aria-hidden="true">+</span></a>
+  </header>
+  <ul class="group-list {{if eq .Section.Key "tags"}}tag-list{{else}}collection-list{{end}}">
     {{range .Groups}}<li>
-      <a class="group-item" href="{{$.Section.Base}}/{{.ID}}">
+      <a class="group-item {{if eq $.Section.Key "tags"}}tag-item{{else}}collection-card{{end}}" href="{{$.Section.Base}}/{{.ID}}">
+        {{if eq $.Section.Key "collections"}}<svg class="collection-cover" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true"><rect width="1" height="1"{{with .Color}} fill="{{.}}"{{end}}/></svg><span class="notebook-spine" aria-hidden="true"></span>{{end}}
+        <span class="group-summary">
         {{template "swatch" .Color}}
         <span class="group-name">{{template "group-name" .}}</span>
         {{if .Reserved}}<span class="badge">{{t "groups.reserved"}}</span>{{end}}
+        </span>
+        {{if eq $.Section.Key "collections"}}{{with .Comment}}<span class="collection-comment">{{.}}</span>{{end}}{{end}}
         <span class="group-count">{{if eq .DayCount 1}}{{t "groups.days.one" .DayCount}}{{else}}{{t "groups.days.other" .DayCount}}{{end}}</span>
       </a>
     </li>{{end}}
   </ul>
-  <form method="post" action="{{.Section.Base}}" class="card form">
+  <dialog id="group-create" class="card confirm-dialog" aria-labelledby="group-create-title"{{if .CreateOpen}} open data-auto-open{{end}}>
+  <form method="post" action="{{.Section.Base}}" class="form">
     {{template "csrf-field" .}}
-    <h2>{{t (printf "%s.new" .Section.Key)}}</h2>
+    <h2 id="group-create-title">{{t (printf "%s.new" .Section.Key)}}</h2>
+    {{with .Error}}<p class="alert" role="alert">{{t .}}</p>{{end}}
     <label>{{t "groups.name"}}
       <input type="text" name="name" value="{{.Form.Name}}" maxlength="100" required>
     </label>
     {{template "group-color-fields" .Form}}
-    <button type="submit" class="btn">{{t "groups.create"}}</button>
+    {{if eq .Section.Key "collections"}}<label>{{t "collections.comment"}}<textarea name="comment" rows="3" maxlength="10000">{{.Form.Comment}}</textarea></label>{{end}}
+    <div class="actions dialog-actions">
+      <a class="btn btn-secondary" href="{{.Section.Base}}" data-close-dialog>{{t "admin.cancel"}}</a>
+      <button type="submit" class="btn">{{t "groups.create"}}</button>
+    </div>
   </form>
+  </dialog>
 </section>
 {{end}}

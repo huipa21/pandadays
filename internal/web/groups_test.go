@@ -48,6 +48,53 @@ func TestGroupPagesRequireLogin(t *testing.T) {
 	}
 }
 
+func TestGroupCreationPopupsAndCollectionCards(t *testing.T) {
+	s, _, u, token := authenticatedServer(t)
+	for _, base := range []string{"/tags", "/collections"} {
+		body := get(s.Handler(), base, token).Body.String()
+		for _, want := range []string{`data-open-dialog="group-create"`, `<dialog id="group-create"`, `aria-labelledby="group-create-title"`} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s missing %q", base, want)
+			}
+		}
+		if strings.Contains(body, ` open data-auto-open`) {
+			t.Errorf("%s opens create popup on ordinary GET", base)
+		}
+		body = get(s.Handler(), base+"?create=1", token).Body.String()
+		if !strings.Contains(body, ` open data-auto-open`) {
+			t.Errorf("%s missing no-JS create popup", base)
+		}
+	}
+	rr := sessionPost(t, s, "/collections", token, url.Values{
+		"name": {"Notebook"}, "color": {"#aabbcc"}, "comment": {"Family\n<script>literal</script>"},
+	})
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("create: %d %s", rr.Code, rr.Body.String())
+	}
+	list, err := s.collections.List(context.Background(), u.ID)
+	if err != nil || len(list) != 2 || list[1].Comment != "Family\n<script>literal</script>" {
+		t.Fatalf("saved: %+v %v", list, err)
+	}
+	body := get(s.Handler(), "/collections", token).Body.String()
+	for _, want := range []string{`collection-card`, `collection-cover`, `fill="#aabbcc"`, `Family`, `&lt;script&gt;literal&lt;/script&gt;`, `0 days`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("card missing %q", want)
+		}
+	}
+	rr = sessionPost(t, s, "/collections", token, url.Values{
+		"name": {"Notebook"}, "color": {"#123456"}, "comment": {"Retained comment"},
+	})
+	body = rr.Body.String()
+	if rr.Code != http.StatusUnprocessableEntity || !strings.Contains(body, ` open data-auto-open`) ||
+		!strings.Contains(body, "Retained comment") {
+		t.Fatalf("validation popup: %d %s", rr.Code, body)
+	}
+	body = get(s.Handler(), "/tags", token).Body.String()
+	if !strings.Contains(body, `tag-list`) || !strings.Contains(body, `tag-item`) || strings.Contains(body, `name="comment"`) {
+		t.Fatal("tag list should show compact tags, without collection comment field")
+	}
+}
+
 func TestGroupCRUDFlow(t *testing.T) {
 	s, _, u, token := authenticatedServer(t)
 	h := s.Handler()

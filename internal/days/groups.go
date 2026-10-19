@@ -56,11 +56,19 @@ func (k GroupKind) dayCountQuery() string {
 	return `(SELECT COUNT(*) FROM days d WHERE d.collection_id = g.id)`
 }
 
+func (k GroupKind) commentColumn() string {
+	if k == KindCollection {
+		return "g.comment"
+	}
+	return "''"
+}
+
 type Group struct {
 	ID        int64
 	Kind      GroupKind
 	Name      string
 	Color     string // "#rrggbb" or empty
+	Comment   string
 	Reserved  bool
 	DayCount  int
 	CreatedAt time.Time
@@ -69,8 +77,9 @@ type Group struct {
 // GroupInput is user-supplied data for create/update. Name is ignored when
 // updating the reserved default if it is empty or unchanged.
 type GroupInput struct {
-	Name  string
-	Color string
+	Name    string
+	Color   string
+	Comment string
 }
 
 // Groups is an owner-scoped repository for collections or tags. Every method
@@ -88,7 +97,7 @@ func (g *Groups) Kind() GroupKind { return g.kind }
 // List returns the owner's groups, reserved default first, then by name.
 func (g *Groups) List(ctx context.Context, ownerID int64) ([]Group, error) {
 	rows, err := g.db.QueryContext(ctx, `SELECT g.id, g.name, COALESCE(g.color, ''), g.is_reserved, g.created_at, `+
-		g.kind.dayCountQuery()+` FROM `+g.kind.table()+` g WHERE g.owner_id = ?
+		g.kind.dayCountQuery()+`, `+g.kind.commentColumn()+` FROM `+g.kind.table()+` g WHERE g.owner_id = ?
 		ORDER BY g.id`, ownerID)
 	if err != nil {
 		return nil, fmt.Errorf("list %s: %w", g.kind.table(), err)
@@ -129,7 +138,7 @@ type scanner interface{ Scan(dest ...any) error }
 
 func (g *Groups) get(ctx context.Context, q querier, ownerID, id int64) (Group, error) {
 	row := q.QueryRowContext(ctx, `SELECT g.id, g.name, COALESCE(g.color, ''), g.is_reserved, g.created_at, `+
-		g.kind.dayCountQuery()+` FROM `+g.kind.table()+` g WHERE g.owner_id = ? AND g.id = ?`, ownerID, id)
+		g.kind.dayCountQuery()+`, `+g.kind.commentColumn()+` FROM `+g.kind.table()+` g WHERE g.owner_id = ? AND g.id = ?`, ownerID, id)
 	grp, err := g.scan(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Group{}, ErrNotFound
@@ -140,7 +149,7 @@ func (g *Groups) get(ctx context.Context, q querier, ownerID, id int64) (Group, 
 func (g *Groups) scan(s scanner) (Group, error) {
 	grp := Group{Kind: g.kind}
 	var created int64
-	if err := s.Scan(&grp.ID, &grp.Name, &grp.Color, &grp.Reserved, &created, &grp.DayCount); err != nil {
+	if err := s.Scan(&grp.ID, &grp.Name, &grp.Color, &grp.Reserved, &created, &grp.DayCount, &grp.Comment); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Group{}, err
 		}
@@ -171,6 +180,10 @@ func (g *Groups) defaultID(ctx context.Context, q querier, ownerID int64) (int64
 func normalizeInput(in GroupInput) (GroupInput, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	in.Color = strings.ToLower(strings.TrimSpace(in.Color))
+	in.Comment = strings.TrimSpace(strings.ReplaceAll(in.Comment, "\r\n", "\n"))
+	if utf8.RuneCountInString(in.Comment) > MaxCommentRunes {
+		return in, ErrCommentTooLong
+	}
 	if in.Color != "" && !colorPattern.MatchString(in.Color) {
 		return in, ErrColorInvalid
 	}
@@ -226,6 +239,9 @@ func (g *Groups) ensureUniqueName(ctx context.Context, tx *sql.Tx, ownerID, exce
 }
 
 func (g *Groups) Create(ctx context.Context, ownerID int64, in GroupInput, now time.Time) (Group, error) {
+	if g.kind == KindTag {
+		in.Comment = ""
+	}
 	in, err := normalizeInput(in)
 	if err != nil {
 		return Group{}, err
@@ -251,14 +267,24 @@ func (g *Groups) Create(ctx context.Context, ownerID int64, in GroupInput, now t
 	if err != nil {
 		return Group{}, fmt.Errorf("create %s: %w", g.kind.table(), err)
 	}
+	if g.kind == KindCollection {
+		if _, err := tx.ExecContext(ctx, `UPDATE collections SET comment = ? WHERE owner_id = ? AND id = ?`,
+			in.Comment, ownerID, id); err != nil {
+			return Group{}, fmt.Errorf("create collection comment: %w", err)
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return Group{}, fmt.Errorf("create %s: %w", g.kind.table(), err)
 	}
-	return Group{ID: id, Kind: g.kind, Name: in.Name, Color: in.Color, CreatedAt: time.Unix(now.Unix(), 0).UTC()}, nil
+	return Group{ID: id, Kind: g.kind, Name: in.Name, Color: in.Color, Comment: in.Comment, CreatedAt: time.Unix(now.Unix(), 0).UTC()}, nil
 }
 
-// Update renames and recolors a group. The reserved default can only be recolored.
+// Update changes a group's name, color, and collection comment.
+// The reserved default cannot be renamed.
 func (g *Groups) Update(ctx context.Context, ownerID, id int64, in GroupInput) (Group, error) {
+	if g.kind == KindTag {
+		in.Comment = ""
+	}
 	in, err := normalizeInput(in)
 	if err != nil {
 		return Group{}, err
@@ -289,10 +315,16 @@ func (g *Groups) Update(ctx context.Context, ownerID, id int64, in GroupInput) (
 		in.Name, nullString(in.Color), ownerID, id); err != nil {
 		return Group{}, mapConstraint(fmt.Errorf("update %s: %w", g.kind.table(), err))
 	}
+	if g.kind == KindCollection {
+		if _, err := tx.ExecContext(ctx, `UPDATE collections SET comment = ? WHERE owner_id = ? AND id = ?`,
+			in.Comment, ownerID, id); err != nil {
+			return Group{}, fmt.Errorf("update collection comment: %w", err)
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return Group{}, fmt.Errorf("update %s: %w", g.kind.table(), err)
 	}
-	cur.Name, cur.Color = in.Name, in.Color
+	cur.Name, cur.Color, cur.Comment = in.Name, in.Color, in.Comment
 	return cur, nil
 }
 

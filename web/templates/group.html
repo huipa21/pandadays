@@ -5,6 +5,7 @@
   <h1 class="group-heading">{{template "swatch" .Group.Color}} {{template "group-name" .Group}}
     {{if .Group.Reserved}}<span class="badge">{{t "groups.reserved"}}</span>{{end}}</h1>
   <p class="hint">{{if eq .Group.DayCount 1}}{{t "groups.days.one" .Group.DayCount}}{{else}}{{t "groups.days.other" .Group.DayCount}}{{end}}</p>
+  {{if eq .Section.Key "collections"}}{{with .Group.Comment}}<p class="collection-description">{{.}}</p>{{end}}{{end}}
   {{template "group-days" .}}
   {{if eq .Section.Key "collections"}}
   <section class="card form">
@@ -40,6 +41,7 @@
       <input type="text" name="name" value="{{.Form.Name}}" maxlength="100" required>
     </label>{{end}}
     {{template "group-color-fields" .Form}}
+    {{if eq .Section.Key "collections"}}<label>{{t "collections.comment"}}<textarea name="comment" rows="3" maxlength="10000">{{.Form.Comment}}</textarea></label>{{end}}
     <button type="submit" class="btn">{{t "groups.save"}}</button>
   </form>
   {{if not .Group.Reserved}}

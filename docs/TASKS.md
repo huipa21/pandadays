@@ -180,6 +180,7 @@ Status legend: `[ ]` todo, `[x]` done.
 
 ### [x] T21 Final polish & QA
 - Accessibility pass (labels, contrast, focus, badges not color-only).
+- [x] Unsaved day forms: browser-native confirmation before leaving create/edit forms with changed fields, protection after validation errors, and normal saves without prompting. Verified Go tests/vet, eight dependency-free JavaScript regressions, and Chromium navigation/cancel/confirm/reload/save flows at 375px/1280px.
 - zh translations complete.
 - Manual QA matrix: iOS Safari, Android Chrome, desktop Chrome/Firefox; voice recording; large video upload; restore.
 - [x] Responsive laptop width: remove the main container's 960 px cap while preserving mobile/desktop padding and centered 420 px auth cards. Verified in Chromium at 375, 768, 1280, and 1600 px on setup, populated home/day, day edit, settings, admin users, and password pages; no horizontal document overflow. Full Go tests and vet pass.
@@ -203,6 +204,21 @@ Status legend: `[ ]` todo, `[x]` done.
 - New profile migration, bounded validated avatar uploads, identity/authorization tests, bilingual strings, and mobile/desktop checks.
 - **Done when**: requested flows work at 375px/1280px; full tests, vet, and CGO-free build pass.
 - Verified: full `go test ./...`, `go vet ./...`, CGO-free build, and JavaScript syntax checks pass. Chromium checks at 375px/1280px covered light/dark persistence, saved English/Chinese switching with search preserved, Enter search, create/edit/detail flows, enable/disable, temporary password reset, avatar upload/display, and cancel/confirm deletion without horizontal overflow.
+
+### [x] T24 Tag editor and style pickers
+- Multiline tag editor with `#`-triggered suggestions for existing owned tags, keyboard/click selection, and removable chips without the trigger prefix.
+- 84 icon presets, custom icon entry, and default-icon reset.
+- Shared day/collection/tag palette with 20 preset colors followed by a rainbow native custom-color picker; preserve no-color behavior and saved custom values.
+- English/Chinese labels, mobile-first styling, JavaScript-free fallbacks, and existing unsaved-change protection retained.
+- Verified: full Go tests and vet, CGO-free build, 14 dependency-free JavaScript tests, and Chromium checks at 375px/1280px in light/dark themes. Exercised create/edit persistence, custom colors/icons, Chinese/multiword matching, validation retention, literal markup, no-JavaScript controls, and exit-confirmation/cancel behavior for each picker.
+
+### [x] T25 Coordinated pickers and notebook groups
+- Match the icon grid width to the color palette and other day-form controls.
+- Select or create tags with `#`; persist new tags atomically with the day and retain draft selections on errors.
+- Show compact tag-shaped links with day counts and notebook-style collection cards with color, comment, and day count.
+- Use `+` creation dialogs on both group pages, with validation retention, keyboard dismissal, and no-JavaScript fallbacks.
+- **Done when**: business-rule and ownership tests, full Go tests/vet, JavaScript tests, and 375px/1280px browser checks pass.
+- Verified: full `go test ./...`, `go vet ./...`, CGO-free build, and all 16 dependency-free JavaScript tests pass. Chromium checks confirmed identical icon/color field widths (294px at 375px and 1167px at 1280px), no document overflow, compact counted tags, notebook membership/counts, comment create/edit persistence, modal create/error/cancel/Escape flows, draft tag retention/removal/reselection, and no-JavaScript creation. English/Chinese and light/dark layouts checked.
 
 ## Dependency Graph
 

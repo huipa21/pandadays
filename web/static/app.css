@@ -177,6 +177,7 @@ img, video, audio { max-width: 100%; }
 .profile-comment { white-space: pre-wrap; }
 .confirm-dialog { width: min(36rem, calc(100vw - 2rem)); max-height: calc(100vh - 2rem); overflow-y: auto; color: var(--fg); }
 .confirm-dialog::backdrop { background: rgb(0 0 0 / 0.5); }
+dialog.confirm-dialog { margin: auto; }
 .confirm-dialog h2 { margin-top: 0; }
 .confirm-dialog > .hint, .confirm-dialog > .alert { margin-top: 1rem; }
 .dialog-actions { justify-content: flex-end; margin: 1rem 0 0; }
@@ -325,6 +326,29 @@ img, video, audio { max-width: 100%; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 0.375rem; }
 
+.tag-field > .tag-editor, .tag-field > [data-tag-fallback] { flex-basis: 100%; }
+.tag-editor { display: flex; flex-direction: column; min-width: 0; padding: 0.625rem; border: 1px solid var(--control-border); border-radius: 12px; background: var(--bg); }
+.tag-editor [data-tag-query-label] { order: 1; }
+.tag-editor .tag-suggestions, .tag-editor [data-tag-empty] { order: 2; }
+.tag-query-label { flex-basis: 100%; min-width: 0; }
+.tag-editor:focus-within { border-color: var(--accent); }
+.tag-editor:has(textarea:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tag-editor .chips:empty { display: none; }
+.form .tag-editor textarea { border: 0; background: transparent; padding: 0.625rem 0.25rem; }
+.form .tag-editor textarea:focus-visible { outline: none; }
+.tag-chip { cursor: pointer; font: inherit; text-align: left; }
+.tag-chip > span:last-child { color: var(--muted); margin-left: 0.25rem; font-size: 1.25rem; }
+.tag-chip:hover { border-color: var(--accent); }
+.tag-suggestions { max-height: 15rem; overflow-y: auto; border-top: 1px solid var(--border); padding-top: 0.375rem; }
+.tag-option { display: flex; align-items: center; gap: 0.5rem; width: 100%; min-height: 44px; padding: 0.5rem 0.75rem; border: 0; border-radius: 8px; background: var(--bg); color: var(--fg); font: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.tag-option:hover, .tag-option[aria-selected="true"] { background: var(--surface); outline: 2px solid var(--accent); outline-offset: -2px; }
+.icon-picker { flex-basis: 100%; display: grid; gap: 0.5rem; min-width: 0; }
+.icon-options { display: grid; width: 100%; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 0.375rem; max-height: 15rem; overflow-y: auto; padding: 0.25rem; }
+.icon-option { display: grid; place-items: center; min-width: 44px; min-height: 44px; padding: 0.25rem; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); font-size: 1.5rem; cursor: pointer; }
+.icon-option:hover, .icon-option[aria-pressed="true"] { border-color: var(--accent); background: var(--surface); }
+.icon-option[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: -2px; }
+.icon-picker > .link-button { justify-self: start; min-height: 44px; }
+
 .day-heading { overflow-wrap: anywhere; margin: 0; font-size: 1.375rem; }
 a.btn { text-decoration: none; }
 .day-facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.5rem 1rem; margin: 0; align-items: center; }
@@ -452,6 +476,23 @@ a.btn { text-decoration: none; }
 .form h2 { margin: 0; font-size: 1.125rem; }
 
 .group-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.groups-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.groups-toolbar h1 { margin: 0; }
+.groups-toolbar .icon-button { font-size: 1.75rem; }
+.group-summary { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.tag-list { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.tag-list li { max-width: 100%; min-width: 0; }
+.tag-list .tag-item { border-radius: 8px 999px 999px 8px; flex-wrap: wrap; padding-left: 1rem; }
+.tag-item::before { content: ""; width: 6px; height: 6px; border-radius: 50%; border: 1px solid var(--muted); flex: none; }
+.tag-item .group-summary { flex-wrap: wrap; }
+.collection-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr)); gap: 1.25rem; }
+.collection-list .collection-card { position: relative; isolation: isolate; display: flex; flex-direction: column; align-items: stretch; gap: 0.75rem; min-height: 12rem; height: 100%; overflow: hidden; padding: 1.25rem 1rem 1rem 2rem; border-radius: 4px 14px 14px 4px; box-shadow: 2px 3px 0 var(--border); }
+.collection-cover { position: absolute; inset: 0; width: 100%; height: 100%; fill: var(--accent); opacity: 0.18; z-index: -1; }
+.notebook-spine { position: absolute; inset: 0 auto 0 0; width: 0.75rem; border-right: 1px solid var(--control-border); background: var(--surface); opacity: 0.65; }
+.collection-card .group-summary { flex-wrap: wrap; font-weight: 600; }
+.collection-card .group-count { margin-top: auto; }
+.collection-comment { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; white-space: pre-wrap; }
+.collection-description { overflow-wrap: anywhere; white-space: pre-wrap; }
 
 .group-item {
   display: flex;
@@ -498,6 +539,16 @@ a.btn { text-decoration: none; }
   border-radius: 8px;
   background: var(--bg);
 }
+
+.color-palette, .color-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem; }
+.color-palette { min-width: 0; }
+.color-presets { display: contents; }
+.color-option { display: grid; place-items: center; width: 44px; height: 44px; flex: none; padding: 3px; border: 1px solid var(--control-border); border-radius: 50%; background: var(--bg); cursor: pointer; }
+.color-option svg { width: 100%; height: 100%; }
+.color-option:hover, .color-option[aria-pressed="true"], .color-picker-enhanced .color-label.is-selected { outline: 2px solid var(--accent); outline-offset: 2px; }
+.color-picker-enhanced .color-label { position: relative; width: 44px; height: 44px; flex: none; overflow: hidden; border: 1px solid var(--control-border); border-radius: 50%; background: conic-gradient(#ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ec4899, #ef4444); cursor: pointer; }
+.color-picker-enhanced .color-label:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.form .color-picker-enhanced input[type="color"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 
 .btn-danger { background: #c53030; color: #fff; }
 .danger-zone { border-color: #f5c2c2; }

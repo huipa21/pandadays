@@ -72,11 +72,39 @@ A meaningful date owned by one user.
 | archived_at | null = active; set = archived |
 | attachments | images, audio (incl. in-browser voice recording), video, generic files |
 
+Create and edit forms warn through the browser's native exit confirmation when
+unsaved fields would be lost by navigation, reload, or closing the tab. Unchanged
+forms and valid save submissions do not prompt; validation errors remain unsaved.
+Draft contents are not stored in browser storage.
+
+With JavaScript, tags use a multiline editor: typing `#` filters the owner's
+existing tags, with click or arrow-key/Enter selection, Escape dismissal, and
+removable selected chips that do not display the trigger `#`. A nonmatching name
+offers a create option. New tag names and any remaining `#name` input are resolved
+case-insensitively against the owner's tags or created atomically with a successful
+day save; failed validation or authorization never leaves orphan tags. Without
+JavaScript, existing tag checkboxes and a `#name` text field remain available.
+The style editor offers 84 icon presets while retaining custom emoji/text and a
+reset to the default icon. The icon grid uses the same available field width as
+the color palette and other form controls.
+Day, collection, and tag color controls offer 20 presets followed by a rainbow
+swatch opening the native custom color picker; choosing a color clears "No color".
+
 ### 3.2 Collection
 A "book" of days. Each day belongs to exactly one collection. Each user has a reserved **Default** collection (cannot be renamed or deleted). Deleting a non-default collection moves all its days to Default (single transaction).
 
+Collections appear as notebook-style cards containing the name, background-color
+tint, optional comment (maximum 10,000 characters), and day count. Opening a card
+shows the days in that subgroup. A `+` button opens the create dialog with name,
+color, and comment; comments and colors can also be edited in collection detail.
+
 ### 3.3 Tag
 Describes the nature of a day; many-to-many. Each user has a reserved **Default** tag (cannot be renamed or deleted). Deleting a tag removes it from days; any day left with zero tags gets Default.
+
+The Tags page shows wrapping, content-width tag-shaped links with day counts,
+rather than full-width rows. A `+` button opens the create dialog. Both tag and
+collection dialogs retain validation errors and entered fields, support Escape
+and Cancel, and have a link-based creation fallback without JavaScript.
 
 Reserved names are displayed localized ("Default" / "默认") but stored with `is_reserved=1`; users cannot create another collection/tag literally named the reserved name.
 

@@ -21,14 +21,16 @@ type groupForm struct {
 	Name    string
 	Color   string
 	NoColor bool
+	Comment string
 }
 
 type groupsPage struct {
 	pageData
-	Section groupSection
-	Groups  []days.Group
-	Form    groupForm
-	Error   string
+	Section    groupSection
+	Groups     []days.Group
+	Form       groupForm
+	Error      string
+	CreateOpen bool
 }
 
 type groupPage struct {
@@ -72,6 +74,8 @@ func groupErrorKey(err error) (string, bool) {
 		return "groups.error.name_taken", true
 	case errors.Is(err, days.ErrColorInvalid):
 		return "groups.error.color", true
+	case errors.Is(err, days.ErrCommentTooLong):
+		return "days.error.comment_too_long", true
 	case errors.Is(err, days.ErrReserved):
 		return "groups.error.reserved", true
 	}
@@ -79,7 +83,8 @@ func groupErrorKey(err error) (string, bool) {
 }
 
 func parseGroupForm(r *http.Request) groupForm {
-	f := groupForm{Name: r.PostForm.Get("name"), Color: r.PostForm.Get("color"), NoColor: r.PostForm.Get("no_color") != ""}
+	f := groupForm{Name: r.PostForm.Get("name"), Color: r.PostForm.Get("color"), NoColor: r.PostForm.Get("no_color") != "",
+		Comment: r.PostForm.Get("comment")}
 	if f.NoColor {
 		f.Color = ""
 	}
@@ -114,7 +119,7 @@ func (h *groupHandlers) renderList(w http.ResponseWriter, r *http.Request, statu
 		form.Color = defaultGroupColor
 	}
 	h.s.renderStatus(w, r, "groups.html", status, groupsPage{pageData: newPageData(r), Section: h.section,
-		Groups: groups, Form: form, Error: errKey})
+		Groups: groups, Form: form, Error: errKey, CreateOpen: errKey != "" || r.URL.Query().Get("create") == "1"})
 }
 
 func (h *groupHandlers) list(w http.ResponseWriter, r *http.Request) {
@@ -127,8 +132,11 @@ func (h *groupHandlers) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	form := parseGroupForm(r)
+	if h.section.Key != "collections" {
+		form.Comment = ""
+	}
 	_, err := h.store.Create(r.Context(), CurrentUser(r.Context()).ID,
-		days.GroupInput{Name: form.Name, Color: form.Color}, time.Now())
+		days.GroupInput{Name: form.Name, Color: form.Color, Comment: form.Comment}, time.Now())
 	if key, ok := groupErrorKey(err); ok {
 		h.renderList(w, r, http.StatusUnprocessableEntity, form, key)
 		return
@@ -178,7 +186,7 @@ func (h *groupHandlers) renderDetail(w http.ResponseWriter, r *http.Request, sta
 }
 
 func formFromGroup(g days.Group) groupForm {
-	f := groupForm{Name: g.Name, Color: g.Color, NoColor: g.Color == ""}
+	f := groupForm{Name: g.Name, Color: g.Color, NoColor: g.Color == "", Comment: g.Comment}
 	if f.NoColor {
 		f.Color = defaultGroupColor
 	}
@@ -209,7 +217,10 @@ func (h *groupHandlers) update(w http.ResponseWriter, r *http.Request) {
 	}
 	owner := CurrentUser(r.Context()).ID
 	form := parseGroupForm(r)
-	_, err := h.store.Update(r.Context(), owner, id, days.GroupInput{Name: form.Name, Color: form.Color})
+	if h.section.Key != "collections" {
+		form.Comment = ""
+	}
+	_, err := h.store.Update(r.Context(), owner, id, days.GroupInput{Name: form.Name, Color: form.Color, Comment: form.Comment})
 	if key, ok := groupErrorKey(err); ok {
 		g, gerr := h.store.Get(r.Context(), owner, id)
 		if gerr != nil {

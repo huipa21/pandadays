@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"pandadays/internal/auth"
@@ -20,6 +21,8 @@ type dayForm struct {
 	Repeat       string
 	CollectionID int64
 	TagIDs       []int64
+	TagNames     []string
+	TagQuery     string
 	Comment      string
 	Color        string
 	NoColor      bool
@@ -117,7 +120,7 @@ func dayErrorKey(err error) (string, bool) {
 			return k.key, true
 		}
 	}
-	return "", false
+	return groupErrorKey(err)
 }
 
 // userLocation is the user's timezone, falling back to the server's (TZ).
@@ -153,6 +156,8 @@ func parseDayForm(r *http.Request) dayForm {
 		Color:        r.PostForm.Get("color"),
 		NoColor:      r.PostForm.Get("no_color") != "",
 		Icon:         r.PostForm.Get("icon"),
+		TagNames:     r.PostForm["new_tags"],
+		TagQuery:     r.PostForm.Get("tag_query"),
 	}
 	for _, v := range r.PostForm["tags"] {
 		f.TagIDs = append(f.TagIDs, parseID(v))
@@ -162,7 +167,12 @@ func parseDayForm(r *http.Request) dayForm {
 
 func (f dayForm) input() days.DayInput {
 	in := days.DayInput{Title: f.Title, Date: f.Date, Time: f.Time, Repeat: days.Repeat(f.Repeat),
-		CollectionID: f.CollectionID, TagIDs: f.TagIDs, Comment: f.Comment, StyleColor: f.Color, StyleIcon: f.Icon}
+		CollectionID: f.CollectionID, TagIDs: f.TagIDs, TagNames: append([]string(nil), f.TagNames...), Comment: f.Comment, StyleColor: f.Color, StyleIcon: f.Icon}
+	for _, name := range strings.Split(f.TagQuery, "#")[1:] {
+		if name = strings.TrimSpace(name); name != "" {
+			in.TagNames = append(in.TagNames, name)
+		}
+	}
 	if f.NoColor {
 		in.StyleColor = ""
 	}

@@ -102,8 +102,11 @@
   </form>{{end}}{{end}}
 {{define "group-name"}}{{if .Reserved}}{{t "groups.default"}}{{else}}{{.Name}}{{end}}{{end}}
 {{define "swatch"}}<svg class="swatch" viewBox="0 0 16 16" aria-hidden="true">{{if .}}<circle cx="8" cy="8" r="7" fill="{{.}}"/>{{else}}<circle class="swatch-none" cx="8" cy="8" r="6"/>{{end}}</svg>{{end}}
-{{define "group-color-fields"}}<div class="color-row">
-  <label class="color-label">{{t "groups.color"}} <input type="color" name="color" value="{{.Color}}"></label>
+{{define "group-color-fields"}}<div class="color-row" data-color-picker>
+  <div class="color-palette" role="group" aria-label="{{t "groups.color"}}">
+    <div class="color-presets" data-color-presets hidden></div>
+    <label class="color-label" data-custom-color title="{{t "groups.custom_color"}}"><span data-color-label>{{t "groups.color"}}</span><input type="color" name="color" value="{{.Color}}" aria-label="{{t "groups.custom_color"}}"></label>
+  </div>
   <label class="check"><input type="checkbox" name="no_color" value="1"{{if .NoColor}} checked{{end}}> {{t "groups.no_color"}}</label>
 </div>{{end}}
 {{define "day-delete"}}<form method="post" action="/days/{{.Day.ID}}/delete" class="card form danger-zone"

@@ -59,12 +59,20 @@ func TestDayNewFormDefaults(t *testing.T) {
 	today := time.Now().In(userLocation(&auth.User{Timezone: "Pacific/Kiritimati"})).Format(time.DateOnly)
 	for _, want := range []string{
 		`action="/days"`,
+		`data-day-form data-unsaved="false"`,
 		`name="date" value="` + today + `"`,
 		`<option value="none" selected>Does not repeat</option>`,
 		`<option value="` + strconv.FormatInt(defCol, 10) + `" selected>Default</option>`,
 		`name="tags" value="` + strconv.FormatInt(defTag, 10) + `" checked>`,
 		`name="tags" value="` + strconv.FormatInt(other.ID, 10) + `">`,
 		`name="no_color" value="1" checked>`,
+		`data-tag-picker data-remove-label="Remove tag"`,
+		`<textarea id="tag-query" name="tag_query" rows="2"`,
+		`aria-controls="tag-suggestions"`,
+		`data-tag-fallback class="chips"`,
+		`data-icon-options role="group" aria-label="Choose an icon" hidden`,
+		`data-color-presets hidden`,
+		`data-custom-color title="Custom color"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("new form missing %q", want)
@@ -151,6 +159,9 @@ func TestDayValidationErrorsLocalized(t *testing.T) {
 	if !strings.Contains(rr.Body.String(), `value="Keep me"`) {
 		t.Error("invalid form lost the submitted title")
 	}
+	if !strings.Contains(rr.Body.String(), `data-day-form data-unsaved="true"`) {
+		t.Error("invalid form is not marked as unsaved")
+	}
 	if _, err := db.Exec(`UPDATE users SET lang = 'zh' WHERE id = ?`, u.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +203,8 @@ func TestDayEditAndDelete(t *testing.T) {
 	}
 	path := dayPath(d.ID)
 	if rr := get(s.Handler(), path+"/edit", token); rr.Code != 200 || !strings.Contains(rr.Body.String(), `value="Trip"`) ||
-		!strings.Contains(rr.Body.String(), `action="`+path+`/edit"`) || !strings.Contains(rr.Body.String(), path+"/delete") {
+		!strings.Contains(rr.Body.String(), `action="`+path+`/edit"`) || !strings.Contains(rr.Body.String(), path+"/delete") ||
+		!strings.Contains(rr.Body.String(), `data-day-form data-unsaved="false"`) {
 		t.Fatalf("edit form: %d", rr.Code)
 	}
 	rr := sessionPost(t, s, path+"/edit", token, dayValues("title", "Holiday", "repeat", "weekly", "time", "07:15"))
@@ -265,8 +277,12 @@ func TestDayCrossUserAccess404(t *testing.T) {
 	if rr := sessionPost(t, s, "/days", bobToken, dayValues("tags", strconv.FormatInt(aliceTag, 10))); rr.Code != http.StatusUnprocessableEntity {
 		t.Errorf("bob uses alice's tag: %d", rr.Code)
 	}
-	if body := get(s.Handler(), "/days/new", bobToken).Body.String(); strings.Contains(body, `<option value="`+strconv.FormatInt(aliceCol, 10)+`"`) {
+	body := get(s.Handler(), "/days/new", bobToken).Body.String()
+	if strings.Contains(body, `<option value="`+strconv.FormatInt(aliceCol, 10)+`"`) {
 		t.Error("bob's form lists alice's collection")
+	}
+	if strings.Contains(body, `name="tags" value="`+strconv.FormatInt(aliceTag, 10)+`"`) {
+		t.Error("bob's tag picker lists alice's tag")
 	}
 	var n int
 	s.db.QueryRow(`SELECT COUNT(*) FROM days WHERE owner_id = ?`, bob.ID).Scan(&n)

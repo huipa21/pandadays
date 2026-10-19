@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +12,39 @@ import (
 )
 
 var groupNow = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+
+func TestCollectionComments(t *testing.T) {
+	ctx := context.Background()
+	db := dbtest.Open(t)
+	alice, bob := newOwner(t, db, "alice"), newOwner(t, db, "bob")
+	store := NewCollections(db)
+	g, err := store.Create(ctx, alice, GroupInput{Name: "Trips", Color: "#AABBCC", Comment: "  First\r\nnotebook  "}, groupNow)
+	if err != nil || g.Comment != "First\nnotebook" {
+		t.Fatalf("create: %+v %v", g, err)
+	}
+	list, err := store.List(ctx, alice)
+	if err != nil || len(list) != 2 || list[1].Comment != g.Comment {
+		t.Fatalf("list: %+v %v", list, err)
+	}
+	in := GroupInput{Name: "Trips", Color: "#123456", Comment: strings.Repeat("日", MaxCommentRunes)}
+	if _, err := store.Update(ctx, alice, g.ID, in); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Update(ctx, bob, g.ID, in); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("cross-owner update: %v", err)
+	}
+	in.Comment += "日"
+	if _, err := store.Update(ctx, alice, g.ID, in); !errors.Is(err, ErrCommentTooLong) {
+		t.Fatalf("long update: %v", err)
+	}
+	if _, err := store.Create(ctx, alice, in, groupNow); !errors.Is(err, ErrCommentTooLong) {
+		t.Fatalf("long create: %v", err)
+	}
+	saved, err := store.Get(ctx, alice, g.ID)
+	if err != nil || saved.Color != "#123456" || len([]rune(saved.Comment)) != MaxCommentRunes {
+		t.Fatalf("get: %+v %v", saved, err)
+	}
+}
 
 // newOwner inserts a user with reserved defaults, mirroring auth.CreateUser.
 func newOwner(t *testing.T, db *sql.DB, name string) int64 {

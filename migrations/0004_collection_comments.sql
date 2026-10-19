@@ -1,0 +1,1 @@
+ALTER TABLE collections ADD COLUMN comment TEXT NOT NULL DEFAULT '';
