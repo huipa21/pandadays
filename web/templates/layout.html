@@ -36,7 +36,8 @@
       <summary><span class="avatar-notification">{{template "user-avatar" .}}{{if not .IsAdmin}}{{if pendingShares}}<span class="notification-badge" aria-label="{{t "messages.pending_count" (pendingShares)}}">{{pendingShares}}</span>{{end}}{{end}}</span><span>{{.Username}}</span></summary>
       <div class="dropdown-panel">
         {{if not .IsAdmin}}<a href="/messages">{{t "messages.title"}}{{if pendingShares}} ({{pendingShares}}){{end}}</a>{{end}}
-        <a href="/settings">{{t "nav.profile"}}</a>
+        <a href="/profile">{{t "nav.profile"}}</a>
+        <a href="/settings">{{t "nav.settings"}}</a>
         <form method="post" action="/logout">{{template "csrf-field" $}}<button type="submit" class="link-button">{{t "nav.logout"}}</button></form>
       </div>
     </details>

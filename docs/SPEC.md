@@ -48,7 +48,7 @@ neither needs a deployment environment setting.
 
 ## 2. Roles
 
-- **Admin**: site administration only: Users, Backup/Restore, and Site Settings. The avatar/username menu contains Profile and Sign out. Admins land on Users and cannot access personal days, archive, sharing, collections, tags, attachments, or import/export routes. Existing owned data is preserved.
+- **Admin**: site administration only: Users, Backup/Restore, and Site Settings. The avatar/username menu contains Profile, Settings, and Sign out. Admins land on Users and cannot access personal days, archive, sharing, collections, tags, attachments, or import/export routes. Existing owned data is preserved.
 - **User**: manages own days, collections, tags, attachments, shares; views days shared with them.
 - **No self-registration.** Only admin creates users.
 
@@ -241,7 +241,8 @@ Other subcommands:
 
 ### 4.6 Profile and account controls
 - The header has a light/dark icon toggle and a globe-icon Chinese/English toggle of the same size, placed to the left of the navigation links for every user. Theme defaults to the browser preference and persists in a browser cookie; switching language saves the signed-in user's preference and stays on the current page, preserving filters. Language is not a profile dropdown.
-- Profile has no "User settings" subtitle. It edits username, display name, email, timezone, and avatar; the password is a fixed mask with a reset button on the right that opens the authenticated password-change form. Actual passwords and hashes are never rendered.
+- Profile (`/profile`) contains only identity. A square container holds the circular avatar; clicking it opens the file picker (previewed before saving), and an X at the circle's top-right removes an existing avatar. Username (read-only), display name, and email are three rows beside the avatar on wide screens and below it on phones. Usernames are unique and fixed after creation. Changing one's own email requires the current password, sharing the password-change backoff. The password is a fixed mask with a reset button on the right that opens the authenticated password-change form. Actual passwords and hashes are never rendered.
+- Settings (`/settings`, in the avatar menu) holds timezone, storage usage, and backup & restore (personal export/import). Admins see timezone only.
 - Display names are at most 100 characters; optional administrative comments are at most 10,000. Avatars are optional validated PNG/JPEG uploads, at most 1 MiB and 2048 × 2048 pixels, stored in SQLite and included in full backups. They are separate from day-attachment quotas and accessible only to the account owner or an administrator.
 - Users has a reusable, fixed-style search field with an inset magnifier, Enter-to-search, and an adjacent plus-icon create link. Search matches username, display name, or email case-insensitively.
 - Creation fields are username, display name, optional avatar, email, and optional comment. The compact list shows username, display name, created time, days used, and active/inactive status. Times display in the viewing admin's saved timezone, or the browser timezone when none is saved. Clicking a row opens its detail page.
@@ -449,7 +450,8 @@ Deleting a day/collection also deletes shares targeting it (application-level, s
 | `POST /messages/{id}/reject` | Reject a share invitation, retaining it for later acceptance (recipient only) |
 | `GET /shares`, share CRUD on days/collections | My shares |
 | `POST /shared/{day_id}/hide`, `/unhide` | Recipient hide |
-| `GET/POST /settings` | Language, timezone, password link |
+| `GET/POST /profile`, `POST /profile/avatar/delete` | Display name, email (current password required to change), avatar, password link |
+| `GET/POST /settings` | Timezone, storage usage, backup & restore |
 | `GET /settings/export`, `POST /settings/import`, `POST /settings/import/confirm` | User zip |
 | `GET/POST /admin/users` | List usage / create account (optional admin role) |
 | `POST /admin/users/{id}/reset-password`, `/activate`, `/deactivate`, `/delete`, `/quotas` | Admin account actions; delete requires confirmation |

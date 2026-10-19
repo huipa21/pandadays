@@ -52,7 +52,7 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 			if user := CurrentUser(r.Context()); user == nil {
 				authRedirect(w, r, "/login")
 				return
-			} else if r.URL.Path != "/settings" && !user.IsAdmin {
+			} else if r.URL.Path != "/profile" && !user.IsAdmin {
 				http.NotFound(w, r)
 				return
 			}

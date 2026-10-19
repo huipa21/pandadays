@@ -25,10 +25,6 @@ func (s *Service) ChangePassword(ctx context.Context, ip string, userID int64, k
 	if err := ValidatePassword(next); err != nil {
 		return err
 	}
-	limiterKey := "\x00password-change:" + strconv.FormatInt(userID, 10)
-	if !s.limiter.Allow(ip, limiterKey, now) {
-		return ErrRateLimited
-	}
 	var hash string
 	err := s.db.QueryRowContext(ctx, `SELECT password_hash FROM users WHERE id = ? AND is_active = 1`, userID).Scan(&hash)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -37,15 +33,9 @@ func (s *Service) ChangePassword(ctx context.Context, ip string, userID int64, k
 	if err != nil {
 		return fmt.Errorf("read password hash: %w", err)
 	}
-	ok, err := CheckPassword(hash, current)
-	if err != nil {
-		return fmt.Errorf("verify password hash: %w", err)
+	if err := s.verifyCurrentPassword(ip, userID, hash, current, now); err != nil {
+		return err
 	}
-	if !ok {
-		s.limiter.Failure(ip, limiterKey, now)
-		return ErrCredentials
-	}
-	s.limiter.Success(ip, limiterKey)
 	if current == next {
 		return ErrPasswordUnchanged
 	}
@@ -77,6 +67,32 @@ func (s *Service) ChangePassword(ctx context.Context, ip string, userID int64, k
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit password change: %w", err)
 	}
+	return nil
+}
+
+func passwordLimiterKey(userID int64) string {
+	return "\x00password-change:" + strconv.FormatInt(userID, 10)
+}
+
+// verifyCurrentPassword re-authenticates a signed-in user for sensitive
+// account changes, sharing the login backoff keyed per user.
+func (s *Service) verifyCurrentPassword(ip string, userID int64, hash, current string, now time.Time) error {
+	key := passwordLimiterKey(userID)
+	if current == "" {
+		return ErrCredentials
+	}
+	if !s.limiter.Allow(ip, key, now) {
+		return ErrRateLimited
+	}
+	ok, err := CheckPassword(hash, current)
+	if err != nil {
+		return fmt.Errorf("verify password hash: %w", err)
+	}
+	if !ok {
+		s.limiter.Failure(ip, key, now)
+		return ErrCredentials
+	}
+	s.limiter.Success(ip, key)
 	return nil
 }
 

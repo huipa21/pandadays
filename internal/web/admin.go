@@ -118,13 +118,23 @@ func (s *Server) saveAdminUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, err := profileParams(r)
+	p.ClientIP = ClientIP(r)
 	if err == nil {
 		err = s.auth.UpdateProfile(r.Context(), CurrentUser(r.Context()).ID, id, p, target.Lang, target.Timezone, s.now())
 	}
-	if errors.Is(err, auth.ErrIdentity) || errors.Is(err, auth.ErrProfile) {
-		page := adminUsersPage{pageData: newPageData(r), Edit: true, TargetID: id, Error: "profile.error",
-			Fields: auth.User{ID: id, Username: p.Username, DisplayName: p.DisplayName, Email: p.Email, Comment: p.Comment, HasAvatar: target.HasAvatar}}
-		s.renderAdminUsers(w, r, page, http.StatusUnprocessableEntity)
+	if errors.Is(err, auth.ErrIdentity) || errors.Is(err, auth.ErrProfile) || errors.Is(err, auth.ErrCredentials) || errors.Is(err, auth.ErrRateLimited) {
+		key, status := "profile.error", http.StatusUnprocessableEntity
+		switch {
+		case errors.Is(err, auth.ErrIdentity):
+			key = "profile.error.email"
+		case errors.Is(err, auth.ErrCredentials):
+			key = "profile.error.password"
+		case errors.Is(err, auth.ErrRateLimited):
+			key, status = "password.error.rate_limited", http.StatusTooManyRequests
+		}
+		page := adminUsersPage{pageData: newPageData(r), Edit: true, TargetID: id, Error: key,
+			Fields: auth.User{ID: id, Username: target.Username, DisplayName: p.DisplayName, Email: p.Email, Comment: p.Comment, HasAvatar: target.HasAvatar}}
+		s.renderAdminUsers(w, r, page, status)
 		return
 	}
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"image"
 	"image/png"
 	"strings"
@@ -59,8 +60,9 @@ func TestProfilePersistenceAuthorizationAndValidation(t *testing.T) {
 		lang, timezone string
 		want           error
 	}{
-		{"duplicate identity", ProfileParams{Username: actor.Email, Email: target.Email}, "", "", ErrIdentity},
-		{"empty identity", ProfileParams{Username: "", Email: target.Email}, "", "", ErrIdentity},
+		{"duplicate email", ProfileParams{Email: actor.Email, CurrentPassword: "password123"}, "", "", ErrIdentity},
+		{"email matches another username", ProfileParams{Email: actor.Username, CurrentPassword: "password123"}, "", "", ErrIdentity},
+		{"empty email", ProfileParams{Email: " "}, "", "", ErrIdentity},
 		{"long name", ProfileParams{Username: target.Username, Email: target.Email, DisplayName: strings.Repeat("a", 101)}, "", "", ErrProfile},
 		{"long comment", ProfileParams{Username: target.Username, Email: target.Email, Comment: strings.Repeat("a", 10001)}, "", "", ErrProfile},
 		{"bad avatar", ProfileParams{Username: target.Username, Email: target.Email, Avatar: []byte("<svg/>")}, "", "", ErrProfile},
@@ -92,6 +94,70 @@ func TestProfilePersistenceAuthorizationAndValidation(t *testing.T) {
 	}
 	if _, err := s.Avatar(ctx, target.ID, target.ID); !errors.Is(err, ErrUserNotFound) {
 		t.Fatal("avatar not removed")
+	}
+}
+
+func TestProfileUsernameFixedAndEmailNeedsPassword(t *testing.T) {
+	s, db := testService(t)
+	ctx := context.Background()
+	user, admin := testUser(t, s, "Panda"), testUser(t, s, "Admin")
+	if _, err := db.Exec(`UPDATE users SET is_admin = 1 WHERE id = ?`, admin.ID); err != nil {
+		t.Fatal(err)
+	}
+	identity := func() (string, string) {
+		t.Helper()
+		var username, email string
+		if err := db.QueryRow(`SELECT username, email FROM users WHERE id = ?`, user.ID).Scan(&username, &email); err != nil {
+			t.Fatal(err)
+		}
+		return username, email
+	}
+
+	if err := s.UpdateProfile(ctx, user.ID, user.ID, ProfileParams{Username: "Renamed", Email: user.Email}, "", "", testNow); err != nil {
+		t.Fatal(err)
+	}
+	if username, _ := identity(); username != "Panda" {
+		t.Fatalf("username changed to %q", username)
+	}
+	for i, password := range []string{"", "wrong-password"} {
+		p := ProfileParams{Email: "new@example.com", CurrentPassword: password, ClientIP: fmt.Sprintf("192.0.2.%d", i+1)}
+		if err := s.UpdateProfile(ctx, user.ID, user.ID, p, "", "", testNow); !errors.Is(err, ErrCredentials) {
+			t.Fatalf("email change with password %q: %v", password, err)
+		}
+	}
+	if _, email := identity(); email != user.Email {
+		t.Fatalf("email changed without password: %q", email)
+	}
+	p := ProfileParams{Email: "new@example.com", CurrentPassword: "password123", ClientIP: "192.0.2.9"}
+	if err := s.UpdateProfile(ctx, user.ID, user.ID, p, "", "", testNow); err != nil {
+		t.Fatal(err)
+	}
+	if username, email := identity(); username != "Panda" || email != "new@example.com" {
+		t.Fatalf("identity = %q %q", username, email)
+	}
+	// Administrators manage other users' email without their password, but cannot rename them.
+	p = ProfileParams{Username: "AdminRenamed", Email: "admin-set@example.com"}
+	if err := s.UpdateProfile(ctx, admin.ID, user.ID, p, "", "", testNow); err != nil {
+		t.Fatal(err)
+	}
+	if username, email := identity(); username != "Panda" || email != "admin-set@example.com" {
+		t.Fatalf("admin identity update = %q %q", username, email)
+	}
+}
+
+func TestRemoveAvatar(t *testing.T) {
+	s, _ := testService(t)
+	ctx := context.Background()
+	user := testUser(t, s, "Panda")
+	p := ProfileParams{Email: user.Email, Avatar: profileAvatar(t, 1)}
+	if err := s.UpdateProfile(ctx, user.ID, user.ID, p, "", "", testNow); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RemoveAvatar(ctx, user.ID, testNow); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Avatar(ctx, user.ID, user.ID); !errors.Is(err, ErrUserNotFound) {
+		t.Fatalf("avatar not removed: %v", err)
 	}
 }
 

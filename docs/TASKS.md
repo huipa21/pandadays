@@ -265,6 +265,14 @@ Status legend: `[ ]` todo, `[x]` done.
 - **Done when**: group rendering/authorization tests, full Go tests/vet, and 375px/1280px browser checks pass.
 - Verified: Go tests/vet and JavaScript tests pass. Browser checks at 375px/1280px confirm icon-only actions, modal Edit/Delete/Share dialogs without overflow, Escape/Cancel, archive filtering after htmx swaps, successful rename/delete, and link-based dialogs with scripts blocked.
 
+### [x] T32 Separate Profile and Settings
+- Avatar menu offers Profile (`/profile`) and Settings (`/settings`).
+- Profile shows only identity: a square avatar container with a circular photo (click to choose a file, X to remove) beside fixed username, display name, and email rows; password reset link.
+- Usernames stay unique and cannot be changed after creation; changing one's own email requires the current password (rate limited like password changes).
+- Settings holds timezone, storage usage, and backup & restore (export/import); admins see timezone only.
+- **Done when**: identity/re-authentication/avatar tests, full Go tests/vet, and 375px/1280px browser checks pass.
+- Verified: full Go tests/vet and CGO-free build. Chromium checks at 375px/1280px (English/light, Chinese/dark) confirm avatar picker preview, X removal, fixed username, password prompt appearing only after an email edit, wrong-password rejection with retained input, successful email change, the Profile/Settings menu, and no horizontal overflow.
+
 ## Dependency Graph
 
 ```mermaid

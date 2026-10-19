@@ -19,11 +19,16 @@ func TestSettingsRequiresLoginAndShowsUsage(t *testing.T) {
 	rr := get(s.Handler(), "/settings", token)
 	body := rr.Body.String()
 	for _, want := range []string{
-		"Profile", `action="/settings/language"`, `name="timezone"`, `name="display_name"`, `name="avatar"`,
-		"512 B of 1.0 GiB used", `href="/password"`, `value="Asia/Shanghai"`,
+		"Settings", `action="/settings/language"`, `name="timezone"`, "Backup &amp; restore", `href="/settings/export"`,
+		`action="/settings/import"`, "512 B of 1.0 GiB used", `value="Asia/Shanghai"`,
 	} {
 		if rr.Code != http.StatusOK || !strings.Contains(body, want) {
 			t.Errorf("settings page status=%d missing %q", rr.Code, want)
+		}
+	}
+	for _, unwanted := range []string{`name="display_name"`, `name="avatar"`, `name="email"`, `href="/password"`} {
+		if strings.Contains(body, unwanted) {
+			t.Errorf("settings page should not include profile field %s", unwanted)
 		}
 	}
 

@@ -1,0 +1,32 @@
+{{define "title"}}{{t "nav.profile"}} · {{t "app.name"}}{{end}}
+{{define "content"}}
+<section class="card settings-card profile-card">
+  <h1>{{t "nav.profile"}}</h1>
+  {{with .Error}}<p class="alert" role="alert">{{t .}}</p>{{end}}
+  <form method="post" action="/profile" enctype="multipart/form-data" class="form" data-profile-form>
+    {{template "csrf-field" .}}
+    <div class="profile-layout">
+      <div class="avatar-box">
+        <div class="avatar-stage">
+          <label class="avatar-picker" title="{{t "profile.change_avatar"}}">
+            <span class="visually-hidden">{{t "profile.change_avatar"}}</span>
+            <span class="avatar-circle" data-avatar-preview>{{template "user-avatar" .Fields}}</span>
+            <input class="visually-hidden" type="file" name="avatar" accept="image/png,image/jpeg" aria-describedby="avatar-hint" data-avatar-input>
+          </label>
+          {{if .Fields.HasAvatar}}<button type="submit" form="avatar-remove-form" class="avatar-remove" aria-label="{{t "profile.remove_avatar"}}" title="{{t "profile.remove_avatar"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>{{end}}
+        </div>
+      </div>
+      <div class="profile-fields">
+        <label>{{t "admin.username"}}<input type="text" value="{{.Fields.Username}}" readonly autocomplete="username" aria-describedby="username-fixed"><span class="hint" id="username-fixed">{{t "profile.username_fixed"}}</span></label>
+        <label>{{t "profile.display_name"}}<input type="text" name="display_name" value="{{.Fields.DisplayName}}" maxlength="100" autocomplete="nickname"></label>
+        <label>{{t "admin.email"}}<input type="email" name="email" value="{{.Fields.Email}}" required autocomplete="email" data-email-input data-original="{{.User.Email}}"></label>
+        <label data-email-password>{{t "profile.current_password"}}<input type="password" name="current_password" autocomplete="current-password"><span class="hint">{{t "profile.current_password_hint"}}</span></label>
+      </div>
+    </div>
+    <p class="hint" id="avatar-hint">{{t "profile.avatar_hint"}}</p>
+    <button type="submit" class="btn">{{t "profile.save"}}</button>
+  </form>
+  {{if .Fields.HasAvatar}}<form id="avatar-remove-form" method="post" action="/profile/avatar/delete" hidden>{{template "csrf-field" .}}</form>{{end}}
+  <div class="password-row"><div><span>{{t "login.password"}}</span><span class="password-mask" aria-label="{{t "profile.password_masked"}}">••••••••</span></div><a class="btn btn-secondary" href="/password">{{t "admin.reset"}}</a></div>
+</section>
+{{end}}

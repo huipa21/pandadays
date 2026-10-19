@@ -89,23 +89,8 @@ func (s *Server) saveSettings(w http.ResponseWriter, r *http.Request) {
 	if r.PostForm.Has("lang") {
 		lang = r.PostForm.Get("lang")
 	}
-	p, err := profileParams(r)
-	if !r.PostForm.Has("username") {
-		p.Username = user.Username
-	}
-	if !r.PostForm.Has("email") {
-		p.Email = user.Email
-	}
-	if !r.PostForm.Has("display_name") {
-		p.DisplayName = user.DisplayName
-	}
-	p.Comment = user.Comment
-	if err == nil {
-		err = s.auth.UpdateProfile(r.Context(), user.ID, user.ID, p, lang, timezone, s.now())
-	}
+	err := s.auth.UpdatePreferences(r.Context(), user.ID, lang, timezone, s.now())
 	switch {
-	case errors.Is(err, auth.ErrIdentity), errors.Is(err, auth.ErrProfile):
-		s.renderSettings(w, r, settingsPage{pageData: newPageData(r), Error: "profile.error", Status: http.StatusUnprocessableEntity})
 	case errors.Is(err, auth.ErrLanguage):
 		page := settingsPage{pageData: newPageData(r), Error: "settings.error.language", Status: http.StatusUnprocessableEntity}
 		s.renderSettings(w, r, page)

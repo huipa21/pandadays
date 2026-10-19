@@ -479,4 +479,35 @@
     bar.hidden = true;
     bar.removeAttribute("value");
   });
+
+  // Profile: preview a chosen avatar, and ask for the current password only
+  // once the email has been edited (the field stays visible without JS).
+  var avatarInput = document.querySelector("[data-avatar-input]");
+  var avatarPreview = document.querySelector("[data-avatar-preview]");
+  if (avatarInput && avatarPreview && window.FileReader) {
+    avatarInput.addEventListener("change", function () {
+      var file = avatarInput.files && avatarInput.files[0];
+      if (!file || !/^image\/(png|jpeg)$/.test(file.type)) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        var img = document.createElement("img");
+        img.alt = "";
+        img.src = reader.result;
+        avatarPreview.replaceChildren(img);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  var emailInput = document.querySelector("[data-email-input]");
+  var emailPassword = document.querySelector("[data-email-password]");
+  if (emailInput && emailPassword) {
+    var passwordInput = emailPassword.querySelector("input");
+    var syncEmailPassword = function () {
+      var changed = emailInput.value.trim() !== emailInput.dataset.original;
+      emailPassword.hidden = !changed;
+      passwordInput.required = changed;
+    };
+    emailInput.addEventListener("input", syncEmailPassword);
+    syncEmailPassword();
+  }
 })();

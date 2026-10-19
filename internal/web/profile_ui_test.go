@@ -126,28 +126,36 @@ func TestProfileAndUserInterface(t *testing.T) {
 	if rr := get(s.Handler(), path+"/edit", regularToken); rr.Code != http.StatusNotFound {
 		t.Fatal("non-admin edit form")
 	}
-	fields.Set("username", actor.Email)
+	fields.Set("email", actor.Email)
 	if rr := profilePost(t, s, path+"/edit", token, fields, nil, true); rr.Code != http.StatusUnprocessableEntity {
 		t.Fatal("duplicate edit accepted")
 	}
+	fields.Set("email", "new@example.com")
 	if rr := profilePost(t, s, path+"/edit", token, fields, []byte("<svg/>"), true); rr.Code != http.StatusUnprocessableEntity {
 		t.Fatal("invalid avatar accepted")
 	}
 	if rr := profilePost(t, s, path+"/edit", token, fields, make([]byte, auth.MaxAvatarBytes+(128<<10)), true); rr.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("oversized form: %d", rr.Code)
 	}
-	profile := url.Values{"username": {target.Username}, "email": {target.Email}, "display_name": {"My Name"}, "timezone": {"Asia/Shanghai"}}
-	if rr := profilePost(t, s, "/settings", regularToken, profile, avatar.Bytes(), true); rr.Code != http.StatusSeeOther {
+	profile := url.Values{"username": {"Renamed"}, "email": {target.Email}, "display_name": {"My Name"}, "timezone": {"Asia/Shanghai"}}
+	if rr := profilePost(t, s, "/profile", regularToken, profile, avatar.Bytes(), true); rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/profile" {
 		t.Fatalf("profile save: %d %s", rr.Code, rr.Body.String())
 	}
 	saved, err := s.auth.LookupSession(context.Background(), regularToken, time.Now())
-	if err != nil || saved.User.DisplayName != "My Name" || !saved.User.HasAvatar {
-		t.Fatal("profile not persisted")
+	if err != nil || saved.User.DisplayName != "My Name" || !saved.User.HasAvatar ||
+		saved.User.Username != target.Username || saved.User.Timezone == "Asia/Shanghai" {
+		t.Fatalf("profile not persisted as expected: %+v", saved.User)
 	}
-	body := get(s.Handler(), "/settings", regularToken).Body.String()
-	for _, want := range []string{`name="username"`, `value="My Name"`, `name="email"`, `name="timezone"`, `name="avatar"`, `class="password-row"`, `href="/password"`} {
+	body := get(s.Handler(), "/profile", regularToken).Body.String()
+	for _, want := range []string{`value="` + target.Username + `" readonly`, `value="My Name"`, `name="email"`, `name="current_password"`,
+		`name="avatar"`, `class="avatar-box"`, `class="avatar-remove"`, `action="/profile/avatar/delete"`, `class="password-row"`, `href="/password"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("profile missing %s", want)
+		}
+	}
+	for _, unwanted := range []string{`name="username"`, `name="timezone"`, "<progress", `href="/settings/export"`, `action="/settings/import"`} {
+		if strings.Contains(body, unwanted) {
+			t.Errorf("profile should not include %s", unwanted)
 		}
 	}
 	if strings.Contains(body, "User settings") || strings.Contains(body, `<select name="lang">`) {

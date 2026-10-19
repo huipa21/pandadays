@@ -51,19 +51,23 @@ func TestAdminSiteOnlyNavigationAndAccess(t *testing.T) {
 			}
 		}
 		for _, want := range []string{`href="/admin/users"`, `href="/admin/backup"`, `href="/admin/settings"`,
-			`class="avatar"`, actor.Username, `href="/settings"`, `action="/logout"`} {
+			`class="avatar"`, actor.Username, `href="/profile"`, `href="/settings"`, `action="/logout"`} {
 			if !strings.Contains(body, want) {
 				t.Errorf("admin navigation missing %s", want)
 			}
 		}
+		body = get(s.Handler(), "/profile?lang="+lang, token).Body.String()
+		if !strings.Contains(body, `href="/password"`) {
+			t.Error("admin profile missing password change")
+		}
 		body = get(s.Handler(), "/settings?lang="+lang, token).Body.String()
-		if !strings.Contains(body, `href="/password"`) || strings.Contains(body, `action="/settings/import"`) ||
+		if !strings.Contains(body, `name="timezone"`) || strings.Contains(body, `action="/settings/import"`) ||
 			strings.Contains(body, `href="/settings/export"`) || strings.Contains(body, "<progress") {
-			t.Error("admin profile missing password change or exposes personal storage")
+			t.Error("admin settings missing timezone or exposes personal storage")
 		}
 	}
 	_, regularToken := secondUser(t, s)
-	for _, path := range []string{"/", "/collections", "/tags", "/archive", "/shared", "/settings"} {
+	for _, path := range []string{"/", "/collections", "/tags", "/archive", "/shared", "/profile", "/settings"} {
 		if rr := get(s.Handler(), path, regularToken); rr.Code != http.StatusOK {
 			t.Errorf("regular user %s: %d", path, rr.Code)
 		}

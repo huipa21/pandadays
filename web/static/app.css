@@ -196,6 +196,50 @@ dialog.confirm-dialog { margin: auto; }
 .avatar-field input[type="file"] { max-width: 100%; }
 .password-row { justify-content: space-between; }
 .password-mask { display: block; letter-spacing: 0.15em; }
+.settings-card h2 { margin-top: 0; font-size: 1.125rem; }
+.settings-card h3 { margin: 1.25rem 0 0.5rem; font-size: 1rem; }
+.settings-card progress { width: 100%; }
+.profile-card .password-row { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--control-border); }
+.profile-layout { display: grid; gap: 1.25rem; justify-items: center; }
+.profile-fields { display: grid; gap: var(--space); width: 100%; min-width: 0; }
+.form .profile-fields input[readonly] { color: var(--muted); background: transparent; border-style: dashed; cursor: default; }
+.avatar-box {
+  display: grid;
+  place-items: center;
+  width: 10rem;
+  aspect-ratio: 1;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.avatar-stage { position: relative; width: 7.5rem; height: 7.5rem; }
+.form .avatar-picker { display: block; width: 100%; height: 100%; border-radius: 50%; cursor: pointer; }
+.avatar-picker:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
+.avatar-circle { display: block; width: 100%; height: 100%; overflow: hidden; border-radius: 50%; }
+.avatar-circle .avatar, .avatar-circle img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.avatar-picker:hover .avatar-circle { opacity: 0.85; }
+.avatar-remove {
+  position: absolute;
+  top: 2%;
+  right: 2%;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--control-border);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+}
+.avatar-remove::before { content: ""; position: absolute; inset: -6px; }
+.avatar-remove .icon { width: 16px; height: 16px; }
+.avatar-remove:hover, .avatar-remove:focus-visible { color: #fff; background: #c53030; border-color: #c53030; }
+@media (min-width: 600px) {
+  .profile-layout { grid-template-columns: auto minmax(0, 1fr); align-items: start; justify-items: stretch; gap: 1.5rem; }
+}
 .link-button:disabled { color: var(--muted); cursor: not-allowed; text-decoration: none; }
 @media (min-width: 720px) {
   .user-row-link { grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 1rem; }
