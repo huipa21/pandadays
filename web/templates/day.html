@@ -77,7 +77,8 @@
           {{if eq .Kind "image"}}<form method="post" action="/days/{{$.Day.ID}}/attachments/{{.ID}}/background" class="inline-form"
                 hx-post="/days/{{$.Day.ID}}/attachments/{{.ID}}/background">
             {{template "csrf-field" $}}
-            <button type="submit" class="link-button">{{if eq $.Day.StyleBgAttachmentID .ID}}{{t "attachments.background"}}{{else}}{{t "attachments.set_background"}}{{end}}</button>
+            {{if eq $.Day.StyleBgAttachmentID .ID}}<input type="hidden" name="clear" value="1">{{end}}
+            <button type="submit" class="link-button">{{if eq $.Day.StyleBgAttachmentID .ID}}{{t "attachments.clear_background"}}{{else}}{{t "attachments.set_background"}}{{end}}</button>
           </form>{{end}}
           <form method="post" action="/attachments/{{.ID}}/delete" class="inline-form"
                 hx-post="/attachments/{{.ID}}/delete" hx-confirm="{{t "attachments.delete_confirm"}}">
@@ -90,19 +91,12 @@
     </ul>
     {{else}}<p class="hint">{{t "days.attachments_empty"}}</p>{{end}}
     {{if not .Shared}}<form method="post" action="/days/{{.Day.ID}}/attachments" enctype="multipart/form-data"
-          class="form attachment-upload" hx-post="/days/{{.Day.ID}}/attachments" hx-encoding="multipart/form-data" hx-disabled-elt="find button">
+          class="form attachment-upload" data-media-picker data-media-inline>
       {{template "csrf-field" .}}
-      <label>{{t "attachments.choose_file"}}<input type="file" name="file" required></label>
+      {{template "media-picker-panel" .}}
       <progress class="upload-progress" max="100" hidden aria-label="{{t "attachments.uploading"}}" data-upload-progress></progress>
       <button type="submit" class="btn">{{t "attachments.upload"}}</button>
     </form>
-    <div class="voice-controls" hidden data-record-start="{{t "attachments.record_start"}}"
-         data-record-stop="{{t "attachments.record_stop"}}" data-recording="{{t "attachments.recording"}}"
-         data-record-error="{{t "attachments.record_error"}}" data-upload-error="{{t "attachments.upload_error"}}"
-         data-uploading="{{t "attachments.uploading_status"}}">
-      <button type="button" class="btn" data-record-button>{{t "attachments.record_start"}}</button>
-      <span role="status" aria-live="polite" data-record-status></span>
-    </div>
     {{end}}
       </div>
     {{if .Shared}}</details>{{else}}</section>{{end}}
@@ -133,6 +127,7 @@
     </div>
   </section>
   <script src="{{asset "attachments.js"}}" defer></script>
+  <script src="{{asset "media-picker.js"}}" defer></script>
   {{end}}
 </section>
 {{end}}

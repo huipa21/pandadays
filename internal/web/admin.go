@@ -224,6 +224,11 @@ func (s *Server) createAdminUser(w http.ResponseWriter, r *http.Request) {
 			IsAdmin: r.PostForm.Get("is_admin") == "1",
 		}, s.now())
 	}
+	if errors.Is(err, auth.ErrUsername) {
+		s.renderAdminUsers(w, r, adminUsersPage{pageData: newPageData(r), Create: true, Error: "username.error",
+			Fields: auth.User{Username: p.Username, DisplayName: p.DisplayName, Email: p.Email, Comment: p.Comment}}, http.StatusUnprocessableEntity)
+		return
+	}
 	if errors.Is(err, auth.ErrIdentity) || errors.Is(err, auth.ErrProfile) {
 		s.renderAdminUsers(w, r, adminUsersPage{pageData: newPageData(r), Create: true, Error: "profile.error",
 			Fields: auth.User{Username: p.Username, DisplayName: p.DisplayName, Email: p.Email, Comment: p.Comment}}, http.StatusUnprocessableEntity)

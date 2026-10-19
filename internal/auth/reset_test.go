@@ -10,7 +10,7 @@ func TestResetAdminPassword(t *testing.T) {
 	s, db := testService(t)
 	ctx := context.Background()
 	admin, err := s.CreateUser(ctx, CreateUserParams{
-		Username: "Admin", Email: "admin@example.com", Password: "password123", IsAdmin: true,
+		Username: "admin", Email: "admin@example.com", Password: "password123", IsAdmin: true,
 	}, testNow)
 	if err != nil {
 		t.Fatal(err)
@@ -32,7 +32,7 @@ func TestResetAdminPassword(t *testing.T) {
 		{"empty", "  ", ErrUserNotFound},
 		{"unknown", "nobody", ErrUserNotFound},
 		{"email is not a username", "admin@example.com", ErrUserNotFound},
-		{"non-admin", "bob", ErrNotAdmin},
+		{"non-admin", "bob1", ErrNotAdmin},
 	} {
 		if _, _, err := ResetAdminPassword(ctx, db, tc.username, testNow); !errors.Is(err, tc.want) {
 			t.Fatalf("%s: err=%v, want %v", tc.name, err, tc.want)

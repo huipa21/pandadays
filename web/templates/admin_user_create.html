@@ -7,7 +7,7 @@
   <form method="post" action="/admin/users{{if .Edit}}/{{.TargetID}}/edit{{end}}" enctype="multipart/form-data" class="form">
     {{template "csrf-field" .}}
     {{if .Edit}}<label>{{t "admin.username"}}<input type="text" value="{{.Fields.Username}}" readonly aria-describedby="username-fixed"><span class="hint" id="username-fixed">{{t "profile.username_fixed"}}</span></label>
-    {{else}}<label>{{t "admin.username"}}<input type="text" name="username" value="{{.Fields.Username}}" required autocomplete="off"></label>{{end}}
+    {{else}}<label>{{t "admin.username"}}<input type="text" name="username" value="{{.Fields.Username}}" required autocomplete="off" autocapitalize="none" spellcheck="false" minlength="4" maxlength="32" pattern="[a-z0-9-]{4,32}" aria-describedby="username-hint"></label><span class="hint" id="username-hint">{{t "username.hint"}}</span>{{end}}
     <label>{{t "profile.display_name"}}<input type="text" name="display_name" value="{{.Fields.DisplayName}}" maxlength="100"></label>
     <label>{{t "profile.avatar"}}<input type="file" name="avatar" accept="image/png,image/jpeg"><span class="hint">{{t "profile.avatar_hint"}}</span></label>
     {{if .Fields.HasAvatar}}<div class="avatar-field">{{template "user-avatar" .Fields}}<label class="check"><input type="checkbox" name="remove_avatar" value="1"> {{t "profile.remove_avatar"}}</label></div>{{end}}

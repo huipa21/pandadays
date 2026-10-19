@@ -85,6 +85,8 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		page.Error = "setup.error.policy"
 	case errors.Is(err, auth.ErrIdentity):
 		page.Error = "setup.error.identity"
+	case errors.Is(err, auth.ErrUsername):
+		page.Error = "username.error"
 	case errors.Is(err, auth.ErrLanguage):
 		page.Error = "settings.error.language"
 	case errors.Is(err, auth.ErrTimezone):

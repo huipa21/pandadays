@@ -4,14 +4,28 @@
 
   const button = controls.querySelector("[data-record-button]");
   const status = controls.querySelector("[data-record-status]");
-  const form = document.querySelector(".attachment-upload");
-  const csrf = form?.querySelector('[name="csrf_token"]')?.value;
-  if (!button || !status || !form || !csrf) return;
+  const form = controls.closest("form");
+  const fileInput = controls.querySelector("[data-record-file]");
+  const preview = controls.querySelector("[data-record-preview]");
+  if (!button || !status || !form || !fileInput) return;
 
   controls.hidden = false;
+  controls.parentElement.querySelector("[data-record-unavailable]").hidden = true;
   let recorder;
   let stream;
   let chunks = [];
+  let previewURL;
+  let pending = false;
+  function release() {
+    stream?.getTracks().forEach((track) => track.stop());
+  }
+  window.addEventListener("pagehide", release);
+  form.addEventListener("submit", (event) => {
+    if (pending || recorder?.state === "recording") {
+      event.preventDefault();
+      status.textContent = controls.dataset.recording;
+    }
+  });
 
   // Browsers support different recorder formats: Chrome/Firefox WebM or Ogg
   // Opus, Safari MP4/AAC. The server sniffs the content to classify it.
@@ -32,50 +46,58 @@
 
   button.addEventListener("click", async () => {
     if (recorder?.state === "recording") {
+      pending = true;
       recorder.stop();
       button.disabled = true;
       return;
     }
     button.disabled = true;
+    pending = true;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       chunks = [];
+      let failed = false;
       recorder.addEventListener("dataavailable", (event) => {
         if (event.data.size) chunks.push(event.data);
       });
-      recorder.addEventListener("stop", async () => {
-        stream.getTracks().forEach((track) => track.stop());
+      recorder.addEventListener("error", () => {
+        failed = true;
+        release();
+        pending = false;
+        status.textContent = controls.dataset.recordError;
+        resetButton();
+      });
+      recorder.addEventListener("stop", () => {
+        release();
+        if (failed) return;
         const type = recorder.mimeType || mimeType || "audio/webm";
         const blob = new Blob(chunks, { type });
-        const data = new FormData();
-        data.append("file", blob, voiceFilename(type));
-        status.textContent = controls.dataset.uploading;
-        let serverText = "";
         try {
-          const response = await fetch(form.action, {
-            method: "POST",
-            headers: { "X-CSRF-Token": csrf },
-            body: data,
-          });
-          if (!response.ok) {
-            if ((response.headers.get("Content-Type") || "").startsWith("text/plain")) {
-              serverText = (await response.text()).trim();
-            }
-            throw new Error("upload");
-          }
-          window.location.reload();
+          if (!blob.size) throw new Error("empty recording");
+          const data = new DataTransfer();
+          data.items.add(new File([blob], voiceFilename(type), { type }));
+          fileInput.files = data.files;
+          fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+          if (previewURL) URL.revokeObjectURL(previewURL);
+          previewURL = URL.createObjectURL(blob);
+          preview.src = previewURL;
+          preview.hidden = false;
+          status.textContent = controls.dataset.recordReady;
         } catch {
-          status.textContent = serverText || controls.dataset.uploadError;
-          resetButton();
+          status.textContent = controls.dataset.recordError;
         }
+        pending = false;
+        resetButton();
       }, { once: true });
       recorder.start();
+      pending = false;
       status.textContent = controls.dataset.recording;
       button.textContent = controls.dataset.recordStop;
       button.disabled = false;
     } catch {
-      stream?.getTracks().forEach((track) => track.stop());
+      release();
+      pending = false;
       status.textContent = controls.dataset.recordError;
       resetButton();
     }

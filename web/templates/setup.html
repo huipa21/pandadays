@@ -12,8 +12,9 @@
     </label>
     <p id="setup-token-hint" class="hint">{{t "setup.token_hint"}}</p>
     <label>{{t "setup.username"}}
-      <input type="text" name="username" value="{{.Username}}" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+      <input type="text" name="username" value="{{.Username}}" autocomplete="username" autocapitalize="none" spellcheck="false" minlength="4" maxlength="32" pattern="[a-z0-9-]{4,32}" aria-describedby="username-hint" required>
     </label>
+    <p id="username-hint" class="hint">{{t "username.hint"}}</p>
     <label>{{t "setup.email"}}
       <input type="email" name="email" value="{{.Email}}" autocomplete="email" required>
     </label>

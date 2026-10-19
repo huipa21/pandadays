@@ -76,12 +76,17 @@ func TestAdminUserLifecycle(t *testing.T) {
 	makeAdmin(t, s, actor.ID)
 	s.cfg.DataDir = t.TempDir()
 	s.media = media.New(db, filepath.Join(s.cfg.DataDir, "media"))
-	rr := sessionPost(t, s, "/admin/users", token, url.Values{"username": {"Bob"}, "email": {"bob@example.com"}})
+	createForm := url.Values{"username": {"Bad_Name"}, "email": {"bad@example.com"}}
+	rr := sessionPost(t, s, "/admin/users", token, createForm)
+	if rr.Code != http.StatusUnprocessableEntity || !strings.Contains(rr.Body.String(), "Use 4–32 lowercase letters") {
+		t.Fatalf("invalid username: %d %s", rr.Code, rr.Body.String())
+	}
+	rr = sessionPost(t, s, "/admin/users", token, url.Values{"username": {"bobby"}, "email": {"bobby@example.com"}})
 	if rr.Code != http.StatusOK || rr.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("create: %d %s", rr.Code, rr.Body.String())
 	}
 	password := temporaryPassword(t, rr.Body.String())
-	u, err := s.auth.Authenticate(ctx, "ip", "Bob", password, time.Now())
+	u, err := s.auth.Authenticate(ctx, "ip", "bobby", password, time.Now())
 	if err != nil || !u.MustChangePassword {
 		t.Fatalf("created login: %+v %v", u, err)
 	}
@@ -89,7 +94,7 @@ func TestAdminUserLifecycle(t *testing.T) {
 	if strings.Contains(rr.Body.String(), password) {
 		t.Fatal("temporary password persisted on GET")
 	}
-	rr = sessionPost(t, s, "/admin/users", token, url.Values{"username": {"bob"}, "email": {"new@example.com"}})
+	rr = sessionPost(t, s, "/admin/users", token, url.Values{"username": {"bobby"}, "email": {"new@example.com"}})
 	if rr.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("duplicate user: %d", rr.Code)
 	}
@@ -109,7 +114,7 @@ func TestAdminUserLifecycle(t *testing.T) {
 	if reset == password {
 		t.Fatal("reset reused password")
 	}
-	if !strings.Contains(rr.Body.String(), "Bob: <code") {
+	if !strings.Contains(rr.Body.String(), "bobby: <code") {
 		t.Fatal("reset banner does not name the account")
 	}
 	if _, err := s.auth.LookupSession(ctx, userToken, time.Now()); !errors.Is(err, auth.ErrSession) {

@@ -114,6 +114,9 @@ func (s *Service) CompleteSetup(ctx context.Context, ip, token string, p CreateU
 	if p.Username == "" || p.Email == "" {
 		return nil, ErrIdentity
 	}
+	if err := ValidateUsername(p.Username); err != nil {
+		return nil, err
+	}
 	if err := validatePreferences(p.Lang, p.Timezone); err != nil {
 		return nil, err
 	}

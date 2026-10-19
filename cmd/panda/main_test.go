@@ -162,7 +162,7 @@ func TestResetAdminPassword(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := svc.CreateUser(ctx, auth.CreateUserParams{
-		Username: "bob", Email: "bob@example.com", Password: "password123",
+		Username: "bob1", Email: "bob@example.com", Password: "password123",
 	}, now); err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestResetAdminPassword(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if code, _, errOut := reset("--username", "bob"); code != 1 || !strings.Contains(errOut, "not an admin") {
+	if code, _, errOut := reset("--username", "bob1"); code != 1 || !strings.Contains(errOut, "not an admin") {
 		t.Fatalf("non-admin: exit = %d, stderr = %q", code, errOut)
 	}
 	if code, _, errOut := reset("--username", "ghost"); code != 1 || !strings.Contains(errOut, "not found") {

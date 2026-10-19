@@ -28,7 +28,7 @@ func TestAdminSiteOnlyNavigationAndAccess(t *testing.T) {
 		t.Fatalf("admin landing: %d %s", rr.Code, rr.Header().Get("Location"))
 	}
 	for _, path := range []string{"/archive", "/days/new", "/days/1", "/collections", "/collections/1",
-		"/tags", "/tags/1", "/shared", "/messages", "/attachments/1", "/settings/export", "/settings/import"} {
+		"/tags", "/tags/1", "/shared", "/messages", "/attachments/1", "/media", "/settings/export", "/settings/import"} {
 		if rr := get(s.Handler(), path, token); rr.Code != http.StatusNotFound {
 			t.Errorf("admin GET %s: %d", path, rr.Code)
 		}
@@ -45,7 +45,7 @@ func TestAdminSiteOnlyNavigationAndAccess(t *testing.T) {
 	}
 	for _, lang := range []string{"en", "zh"} {
 		body := get(s.Handler(), "/admin/users?lang="+lang, token).Body.String()
-		for _, link := range []string{"/archive", "/shared", "/collections", "/tags"} {
+		for _, link := range []string{"/archive", "/shared", "/collections", "/tags", "/media"} {
 			if strings.Contains(body, `href="`+link+`"`) {
 				t.Errorf("admin navigation exposes %s", link)
 			}
@@ -67,7 +67,7 @@ func TestAdminSiteOnlyNavigationAndAccess(t *testing.T) {
 		}
 	}
 	_, regularToken := secondUser(t, s)
-	for _, path := range []string{"/", "/collections", "/tags", "/archive", "/shared", "/profile", "/settings"} {
+	for _, path := range []string{"/", "/collections", "/tags", "/archive", "/shared", "/media", "/profile", "/settings"} {
 		if rr := get(s.Handler(), path, regularToken); rr.Code != http.StatusOK {
 			t.Errorf("regular user %s: %d", path, rr.Code)
 		}
@@ -243,7 +243,7 @@ func TestAdminHeaderTimesDaysUsedAndDeleteDialog(t *testing.T) {
 	if rr.Code != http.StatusOK || strings.Contains(frag, "<html") {
 		t.Fatalf("dialog fragment: %d", rr.Code)
 	}
-	for _, want := range []string{`id="dialog-title"`, "Bob", "bob@example.com", "Secret note", "Asia/Shanghai",
+	for _, want := range []string{`id="dialog-title"`, "bob1", "bob@example.com", "Secret note", "Asia/Shanghai",
 		"1 days used", `action="` + path + `"`, `name="confirm" value="1"`, `name="csrf_token"`, "data-close-dialog", "data-local-time"} {
 		if !strings.Contains(frag, want) {
 			t.Errorf("dialog missing %s", want)

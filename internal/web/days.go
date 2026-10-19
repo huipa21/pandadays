@@ -2,6 +2,7 @@ package web
 
 import (
 	"errors"
+	"mime/multipart"
 	"net/http"
 	"strconv"
 	"strings"
@@ -27,6 +28,7 @@ type dayForm struct {
 	Color        string
 	NoColor      bool
 	Icon         string
+	LibraryIDs   []int64 // existing attachments to copy onto a new day
 }
 
 type groupOption struct {
@@ -41,6 +43,8 @@ type dayFormPage struct {
 	Repeats     []days.Repeat
 	Collections []groupOption
 	Tags        []groupOption
+	Library     []media.LibraryItem
+	Picked      map[int64]bool
 	Error       string
 }
 
@@ -63,6 +67,8 @@ type dayPage struct {
 	ShareOwner  string
 	ShowComment bool
 	ShareRows   []shareRow
+	Library     []media.LibraryItem
+	Picked      map[int64]bool
 }
 
 var repeatOptions = []days.Repeat{days.RepeatNone, days.RepeatWeekly, days.RepeatMonthly, days.RepeatYearly}
@@ -163,6 +169,13 @@ func parseDayForm(r *http.Request) dayForm {
 	for _, v := range r.PostForm["tags"] {
 		f.TagIDs = append(f.TagIDs, parseID(v))
 	}
+	seen := make(map[int64]bool)
+	for _, v := range r.PostForm["library"] {
+		if id := parseID(v); id != 0 && !seen[id] {
+			seen[id] = true
+			f.LibraryIDs = append(f.LibraryIDs, id)
+		}
+	}
 	return f
 }
 
@@ -232,6 +245,16 @@ func (s *Server) renderDayForm(w http.ResponseWriter, r *http.Request, status in
 			page.Tags = append(page.Tags, groupOption{Group: g, Selected: selectedTags[g.ID]})
 		}
 	}
+	if d.ID == 0 {
+		if page.Library, err = s.media.ListOwner(r.Context(), owner); err != nil {
+			s.dayFail(w, r, "list media library for", err)
+			return
+		}
+		page.Picked = make(map[int64]bool, len(form.LibraryIDs))
+		for _, id := range form.LibraryIDs {
+			page.Picked[id] = true
+		}
+	}
 	s.renderStatus(w, r, "day_form.html", status, page)
 }
 
@@ -274,18 +297,42 @@ func (s *Server) handleDayCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	form := parseDayForm(r)
 	owner := CurrentUser(r.Context()).ID
+	library := make([]media.Attachment, 0, len(form.LibraryIDs))
+	for _, id := range form.LibraryIDs {
+		a, err := s.media.Get(r.Context(), owner, id)
+		if errors.Is(err, media.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			s.attachmentError(w, r, "get library item for new day", err)
+			return
+		}
+		library = append(library, a)
+	}
+	var uploads []*multipart.FileHeader
 	if r.MultipartForm != nil {
+		uploads = r.MultipartForm.File["file"]
+	}
+	if len(uploads) > 0 || len(library) > 0 {
 		remaining, err := s.media.NewDayRemaining(r.Context(), owner)
 		if err != nil {
 			s.attachmentError(w, r, "check new day attachments", err)
 			return
 		}
-		for _, file := range r.MultipartForm.File["file"] {
-			if remaining <= 0 || file.Size > remaining {
+		sizes := make([]int64, 0, len(uploads)+len(library))
+		for _, file := range uploads {
+			sizes = append(sizes, file.Size)
+		}
+		for _, a := range library {
+			sizes = append(sizes, a.Size)
+		}
+		for _, size := range sizes {
+			if remaining <= 0 || size > remaining {
 				s.renderDayForm(w, r, http.StatusRequestEntityTooLarge, days.Day{}, form, "attachments.error.limit")
 				return
 			}
-			remaining -= file.Size
+			remaining -= size
 		}
 	}
 	d, err := s.days.Create(r.Context(), owner, form.input(), s.now())
@@ -300,22 +347,27 @@ func (s *Server) handleDayCreate(w http.ResponseWriter, r *http.Request) {
 		s.dayFail(w, r, "create", err)
 		return
 	}
-	if r.MultipartForm != nil {
-		for _, header := range r.MultipartForm.File["file"] {
-			file, err := header.Open()
+	for _, a := range library {
+		if _, err := s.media.CopyToDay(r.Context(), owner, a.ID, d.ID); err != nil {
+			s.log.Error("copy library attachment for new day", "day_id", d.ID, "attachment_id", a.ID, "err", err)
+			s.renderDayForm(w, r, http.StatusInternalServerError, d, formFromDay(d), "attachments.create_error")
+			return
+		}
+	}
+	for _, header := range uploads {
+		file, err := header.Open()
+		if err == nil {
+			_, err = s.media.Upload(r.Context(), owner, d.ID, header.Filename, file)
+			closeErr := file.Close()
 			if err == nil {
-				_, err = s.media.Upload(r.Context(), owner, d.ID, header.Filename, file)
-				closeErr := file.Close()
-				if err == nil {
-					err = closeErr
-				}
+				err = closeErr
 			}
-			if err != nil {
-				s.log.Error("upload attachment for new day", "day_id", d.ID, "err", err)
-				// Keep the saved day and successful uploads; retries must not create duplicates.
-				s.renderDayForm(w, r, http.StatusInternalServerError, d, formFromDay(d), "attachments.create_error")
-				return
-			}
+		}
+		if err != nil {
+			s.log.Error("upload attachment for new day", "day_id", d.ID, "err", err)
+			// Keep the saved day and successful uploads; retries must not create duplicates.
+			s.renderDayForm(w, r, http.StatusInternalServerError, d, formFromDay(d), "attachments.create_error")
+			return
 		}
 	}
 	http.Redirect(w, r, dayPath(d.ID), http.StatusSeeOther)
@@ -383,6 +435,11 @@ func (s *Server) handleDayView(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !shared {
+		page.Library, err = s.media.ListOwner(r.Context(), u.ID)
+		if err != nil {
+			s.dayFail(w, r, "list media library for", err)
+			return
+		}
 		if page.Collection, err = s.collections.Get(r.Context(), u.ID, d.CollectionID); err != nil {
 			s.dayFail(w, r, "get collection for", err)
 			return

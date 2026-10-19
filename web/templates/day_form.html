@@ -4,6 +4,7 @@
   {{if .Day.ID}}<p><a href="/days/{{.Day.ID}}">← {{.Day.Title}}</a></p>{{else}}<p><a href="/">← {{t "nav.home"}}</a></p>{{end}}
   <h1>{{if .Day.ID}}{{t "days.edit"}}{{else}}{{t "days.new"}}{{end}}</h1>
   {{with .Error}}<p class="alert" role="alert">{{t .}}</p>{{end}}
+  {{if eq .Error "attachments.create_error"}}<p><a href="/days/{{.Day.ID}}#attachments">{{t "media.attach"}}</a></p>{{end}}
   <form method="post" action="{{if .Day.ID}}/days/{{.Day.ID}}/edit{{else}}/days{{end}}"{{if not .Day.ID}} enctype="multipart/form-data"{{end}} class="card form" data-day-form data-unsaved="{{if .Error}}true{{else}}false{{end}}">
     {{template "csrf-field" .}}
     <p class="hint">{{t "days.unsaved_hint"}}</p>
@@ -60,16 +61,20 @@
         <button type="button" class="link-button" data-icon-clear hidden>{{t "days.icons.clear"}}</button>
       </div>
     </fieldset>
-    <fieldset class="choice-group">
+    {{if not .Day.ID}}<fieldset class="choice-group media-picker" data-media-picker>
       <legend>{{t "days.attachments"}}</legend>
-      {{if .Day.ID}}<a href="/days/{{.Day.ID}}#attachments">{{t "days.action.attachment"}}</a>
-      {{else}}
-      <label>{{t "attachments.choose_file"}}<input type="file" name="file" multiple></label>
-      <p class="hint">{{t "attachments.create_hint"}}</p>
-      {{end}}
-    </fieldset>
+      <div class="media-picker-bar" data-media-bar hidden>
+        <button type="button" class="btn btn-secondary" data-media-open aria-haspopup="dialog">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21 11-8.5 8.5a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 7"/></svg>
+          {{t "media.attach"}}
+        </button>
+        <span class="hint" role="status" aria-live="polite" data-media-status data-none="{{t "media.none_selected"}}"
+              data-library-count="{{t "media.library_count"}}" data-file-count="{{t "media.file_count"}}"></span>
+      </div>
+      {{template "media-picker-panel" .}}
+    </fieldset>{{end}}
     <button type="submit" class="btn">{{if .Day.ID}}{{t "days.save"}}{{else}}{{t "days.create"}}{{end}}</button>
   </form>
-  {{if .Day.ID}}{{template "day-delete" .}}{{end}}
+  {{if not .Day.ID}}<script src="{{asset "media-picker.js"}}" defer></script><script src="{{asset "attachments.js"}}" defer></script>{{end}}
 </section>
 {{end}}

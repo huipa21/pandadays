@@ -46,6 +46,9 @@ func TestSetupValidToken(t *testing.T) {
 			t.Errorf("setup form missing %q", want)
 		}
 	}
+	if !strings.Contains(form.Body.String(), `pattern="[a-z0-9-]{4,32}"`) {
+		t.Fatal("setup username field is missing its format constraint")
+	}
 	csrf := anonymousCSRF(t, h)
 
 	rr := postForm(h, "/setup", setupForm(csrf, token), csrf)
@@ -59,6 +62,26 @@ func TestSetupValidToken(t *testing.T) {
 	}
 	if rr := get(h, "/login", ""); rr.Code != 200 {
 		t.Fatalf("login after setup: status=%d", rr.Code)
+	}
+}
+
+func TestSetupRejectsInvalidUsername(t *testing.T) {
+	s, db, token := setupServer(t)
+	h := s.Handler()
+	csrf := anonymousCSRF(t, h)
+	values := setupForm(csrf, token)
+	values.Set("username", "Bad_Name")
+	rr := postForm(h, "/setup", values, csrf)
+	if rr.Code != http.StatusUnprocessableEntity || !strings.Contains(rr.Body.String(), "Use 4–32 lowercase letters") {
+		t.Fatalf("invalid username: status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var users int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&users); err != nil || users != 0 {
+		t.Fatalf("invalid username created users=%d err=%v", users, err)
+	}
+	values.Set("username", "admin")
+	if rr := postForm(h, "/setup", values, csrf); rr.Code != http.StatusSeeOther {
+		t.Fatalf("valid username after rejection: status=%d body=%s", rr.Code, rr.Body.String())
 	}
 }
 

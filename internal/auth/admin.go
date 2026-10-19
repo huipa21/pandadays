@@ -91,6 +91,9 @@ func (s *Service) AdminCreateUser(ctx context.Context, actorID int64, p CreateUs
 	if p.Username == "" || p.Email == "" {
 		return nil, "", ErrIdentity
 	}
+	if err := ValidateUsername(p.Username); err != nil {
+		return nil, "", err
+	}
 	password, err := RandomPassword()
 	if err != nil {
 		return nil, "", fmt.Errorf("generate password: %w", err)

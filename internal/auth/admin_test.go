@@ -26,16 +26,16 @@ func TestAdminCreateAndReset(t *testing.T) {
 	s, db := testService(t)
 	actor := adminActor(t, s, db)
 	u, password, err := s.AdminCreateUser(ctx, actor.ID, CreateUserParams{
-		Username: " Bob ", Email: " bob@example.com ", IsAdmin: true,
+		Username: " bobby ", Email: " bobby@example.com ", IsAdmin: true,
 		Password: "must-not-be-used",
 	}, testNow)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(password) != 16 || !u.MustChangePassword || !u.IsAdmin || u.Username != "Bob" {
+	if len(password) != 16 || !u.MustChangePassword || !u.IsAdmin || u.Username != "bobby" {
 		t.Fatalf("created user=%+v password length=%d", u, len(password))
 	}
-	logged, err := s.Authenticate(ctx, "127.0.0.1", "Bob", password, testNow)
+	logged, err := s.Authenticate(ctx, "127.0.0.1", "bobby", password, testNow)
 	if err != nil || !logged.MustChangePassword {
 		t.Fatalf("random password login: user=%+v err=%v", logged, err)
 	}
@@ -47,7 +47,7 @@ func TestAdminCreateAndReset(t *testing.T) {
 	}
 	if _, _, err := s.AdminCreateUser(ctx, actor.ID, CreateUserParams{
 		Username: "BOB@example.com", Email: "other@example.com",
-	}, testNow); !errors.Is(err, ErrIdentity) {
+	}, testNow); !errors.Is(err, ErrUsername) {
 		t.Fatalf("cross-identity collision: %v", err)
 	}
 	token, _, err := s.CreateSession(ctx, u.ID, false, testNow)
@@ -55,7 +55,7 @@ func TestAdminCreateAndReset(t *testing.T) {
 		t.Fatal(err)
 	}
 	name, next, err := s.AdminResetPassword(ctx, actor.ID, u.ID, testNow)
-	if err != nil || len(next) != 16 || next == password || name != "Bob" {
+	if err != nil || len(next) != 16 || next == password || name != "bobby" {
 		t.Fatalf("reset password length=%d name=%q err=%v", len(next), name, err)
 	}
 	if _, err := s.LookupSession(ctx, token, testNow); !errors.Is(err, ErrSession) {
@@ -64,7 +64,7 @@ func TestAdminCreateAndReset(t *testing.T) {
 	if _, err := s.Authenticate(ctx, "other-ip", "Bob", password, testNow); !errors.Is(err, ErrCredentials) {
 		t.Fatalf("old password accepted: %v", err)
 	}
-	if _, err := s.Authenticate(ctx, "third-ip", "Bob", next, testNow); err != nil {
+	if _, err := s.Authenticate(ctx, "third-ip", "bobby", next, testNow); err != nil {
 		t.Fatalf("new password rejected: %v", err)
 	}
 	var hash string
@@ -145,7 +145,7 @@ func TestAdminMutationsRecheckActor(t *testing.T) {
 			call func() error
 		}{
 			{"create", func() error {
-				_, _, err := s.AdminCreateUser(ctx, actor.ID, CreateUserParams{Username: "new", Email: "new@example.com"}, testNow)
+				_, _, err := s.AdminCreateUser(ctx, actor.ID, CreateUserParams{Username: "newuser", Email: "new@example.com"}, testNow)
 				return err
 			}},
 			{"reset", func() error { _, _, err := s.AdminResetPassword(ctx, actor.ID, target.ID, testNow); return err }},

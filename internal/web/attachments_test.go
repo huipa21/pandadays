@@ -62,6 +62,11 @@ func csrfTokenForTest(t *testing.T, s *Server, token string) string {
 
 func createDayWithFiles(t *testing.T, s *Server, token, csrf string, headerCSRF bool, values url.Values, files ...string) *httptest.ResponseRecorder {
 	t.Helper()
+	return postMediaFiles(t, s, "/days", token, csrf, headerCSRF, values, files...)
+}
+
+func postMediaFiles(t *testing.T, s *Server, path, token, csrf string, headerCSRF bool, values url.Values, files ...string) *httptest.ResponseRecorder {
+	t.Helper()
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 	for key, entries := range values {
@@ -88,7 +93,7 @@ func createDayWithFiles(t *testing.T, s *Server, token, csrf string, headerCSRF 
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
-	r := httptest.NewRequest(http.MethodPost, "/days", &body)
+	r := httptest.NewRequest(http.MethodPost, path, &body)
 	r.Header.Set("Content-Type", writer.FormDataContentType())
 	if headerCSRF {
 		r.Header.Set("X-CSRF-Token", csrf)
@@ -284,7 +289,7 @@ func TestAttachmentAuthorizationSafeDownloadRangeAndDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 	var bobID int64
-	if err := s.db.QueryRow(`SELECT id FROM users WHERE username = 'Bob'`).Scan(&bobID); err != nil {
+	if err := s.db.QueryRow(`SELECT id FROM users WHERE username = 'bob1'`).Scan(&bobID); err != nil {
 		t.Fatal(err)
 	}
 	res, err := s.db.Exec(`INSERT INTO shares (owner_id, target_type, target_id) VALUES (?, 'collection', ?)`,
@@ -339,6 +344,52 @@ func TestAttachmentAuthorizationSafeDownloadRangeAndDelete(t *testing.T) {
 	}
 }
 
+func TestClearBackgroundPreservesImageAndOwnership(t *testing.T) {
+	s, owner, token, day := attachmentServer(t)
+	_, otherToken := secondUser(t, s)
+	png := []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a}
+	if rr := uploadAttachment(t, s, token, day.ID, "image.png", png); rr.Code != http.StatusSeeOther {
+		t.Fatalf("upload: %d", rr.Code)
+	}
+	files, err := s.media.ListDay(context.Background(), owner, day.ID)
+	if err != nil || len(files) != 1 {
+		t.Fatalf("attachments: %v %v", files, err)
+	}
+	a := files[0]
+	path := dayPath(day.ID) + "/attachments/" + strconv.FormatInt(a.ID, 10) + "/background"
+	if rr := sessionPost(t, s, path, token, nil); rr.Code != http.StatusSeeOther {
+		t.Fatalf("set background: %d", rr.Code)
+	}
+	for _, tc := range []struct {
+		path, token string
+		status      int
+	}{
+		{path, otherToken, http.StatusNotFound},
+		{dayPath(day.ID) + "/attachments/999999/background", token, http.StatusNotFound},
+		{path, token, http.StatusSeeOther},
+	} {
+		rr := sessionPost(t, s, tc.path, tc.token, url.Values{"clear": {"1"}})
+		if rr.Code != tc.status {
+			t.Fatalf("clear %s: %d", tc.path, rr.Code)
+		}
+		d, err := s.days.Get(context.Background(), owner, day.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tc.status == http.StatusNotFound && d.StyleBgAttachmentID != a.ID {
+			t.Fatal("unauthorized removal changed background")
+		}
+		if tc.status == http.StatusSeeOther && d.StyleBgAttachmentID != 0 {
+			t.Fatal("background was not cleared")
+		}
+	}
+	if _, err := s.media.Get(context.Background(), owner, a.ID); err != nil {
+		t.Fatalf("image deleted: %v", err)
+	}
+	if _, err := os.Stat(s.media.Path(owner, a)); err != nil {
+		t.Fatalf("image file removed: %v", err)
+	}
+}
 func TestAttachmentNativeMultipartFormRemainsSupported(t *testing.T) {
 	s, _, token, day := attachmentServer(t)
 	var body bytes.Buffer

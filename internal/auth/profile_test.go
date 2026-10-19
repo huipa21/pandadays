@@ -116,7 +116,7 @@ func TestProfileUsernameFixedAndEmailNeedsPassword(t *testing.T) {
 	if err := s.UpdateProfile(ctx, user.ID, user.ID, ProfileParams{Username: "Renamed", Email: user.Email}, "", "", testNow); err != nil {
 		t.Fatal(err)
 	}
-	if username, _ := identity(); username != "Panda" {
+	if username, _ := identity(); username != "panda" {
 		t.Fatalf("username changed to %q", username)
 	}
 	for i, password := range []string{"", "wrong-password"} {
@@ -132,7 +132,7 @@ func TestProfileUsernameFixedAndEmailNeedsPassword(t *testing.T) {
 	if err := s.UpdateProfile(ctx, user.ID, user.ID, p, "", "", testNow); err != nil {
 		t.Fatal(err)
 	}
-	if username, email := identity(); username != "Panda" || email != "new@example.com" {
+	if username, email := identity(); username != "panda" || email != "new@example.com" {
 		t.Fatalf("identity = %q %q", username, email)
 	}
 	// Administrators manage other users' email without their password, but cannot rename them.
@@ -140,7 +140,7 @@ func TestProfileUsernameFixedAndEmailNeedsPassword(t *testing.T) {
 	if err := s.UpdateProfile(ctx, admin.ID, user.ID, p, "", "", testNow); err != nil {
 		t.Fatal(err)
 	}
-	if username, email := identity(); username != "Panda" || email != "admin-set@example.com" {
+	if username, email := identity(); username != "panda" || email != "admin-set@example.com" {
 		t.Fatalf("admin identity update = %q %q", username, email)
 	}
 }
@@ -168,7 +168,7 @@ func TestAdminCreateProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	u, _, err := s.AdminCreateUser(context.Background(), actor.ID, CreateUserParams{
-		Username: "New", Email: "new@example.com", DisplayName: " New Panda ", Comment: " Note ", Avatar: profileAvatar(t, 1),
+		Username: "newuser", Email: "new@example.com", DisplayName: " New Panda ", Comment: " Note ", Avatar: profileAvatar(t, 1),
 	}, testNow)
 	if err != nil || u.DisplayName != "New Panda" || u.Comment != "Note" || !u.HasAvatar {
 		t.Fatalf("create profile: %+v %v", u, err)

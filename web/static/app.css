@@ -654,3 +654,51 @@ details[open] > .day-section-toggle .expand-icon { transform: rotate(180deg); }
   .brand { font-size: 1.25rem; }
   .field-row { grid-template-columns: 1fr 1fr; }
 }
+
+/* Media library and new-day media picker */
+.media-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr)); }
+.media-card { display: grid; grid-template-rows: auto 1fr; gap: 0.5rem; padding: 0.5rem; min-width: 0; }
+.media-card-preview { display: grid; place-items: center; gap: 0.5rem; min-height: 8rem; border-radius: 8px; background: var(--bg); overflow: hidden; }
+.media-card-preview img, .media-card-preview video { display: block; width: 100%; max-height: 14rem; object-fit: cover; }
+.media-card-preview a { display: block; width: 100%; }
+.media-card-preview audio { width: calc(100% - 1rem); }
+.media-card-body { display: grid; align-content: start; gap: 0.125rem; min-width: 0; overflow-wrap: anywhere; }
+.media-card-name { font-weight: 500; }
+.media-card-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.media-detail { display: grid; gap: 1.5rem; min-width: 0; }
+.media-detail-preview { display: grid; place-items: center; min-width: 0; }
+.media-detail-preview img, .media-detail-preview video { max-width: 100%; max-height: 75vh; object-fit: contain; }
+.media-detail-preview audio { width: 100%; }
+.media-detail .media-card-body { gap: 0.75rem; }
+.media-detail h2 { margin: 0; font-size: 1.125rem; }
+.voice-controls audio { display: block; max-width: 100%; margin-top: 0.75rem; }
+@media (min-width: 48rem) {
+  .media-detail { grid-template-columns: minmax(0, 1fr) minmax(14rem, 20rem); }
+}
+.media-card-body .inline-form { justify-self: start; }
+.media-thumb-icon { font-size: 2.25rem; line-height: 1; }
+.empty-state { text-align: center; }
+
+.media-picker-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; flex-basis: 100%; }
+.media-picker-bar .btn { display: inline-flex; align-items: center; gap: 0.5rem; }
+.media-panel { flex-basis: 100%; display: grid; gap: 0.75rem; min-width: 0; }
+.media-panel-head { display: none; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.media-panel-head h2 { margin: 0; font-size: 1.125rem; }
+.media-panel-fallback-heading { margin: 0 0 0.5rem; font-size: 1rem; }
+.media-panel .tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.media-panel .tab { min-width: 0; padding: 0.5rem 0.375rem; font-size: 0.875rem; white-space: normal; overflow-wrap: anywhere; }
+.media-picker-enhanced .media-panel-head { display: flex; }
+.media-picker-enhanced .media-panel-fallback-heading { display: none; }
+.media-dialog { width: min(48rem, calc(100vw - 2rem)); }
+.tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.tab { min-height: 44px; padding: 0.5rem 1rem; border: 0; border-bottom: 3px solid transparent; background: none; color: var(--muted); font: inherit; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-panel { display: grid; gap: 0.75rem; min-width: 0; }
+.media-pick-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); max-height: 55vh; overflow-y: auto; }
+.form label.media-pick { position: relative; display: grid; gap: 0.25rem; padding: 0.375rem; border: 2px solid var(--border); border-radius: 8px; cursor: pointer; font-weight: 400; min-width: 0; }
+.media-pick:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.media-pick:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
+.media-pick input { position: absolute; top: 0.5rem; left: 0.5rem; width: 1.25rem; height: 1.25rem; margin: 0; accent-color: var(--accent); }
+.media-pick-thumb { display: grid; place-items: center; aspect-ratio: 1; border-radius: 6px; background: var(--bg); overflow: hidden; }
+.media-pick-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.media-pick-name, .media-pick-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8125rem; }

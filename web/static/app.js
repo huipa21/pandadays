@@ -338,7 +338,7 @@
   if (dayForm) {
     function dayFormValues() {
       return JSON.stringify(Array.from(new FormData(dayForm).entries()).filter(function (entry) {
-        return entry[0] !== "csrf_token";
+        return entry[0] !== "csrf_token" && (typeof entry[1] === "string" || entry[1].name !== "");
       }).map(function (entry) {
         var value = entry[1];
         return [entry[0], typeof value === "string" ? value : [value.name, value.size, value.lastModified, value.type]];

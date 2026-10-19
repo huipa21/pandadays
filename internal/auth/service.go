@@ -13,6 +13,7 @@ var (
 	ErrCredentials = errors.New("invalid credentials")
 	ErrRateLimited = errors.New("login temporarily rate limited")
 	ErrIdentity    = errors.New("username and email must be nonempty and unique")
+	ErrUsername    = errors.New("username must be 4-32 lowercase letters, numbers, or hyphens")
 )
 
 type User struct {
@@ -57,12 +58,28 @@ type CreateUserParams struct {
 	Avatar             []byte
 }
 
+func ValidateUsername(username string) error {
+	if len(username) < 4 || len(username) > 32 {
+		return ErrUsername
+	}
+	for i := 0; i < len(username); i++ {
+		c := username[i]
+		if (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '-' {
+			return ErrUsername
+		}
+	}
+	return nil
+}
+
 // CreateUser atomically creates an active account and its reserved defaults.
 // Setup supplies its chosen password; admin/reset callers use RandomPassword.
 func (s *Service) CreateUser(ctx context.Context, p CreateUserParams, now time.Time) (*User, error) {
 	p.Username, p.Email = strings.TrimSpace(p.Username), strings.TrimSpace(p.Email)
 	if p.Username == "" || p.Email == "" {
 		return nil, ErrIdentity
+	}
+	if err := ValidateUsername(p.Username); err != nil {
+		return nil, err
 	}
 	if err := validatePreferences(p.Lang, p.Timezone); err != nil {
 		return nil, err
@@ -89,6 +106,9 @@ func (s *Service) CreateUser(ctx context.Context, p CreateUserParams, now time.T
 // insertUser expects trimmed, nonempty identities and an already computed
 // hash, so callers avoid running bcrypt while holding the write lock.
 func insertUser(ctx context.Context, tx *sql.Tx, p CreateUserParams, hash string, now time.Time) (*User, error) {
+	if err := ValidateUsername(p.Username); err != nil {
+		return nil, err
+	}
 	if err := validateProfile(p.DisplayName, p.Comment, p.Avatar); err != nil {
 		return nil, err
 	}

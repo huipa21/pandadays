@@ -45,7 +45,7 @@ func TestMessagesBadgeDecisionsAndAuthorization(t *testing.T) {
 		t.Fatalf("attachments = %+v, %v", files, err)
 	}
 	filePath := "/attachments/" + strconv.FormatInt(files[0].ID, 10)
-	sh, err := s.shares.Create(ctx, owner.ID, share.TargetDay, day.ID, []string{"Bob"}, true, s.now())
+	sh, err := s.shares.Create(ctx, owner.ID, share.TargetDay, day.ID, []string{"bob1"}, true, s.now())
 	if err != nil {
 		t.Fatal(err)
 	}

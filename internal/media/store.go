@@ -301,6 +301,54 @@ func (s *Store) ListDay(ctx context.Context, ownerID, dayID int64) ([]Attachment
 	return out, nil
 }
 
+// LibraryItem is an owned attachment together with the day it belongs to.
+type LibraryItem struct {
+	Attachment
+	DayTitle string
+}
+
+// ListOwner returns every attachment the owner uploaded, newest first.
+func (s *Store) ListOwner(ctx context.Context, ownerID int64) ([]LibraryItem, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT a.id, a.day_id, a.owner_id, a.uuid, a.kind, a.filename, a.mime, a.size, a.created_at, d.title
+		FROM attachments a JOIN days d ON d.id = a.day_id
+		WHERE a.owner_id = ? AND d.owner_id = ? ORDER BY a.created_at DESC, a.id DESC`, ownerID, ownerID)
+	if err != nil {
+		return nil, fmt.Errorf("list media library: %w", err)
+	}
+	defer rows.Close()
+	var out []LibraryItem
+	for rows.Next() {
+		var item LibraryItem
+		var created int64
+		if err := rows.Scan(&item.ID, &item.DayID, &item.OwnerID, &item.UUID, &item.Kind, &item.Filename,
+			&item.MIME, &item.Size, &created, &item.DayTitle); err != nil {
+			return nil, fmt.Errorf("scan media library item: %w", err)
+		}
+		item.CreatedAt = time.Unix(created, 0).UTC()
+		out = append(out, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate media library: %w", err)
+	}
+	return out, nil
+}
+
+// CopyToDay attaches a copy of an owned attachment to another owned day. The
+// copy is an independent file so deleting either one leaves the other intact;
+// it counts against the same per-day and account quotas as an upload.
+func (s *Store) CopyToDay(ctx context.Context, ownerID, attachmentID, dayID int64) (Attachment, error) {
+	src, err := s.Get(ctx, ownerID, attachmentID)
+	if err != nil {
+		return Attachment{}, err
+	}
+	f, err := os.Open(s.Path(ownerID, src))
+	if err != nil {
+		return Attachment{}, fmt.Errorf("open library attachment: %w", err)
+	}
+	defer f.Close()
+	return s.Upload(ctx, ownerID, dayID, src.Filename, f)
+}
+
 func (s *Store) ListAccessibleDay(ctx context.Context, viewerID, dayID int64) ([]Attachment, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT a.id, a.day_id, a.owner_id, a.uuid, a.kind, a.filename, a.mime, a.size, a.created_at
 		FROM attachments a JOIN days d ON d.id = a.day_id
@@ -445,4 +493,23 @@ func (s *Store) SetBackground(ctx context.Context, ownerID, dayID, attachmentID 
 
 func (s *Store) Path(ownerID int64, a Attachment) string {
 	return filepath.Join(s.root, strconv.FormatInt(ownerID, 10), a.UUID)
+}
+
+func (s *Store) ClearBackground(ctx context.Context, ownerID, dayID, attachmentID int64) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE days SET style_bg_attachment_id = NULL
+		WHERE id = ? AND owner_id = ? AND EXISTS (
+			SELECT 1 FROM attachments a WHERE a.id = ? AND a.day_id = days.id
+			AND a.owner_id = days.owner_id AND a.kind = 'image'
+		)`, dayID, ownerID, attachmentID)
+	if err != nil {
+		return fmt.Errorf("clear attachment background: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check background removal: %w", err)
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

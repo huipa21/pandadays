@@ -28,6 +28,7 @@
     <a href="/shared">{{t "sharing.title"}}</a>
     <a href="/collections">{{t "nav.collections"}}</a>
     <a href="/tags">{{t "nav.tags"}}</a>
+    <a href="/media">{{t "nav.media"}}</a>
     {{end}}
     {{if .IsAdmin}}<a href="/admin/users">{{t "admin.users"}}</a>
     <a href="/admin/backup">{{t "backup.title"}}</a>
@@ -106,6 +107,48 @@
     <a class="btn btn-secondary" href="/admin/users/{{.ID}}" data-close-dialog>{{t "admin.cancel"}}</a>
     <button class="btn btn-danger" type="submit">{{t "admin.delete"}}</button>
   </form>{{end}}{{end}}
+{{define "media-thumb"}}{{if eq .Kind "image"}}<img src="/attachments/{{.ID}}" alt="" loading="lazy">{{else}}<span class="media-thumb-icon" aria-hidden="true">{{if eq .Kind "audio"}}🎵{{else if eq .Kind "video"}}🎬{{else}}📄{{end}}</span>{{end}}{{end}}
+{{define "media-picker-panel"}}
+<div class="media-panel" id="media-panel" data-media-panel>
+  <div class="media-panel-head">
+    <h2 id="media-panel-heading">{{t "media.attach"}}</h2>
+    <button type="button" class="btn" data-media-done hidden>{{t "media.done"}}</button>
+  </div>
+  <div class="tabs" role="tablist" aria-label="{{t "media.attach"}}" data-media-tabs hidden>
+    <button type="button" class="tab" role="tab" id="media-tab-library" aria-controls="media-library" aria-selected="true">{{t "media.tab.library"}}</button>
+    <button type="button" class="tab" role="tab" id="media-tab-upload" aria-controls="media-upload" aria-selected="false" tabindex="-1">{{t "media.tab.upload"}}</button>
+    <button type="button" class="tab" role="tab" id="media-tab-voice" aria-controls="media-voice" aria-selected="false" tabindex="-1">{{t "media.tab.voice"}}</button>
+  </div>
+  <div class="tab-panel" id="media-library" role="tabpanel" aria-labelledby="media-tab-library">
+    <h3 class="media-panel-fallback-heading">{{t "media.tab.library"}}</h3>
+    {{if .Library}}<ul class="media-pick-grid">
+      {{range .Library}}<li><label class="media-pick" title="{{.Filename}}">
+        <input type="checkbox" name="library" value="{{.ID}}"{{if index $.Picked .ID}} checked{{end}}>
+        <span class="media-pick-thumb">{{template "media-thumb" .}}</span>
+        <span class="media-pick-name">{{.Filename}}</span>
+      </label></li>{{end}}
+    </ul><p class="hint">{{t "media.copy_hint"}}</p>
+    {{else}}<p class="hint">{{t "media.empty"}}</p>{{end}}
+  </div>
+  <div class="tab-panel" id="media-upload" role="tabpanel" aria-labelledby="media-tab-upload">
+    <h3 class="media-panel-fallback-heading">{{t "media.tab.upload"}}</h3>
+    <label>{{t "attachments.choose_file"}}<input type="file" name="file" multiple data-media-files></label>
+    <p class="hint">{{t "attachments.create_hint"}}</p>
+  </div>
+  <div class="tab-panel" id="media-voice" role="tabpanel" aria-labelledby="media-tab-voice">
+    <h3 class="media-panel-fallback-heading">{{t "media.tab.voice"}}</h3>
+    <p class="hint" data-record-unavailable>{{t "attachments.record_error"}}</p>
+    <div class="voice-controls" hidden data-record-start="{{t "attachments.record_start"}}"
+         data-record-stop="{{t "attachments.record_stop"}}" data-recording="{{t "attachments.recording"}}"
+         data-record-error="{{t "attachments.record_error"}}" data-record-ready="{{t "media.voice_ready"}}">
+      <button type="button" class="btn" data-record-button>{{t "attachments.record_start"}}</button>
+      <span role="status" aria-live="polite" data-record-status></span>
+      <audio controls hidden data-record-preview></audio>
+      <input type="file" name="file" hidden data-record-file>
+    </div>
+  </div>
+</div>
+{{end}}
 {{define "group-name"}}{{if .Reserved}}{{t "groups.default"}}{{else}}{{.Name}}{{end}}{{end}}
 {{define "swatch"}}<svg class="swatch" viewBox="0 0 16 16" aria-hidden="true">{{if .}}<circle cx="8" cy="8" r="7" fill="{{.}}"/>{{else}}<circle class="swatch-none" cx="8" cy="8" r="6"/>{{end}}</svg>{{end}}
 {{define "group-color-fields"}}<div class="color-row" data-color-picker>

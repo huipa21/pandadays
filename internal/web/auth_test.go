@@ -19,7 +19,7 @@ func authenticatedServer(t *testing.T) (*Server, *sql.DB, *auth.User, string) {
 	db := dbtest.Open(t)
 	s := newTestServerWith(t, func(string) string { return "" }, db)
 	u, err := s.auth.CreateUser(context.Background(), auth.CreateUserParams{
-		Username: "Alice", Email: "alice@example.com", Password: "password123",
+		Username: "alice", Email: "alice@example.com", Password: "password123", DisplayName: "Alice",
 	}, time.Now())
 	if err != nil {
 		t.Fatal(err)

@@ -3,9 +3,7 @@ package web
 import (
 	"errors"
 	"fmt"
-	"io"
 	"mime"
-	"mime/multipart"
 	"net/http"
 	"os"
 
@@ -50,57 +48,77 @@ func (s *Server) handleAttachmentUpload(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, multipartBodyLimit(remaining))
+	if r.MultipartForm == nil {
+		if err := r.ParseMultipartForm(32 << 20); err != nil {
+			if r.MultipartForm != nil {
+				r.MultipartForm.RemoveAll()
+			}
+			s.uploadReadError(w, r, err)
+			return
+		}
+	}
 
 	if r.MultipartForm != nil {
 		defer r.MultipartForm.RemoveAll()
 		files := r.MultipartForm.File["file"]
-		if len(files) != 1 {
+		form := parseDayForm(r)
+		if len(files) == 0 && len(form.LibraryIDs) == 0 {
 			s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 			return
 		}
-		file, err := files[0].Open()
-		if err != nil {
-			s.attachmentError(w, r, "open submitted attachment", err)
-			return
+		var library []media.Attachment
+		for _, id := range form.LibraryIDs {
+			a, err := s.media.Get(r.Context(), ownerID, id)
+			if errors.Is(err, media.ErrNotFound) {
+				http.NotFound(w, r)
+				return
+			}
+			if err != nil {
+				s.attachmentError(w, r, "read library selection", err)
+				return
+			}
+			library = append(library, a)
 		}
-		defer file.Close()
-		s.saveAttachment(w, r, ownerID, dayID, remaining, files[0].Filename, file)
+		allowance := remaining
+		sizes := make([]int64, 0, len(library)+len(files))
+		for _, a := range library {
+			sizes = append(sizes, a.Size)
+		}
+		for _, file := range files {
+			sizes = append(sizes, file.Size)
+		}
+		for _, size := range sizes {
+			if size > allowance {
+				s.authError(w, r, "attachments.error.limit", http.StatusRequestEntityTooLarge)
+				return
+			}
+			allowance -= size
+		}
+		for _, a := range library {
+			if _, err := s.media.CopyToDay(r.Context(), ownerID, a.ID, dayID); err != nil {
+				s.attachmentSaveError(w, r, "copy selected attachment", err)
+				return
+			}
+		}
+		for _, header := range files {
+			file, err := header.Open()
+			if err == nil {
+				_, err = s.media.Upload(r.Context(), ownerID, dayID, header.Filename, file)
+				closeErr := file.Close()
+				if err == nil {
+					err = closeErr
+				}
+			}
+			if err != nil {
+				s.attachmentSaveError(w, r, "save selected attachment", err)
+				return
+			}
+		}
+		authRedirect(w, r, dayPath(dayID)+"#attachments")
 		return
 	}
 
-	mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil || mediaType != "multipart/form-data" || params["boundary"] == "" {
-		s.authError(w, r, "error.bad_request", http.StatusBadRequest)
-		return
-	}
-	reader := multipart.NewReader(r.Body, params["boundary"])
-	for {
-		part, err := reader.NextPart()
-		if errors.Is(err, io.EOF) {
-			s.authError(w, r, "error.bad_request", http.StatusBadRequest)
-			return
-		}
-		if err != nil {
-			s.uploadReadError(w, r, err)
-			return
-		}
-		if part.FormName() != "file" {
-			if _, err := io.Copy(io.Discard, part); err != nil {
-				s.uploadReadError(w, r, err)
-				return
-			}
-			continue
-		}
-		filename := part.FileName()
-		if filename == "" {
-			part.Close()
-			s.authError(w, r, "error.bad_request", http.StatusBadRequest)
-			return
-		}
-		s.saveAttachment(w, r, ownerID, dayID, remaining, filename, part)
-		part.Close()
-		return
-	}
+	s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 }
 
 func multipartBodyLimit(remaining int64) int64 {
@@ -111,31 +129,25 @@ func multipartBodyLimit(remaining int64) int64 {
 	return remaining + multipartOverheadLimit
 }
 
-func (s *Server) saveAttachment(w http.ResponseWriter, r *http.Request, ownerID, dayID, allowance int64, filename string, src io.Reader) {
-	limited := http.MaxBytesReader(w, io.NopCloser(src), allowance)
-	_, err := s.media.Upload(r.Context(), ownerID, dayID, filename, limited)
-	if err != nil {
-		if errors.Is(err, media.ErrQuota) || errors.Is(err, media.ErrTooLarge) {
-			s.authError(w, r, "attachments.error.limit", http.StatusRequestEntityTooLarge)
-			return
-		}
-		var maxErr *http.MaxBytesError
-		if errors.As(err, &maxErr) {
-			s.authError(w, r, "attachments.error.limit", http.StatusRequestEntityTooLarge)
-			return
-		}
-		if errors.Is(err, media.ErrUploadStream) {
-			s.authError(w, r, "error.bad_request", http.StatusBadRequest)
-			return
-		}
-		if errors.Is(err, media.ErrNotFound) {
-			http.NotFound(w, r)
-			return
-		}
-		s.attachmentError(w, r, "upload", err)
+func (s *Server) attachmentSaveError(w http.ResponseWriter, r *http.Request, op string, err error) {
+	if errors.Is(err, media.ErrQuota) || errors.Is(err, media.ErrTooLarge) {
+		s.authError(w, r, "attachments.error.limit", http.StatusRequestEntityTooLarge)
 		return
 	}
-	authRedirect(w, r, dayPath(dayID)+"#attachments")
+	var maxErr *http.MaxBytesError
+	if errors.As(err, &maxErr) {
+		s.authError(w, r, "attachments.error.limit", http.StatusRequestEntityTooLarge)
+		return
+	}
+	if errors.Is(err, media.ErrUploadStream) {
+		s.authError(w, r, "error.bad_request", http.StatusBadRequest)
+		return
+	}
+	if errors.Is(err, media.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	s.attachmentError(w, r, op, err)
 }
 
 func (s *Server) uploadReadError(w http.ResponseWriter, r *http.Request, err error) {
@@ -169,6 +181,10 @@ func (s *Server) handleAttachmentDelete(w http.ResponseWriter, r *http.Request) 
 	case err != nil:
 		s.attachmentError(w, r, "delete", err)
 	default:
+		if r.PostFormValue("return_to") == "/media" {
+			authRedirect(w, r, "/media")
+			return
+		}
 		authRedirect(w, r, dayPath(attachment.DayID)+"#attachments")
 	}
 }
@@ -182,7 +198,12 @@ func (s *Server) handleAttachmentBackground(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	err := s.media.SetBackground(r.Context(), CurrentUser(r.Context()).ID, dayID, attachmentID)
+	var err error
+	if r.PostFormValue("clear") == "1" {
+		err = s.media.ClearBackground(r.Context(), CurrentUser(r.Context()).ID, dayID, attachmentID)
+	} else {
+		err = s.media.SetBackground(r.Context(), CurrentUser(r.Context()).ID, dayID, attachmentID)
+	}
 	switch {
 	case errors.Is(err, media.ErrNotFound):
 		http.NotFound(w, r)

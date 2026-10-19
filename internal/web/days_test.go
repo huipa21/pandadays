@@ -60,7 +60,11 @@ func TestDayNewFormDefaults(t *testing.T) {
 	for _, want := range []string{
 		`action="/days"`,
 		`enctype="multipart/form-data"`,
-		`<input type="file" name="file" multiple>`,
+		`<input type="file" name="file" multiple data-media-files>`,
+		`data-media-picker`,
+		`role="tab" id="media-tab-library" aria-controls="media-library"`,
+		`role="tab" id="media-tab-upload" aria-controls="media-upload"`,
+		`media-picker.js`,
 		`data-day-form data-unsaved="false"`,
 		`name="date" value="` + today + `"`,
 		`<option value="none" selected>Does not repeat</option>`,
@@ -222,7 +226,8 @@ func TestDayEditAndDelete(t *testing.T) {
 	}
 	path := dayPath(d.ID)
 	if rr := get(s.Handler(), path+"/edit", token); rr.Code != 200 || !strings.Contains(rr.Body.String(), `value="Trip"`) ||
-		!strings.Contains(rr.Body.String(), `action="`+path+`/edit"`) || !strings.Contains(rr.Body.String(), path+"/delete") ||
+		!strings.Contains(rr.Body.String(), `action="`+path+`/edit"`) || strings.Contains(rr.Body.String(), path+"/delete") ||
+		strings.Contains(rr.Body.String(), `#attachments`) ||
 		!strings.Contains(rr.Body.String(), `data-day-form data-unsaved="false"`) {
 		t.Fatalf("edit form: %d", rr.Code)
 	}

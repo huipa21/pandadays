@@ -26,7 +26,7 @@ func sessionPost(t *testing.T, s *Server, path, token string, form url.Values) *
 func secondUser(t *testing.T, s *Server) (*auth.User, string) {
 	t.Helper()
 	u, err := s.auth.CreateUser(context.Background(), auth.CreateUserParams{
-		Username: "Bob", Email: "bob@example.com", Password: "password123",
+		Username: "bob1", Email: "bob@example.com", Password: "password123",
 	}, time.Now())
 	if err != nil {
 		t.Fatal(err)

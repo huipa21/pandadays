@@ -30,6 +30,10 @@ func testService(t *testing.T) (*Service, *sql.DB) {
 
 func testUser(t *testing.T, s *Service, name string) *User {
 	t.Helper()
+	name = strings.ToLower(name)
+	if len(name) < 4 {
+		name += "1"
+	}
 	u, err := s.CreateUser(context.Background(), CreateUserParams{
 		Username: name, Email: name + "@example.com", Password: "password123",
 	}, testNow)
@@ -37,6 +41,28 @@ func testUser(t *testing.T, s *Service, name string) *User {
 		t.Fatal(err)
 	}
 	return u
+}
+
+func TestValidateUsername(t *testing.T) {
+	for _, tc := range []struct {
+		username string
+		valid    bool
+	}{
+		{"abcd", true},
+		{"a1-b", true},
+		{strings.Repeat("a", 32), true},
+		{"abc", false},
+		{strings.Repeat("a", 33), false},
+		{"Abcd", false},
+		{"ab_cd", false},
+		{"ab.cd", false},
+		{"ab cd", false},
+		{"猫abc", false},
+	} {
+		if err := ValidateUsername(tc.username); (err == nil) != tc.valid {
+			t.Errorf("ValidateUsername(%q) err=%v, want valid=%v", tc.username, err, tc.valid)
+		}
+	}
 }
 
 func TestPasswordPolicy(t *testing.T) {
@@ -123,23 +149,27 @@ func TestCreateUserDefaultsAndRollback(t *testing.T) {
 	if ok, err := CheckPassword(hash, "password123"); err != nil || !ok {
 		t.Fatalf("stored password invalid: %v", err)
 	}
-	for _, p := range []CreateUserParams{
-		{Username: "ALICE", Email: "other@example.com"},
-		{Username: "other", Email: "ALICE@EXAMPLE.COM"},
-		{Username: "Alice@example.com", Email: "other@example.com"},
-		{Username: "other", Email: "alice"},
-		{Username: " ", Email: "other@example.com"},
+	for _, tc := range []struct {
+		p         CreateUserParams
+		wantError error
+	}{
+		{CreateUserParams{Username: "alice", Email: "other@example.com"}, ErrIdentity},
+		{CreateUserParams{Username: "other", Email: "ALICE@EXAMPLE.COM"}, ErrIdentity},
+		{CreateUserParams{Username: "Alice@example.com", Email: "other@example.com"}, ErrUsername},
+		{CreateUserParams{Username: "other", Email: "alice"}, ErrIdentity},
+		{CreateUserParams{Username: " ", Email: "other@example.com"}, ErrIdentity},
+		{CreateUserParams{Username: "abc", Email: "short@example.com"}, ErrUsername},
 	} {
-		p.Password = "password123"
-		if _, err := s.CreateUser(ctx, p, testNow); !errors.Is(err, ErrIdentity) {
-			t.Fatalf("duplicate/empty identity accepted: %v", err)
+		tc.p.Password = "password123"
+		if _, err := s.CreateUser(ctx, tc.p, testNow); !errors.Is(err, tc.wantError) {
+			t.Fatalf("invalid identity accepted: got %v, want %v", err, tc.wantError)
 		}
 	}
 	if _, err := db.Exec(`CREATE TRIGGER fail_default_tag BEFORE INSERT ON tags
 		BEGIN SELECT RAISE(ABORT, 'test failure'); END`); err != nil {
 		t.Fatal(err)
 	}
-	_, err := s.CreateUser(ctx, CreateUserParams{Username: "Carol", Email: "carol@example.com", Password: "password123"}, testNow)
+	_, err := s.CreateUser(ctx, CreateUserParams{Username: "carol", Email: "carol@example.com", Password: "password123"}, testNow)
 	if err == nil {
 		t.Fatal("expected reserved tag failure")
 	}

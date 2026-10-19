@@ -50,6 +50,9 @@ func newFixture(t *testing.T) *fixture {
 
 func (f *fixture) user(t *testing.T, name string) int64 {
 	t.Helper()
+	if len(name) < 4 {
+		name += "1"
+	}
 	svc, err := auth.NewService(f.db)
 	if err != nil {
 		t.Fatal(err)

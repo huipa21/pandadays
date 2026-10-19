@@ -108,7 +108,7 @@ func TestSearchIncludesOnlyAuthorizedVisibleShares(t *testing.T) {
 	if rr.Code != http.StatusOK || strings.Join(listedTitles(rr.Body.String()), "|") != "Match accepted" {
 		t.Fatalf("search access boundary: %d, %v", rr.Code, listedTitles(rr.Body.String()))
 	}
-	if !strings.Contains(rr.Body.String(), "From @Bob") || strings.Contains(rr.Body.String(), "private comment") {
+	if !strings.Contains(rr.Body.String(), "From @bob1") || strings.Contains(rr.Body.String(), "private comment") {
 		t.Fatal("search lost shared metadata or exposed private comments")
 	}
 }

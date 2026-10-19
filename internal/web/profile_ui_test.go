@@ -57,7 +57,7 @@ func TestProfileAndUserInterface(t *testing.T) {
 	s, _, actor, token := authenticatedServer(t)
 	target, regularToken := secondUser(t, s)
 	makeAdmin(t, s, actor.ID)
-	fields := url.Values{"username": {"NewPanda"}, "display_name": {"New Panda"}, "email": {"new@example.com"}, "comment": {"Private notes"}}
+	fields := url.Values{"username": {"newpanda"}, "display_name": {"New Panda"}, "email": {"new@example.com"}, "comment": {"Private notes"}}
 	var avatar bytes.Buffer
 	if err := png.Encode(&avatar, image.NewRGBA(image.Rect(0, 0, 2, 2))); err != nil {
 		t.Fatal(err)
@@ -68,7 +68,7 @@ func TestProfileAndUserInterface(t *testing.T) {
 	}
 	temporaryPassword(t, rr.Body.String())
 	var id int64
-	if err := s.db.QueryRow(`SELECT id FROM users WHERE username = 'NewPanda'`).Scan(&id); err != nil {
+	if err := s.db.QueryRow(`SELECT id FROM users WHERE username = 'newpanda'`).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
 	path := "/admin/users/" + strconv.FormatInt(id, 10)

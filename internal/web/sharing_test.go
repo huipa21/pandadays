@@ -21,7 +21,7 @@ func TestSharingFlowAndReadOnlyRecipientViews(t *testing.T) {
 	s.media = media.New(s.db, filepath.Join(t.TempDir(), "media"))
 	bob, bobToken := secondUser(t, s)
 	carol, err := s.auth.CreateUser(context.Background(), auth.CreateUserParams{
-		Username: "Carol", Email: "carol@example.com", Password: "password123",
+		Username: "carol", Email: "carol@example.com", Password: "password123",
 	}, time.Now())
 	if err != nil {
 		t.Fatal(err)
@@ -48,7 +48,7 @@ func TestSharingFlowAndReadOnlyRecipientViews(t *testing.T) {
 
 	path := dayPath(day.ID) + "/shares"
 	create := sessionPost(t, s, path, ownerToken, url.Values{
-		"recipients":   {"bob, CAROL@example.com"},
+		"recipients":   {"bob1, CAROL@example.com"},
 		"show_comment": {"1"},
 	})
 	if create.Code != http.StatusSeeOther || create.Header().Get("Location") != dayPath(day.ID)+"#day-sharing" {
@@ -57,14 +57,14 @@ func TestSharingFlowAndReadOnlyRecipientViews(t *testing.T) {
 	acceptAllInvitations(t, s, bobToken, bob.ID)
 
 	home := get(s.Handler(), "/", bobToken)
-	for _, want := range []string{"Shared birthday", "day-shared", "From @Alice"} {
+	for _, want := range []string{"Shared birthday", "day-shared", "From @alice"} {
 		if !strings.Contains(home.Body.String(), want) {
 			t.Errorf("recipient Home missing %q", want)
 		}
 	}
 	detail := get(s.Handler(), dayPath(day.ID), bobToken)
 	body := detail.Body.String()
-	for _, want := range []string{"Shared birthday", "Visible comment", "From @Alice", "Attachments", "shared-note.txt"} {
+	for _, want := range []string{"Shared birthday", "Visible comment", "From @alice", "Attachments", "shared-note.txt"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("shared card missing %q", want)
 		}
@@ -101,7 +101,7 @@ func TestSharingFlowAndReadOnlyRecipientViews(t *testing.T) {
 		t.Fatalf("owner share list: %+v, %v", shares, err)
 	}
 	update := sessionPost(t, s, "/shares/"+strconv.FormatInt(shares[0].ID, 10)+"/edit",
-		ownerToken, url.Values{"recipients": {"Bob"}})
+		ownerToken, url.Values{"recipients": {"bob1"}})
 	if update.Code != http.StatusSeeOther {
 		t.Fatalf("update share: %d %s", update.Code, update.Body.String())
 	}
@@ -139,7 +139,7 @@ func TestCollectionSharingIsLiveAndHidesArchivedDays(t *testing.T) {
 		t.Fatal(err)
 	}
 	shareResponse := sessionPost(t, s, "/collections/"+strconv.FormatInt(collection.ID, 10)+"/shares",
-		ownerToken, url.Values{"recipients": {"Bob"}})
+		ownerToken, url.Values{"recipients": {"bob1"}})
 	if shareResponse.Code != http.StatusSeeOther {
 		t.Fatalf("create collection share: %d %s", shareResponse.Code, shareResponse.Body.String())
 	}

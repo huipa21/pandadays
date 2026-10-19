@@ -85,7 +85,7 @@ func TestLoginSuccess(t *testing.T) {
 		t.Fatalf("non-persistent login must set a session cookie: %+v", cookie)
 	}
 	home := get(h, "/", cookie.Value)
-	if home.Code != 200 || !strings.Contains(home.Body.String(), "Alice") ||
+	if home.Code != 200 || !strings.Contains(home.Body.String(), "alice") ||
 		!strings.Contains(home.Body.String(), `action="/logout"`) {
 		t.Fatalf("logged-in home not rendered: %d", home.Code)
 	}

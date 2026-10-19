@@ -79,6 +79,14 @@ test("CSRF token changes are not unsaved user data", () => {
   assert.equal(f.warns(), false);
 });
 
+test("unselected upload and recording inputs do not trigger exit warnings", () => {
+  const f = fixture();
+  f.form.fields.push(["file", { name: "", size: 0, lastModified: 1, type: "application/octet-stream" }]);
+  assert.equal(f.warns(), false);
+  f.form.fields[f.form.fields.length - 1][1].lastModified = 2;
+  assert.equal(f.warns(), false);
+});
+
 test("server validation errors remain protected without further editing", () => {
   assert.equal(fixture({ unsaved: true }).warns(), true);
 });

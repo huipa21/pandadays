@@ -216,6 +216,7 @@ func (s *Server) routes() http.Handler {
 		s.registerGroupRoutes(mux, s.tags, "tags")
 		s.registerDayRoutes(mux)
 		s.registerAttachmentRoutes(mux)
+		s.registerMediaRoutes(mux)
 		s.registerShareRoutes(mux)
 		s.registerAdminRoutes(mux)
 		s.registerPortabilityRoutes(mux)

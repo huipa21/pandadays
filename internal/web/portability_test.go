@@ -95,7 +95,7 @@ func TestExportDownload(t *testing.T) {
 	if rr.Code != http.StatusOK || rr.Header().Get("Content-Type") != "application/zip" {
 		t.Fatalf("export: %d %v", rr.Code, rr.Header())
 	}
-	if cd := rr.Header().Get("Content-Disposition"); !strings.HasPrefix(cd, `attachment; filename=pandadays-export-Alice-`) {
+	if cd := rr.Header().Get("Content-Disposition"); !strings.HasPrefix(cd, `attachment; filename=pandadays-export-alice-`) {
 		t.Fatalf("Content-Disposition = %q", cd)
 	}
 	data := rr.Body.Bytes()
@@ -138,7 +138,7 @@ func TestImportPreviewAndConfirm(t *testing.T) {
 
 	// Another user cannot confirm Alice's upload.
 	bob, err := s.auth.CreateUser(context.Background(), auth.CreateUserParams{
-		Username: "Bob", Email: "bob@example.com", Password: "password123",
+		Username: "bob1", Email: "bob@example.com", Password: "password123",
 	}, time.Now())
 	if err != nil {
 		t.Fatal(err)

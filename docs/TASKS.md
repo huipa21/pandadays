@@ -273,6 +273,21 @@ Status legend: `[ ]` todo, `[x]` done.
 - **Done when**: identity/re-authentication/avatar tests, full Go tests/vet, and 375px/1280px browser checks pass.
 - Verified: full Go tests/vet and CGO-free build. Chromium checks at 375px/1280px (English/light, Chinese/dark) confirm avatar picker preview, X removal, fixed username, password prompt appearing only after an email edit, wrong-password rejection with retained input, successful email change, the Profile/Settings menu, and no horizontal overflow.
 
+### [x] T33 Media library and attachment picker
+- Header **Media** link (`/media`, users only) lists every attachment the user uploaded across their days, newest first, with previews, size, upload time, source-day link, and delete (returning to the library).
+- On the new-day form, **Add attachments** opens a modal dialog with **Media library** and **Upload file** tabs (keyboard arrow/Home/End navigation, Done/Escape). A status line summarizes library picks and new files. Without JavaScript both sections render inline.
+- Picked library items are copied into independent attachments of the new day, counting toward the per-day and account quotas together with uploads. Foreign or unknown IDs return 404 without creating a day; picks survive validation and quota errors.
+- **Done when**: library scoping/authorization/copy/quota tests, full Go tests/vet, JavaScript tests, and 375px/1280px browser checks pass.
+- Verified: full Go tests/vet and all 20 JavaScript tests pass. Chromium checks at 375px/1280px confirm the header link, library grid, tabbed picker dialog, selection status, Escape/Done, and creating a day with two library copies plus one upload.
+
+### [x] T34 Unified media tabs and focused previews
+- Share Media library / Upload file / Voice recording tabs between new-day creation and the card's attachment manager; recordings are previewed and submitted with the selected files.
+- Keep only Save below edit fields; retain attachment and delete actions in the card menu.
+- Clear image backgrounds without removing the image attachment, with owner-scoped authorization.
+- Keep the media library grid compact; show details, source, original link, and deletion only in the item preview, beside the media on desktop and below on mobile.
+- **Done when**: ownership, combined quota, background-preservation and UI tests pass; full Go tests/vet and browser checks at 375px/1280px pass.
+- Verified: full Go tests/vet and all 26 JavaScript tests pass. Browser checks at 375px/1280px cover tab layout and keyboard navigation, Save-only edit forms, compact media grids and responsive preview details, background removal preserving attachments, and creation with a library copy, upload, and mocked microphone recording. Existing-day library copies also save through the tabbed manager.
+
 ## Dependency Graph
 
 ```mermaid

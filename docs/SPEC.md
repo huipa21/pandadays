@@ -49,7 +49,7 @@ neither needs a deployment environment setting.
 ## 2. Roles
 
 - **Admin**: site administration only: Users, Backup/Restore, and Site Settings. The avatar/username menu contains Profile, Settings, and Sign out. Admins land on Users and cannot access personal days, archive, sharing, collections, tags, attachments, or import/export routes. Existing owned data is preserved.
-- **User**: manages own days, collections, tags, attachments, shares; views days shared with them.
+- **User**: manages own days, collections, tags, attachments (including the media library), shares; views days shared with them.
 - **No self-registration.** Only admin creates users.
 
 ---
@@ -82,6 +82,14 @@ do not create a day; files must be selected again after validation errors. If a
 storage failure occurs after the day is saved, the error explicitly identifies
 the saved day and links to its attachment manager rather than inviting duplicate
 creation. Selected files participate in unsaved-change warnings.
+Create and the card menu's attachment manager share Media library, Upload file,
+and Voice recording tabs. Recordings can be previewed before saving/uploading;
+unsupported browsers show an explicit microphone/recording availability message.
+The edit form contains day fields and Save only; attachments and deletion remain
+in the card menu. An image background can be cleared without deleting its attachment.
+The media library uses a compact thumbnail/name grid. Opening an item shows its
+preview with details, source day, original-file link, and Delete in a side column
+(stacked below the preview on mobile).
 
 With JavaScript, tags use a multiline editor: typing `#` filters the owner's
 existing tags, with click or arrow-key/Enter selection, Escape dismissal, and
@@ -209,6 +217,7 @@ themselves or the last active admin; these checks run inside the write transacti
 ### 4.1 Initial setup
 - On startup, if no admin exists and no valid setup token exists: generate a random 32-byte token, store only its SHA-256 hash with `expires_at = now + 1h`, print the token to stdout (container logs) once.
 - `/setup` accepts the token + admin username, email, password. Token is **one-time**: deleted on success. Expired → rejected; restart the container to issue a new one.
+- Usernames contain 4–32 characters and may use only lowercase ASCII letters, numbers, and hyphens.
 - After an admin exists, `/setup` returns 404.
 
 ### 4.2 Login
@@ -245,7 +254,7 @@ Other subcommands:
 - Settings (`/settings`, in the avatar menu) holds timezone, storage usage, and backup & restore (personal export/import). Admins see timezone only.
 - Display names are at most 100 characters; optional administrative comments are at most 10,000. Avatars are optional validated PNG/JPEG uploads, at most 1 MiB and 2048 × 2048 pixels, stored in SQLite and included in full backups. They are separate from day-attachment quotas and accessible only to the account owner or an administrator.
 - Users has a reusable, fixed-style search field with an inset magnifier, Enter-to-search, and an adjacent plus-icon create link. Search matches username, display name, or email case-insensitively.
-- Creation fields are username, display name, optional avatar, email, and optional comment. The compact list shows username, display name, created time, days used, and active/inactive status. Times display in the viewing admin's saved timezone, or the browser timezone when none is saved. Clicking a row opens its detail page.
+- Creation fields are username (4–32 lowercase ASCII letters, numbers, and hyphens), display name, optional avatar, email, and optional comment. The compact list shows username, display name, created time, days used, and active/inactive status. Times display in the viewing admin's saved timezone, or the browser timezone when none is saved. Clicking a row opens its detail page.
 - List rows and the detail page share a three-dot menu with Edit, Enable/Disable, Reset password, and Delete. Delete opens a modal dialog (loaded from `GET /admin/users/{id}/delete`, which is also a no-JS confirmation page) showing all of the user's details and usage before the confirmed delete; self-disable/delete remain unavailable. Detail shows identity, avatar, timezone, language, role, status, creation time, comment, password-change requirement, and effective quota/usage with editable quota overrides for regular users. A back-arrow icon returns to Users.
 
 ---
@@ -258,6 +267,8 @@ Other subcommands:
 - Served only via `/attachments/{id}` with authorization (owner or valid share recipient). Headers: `X-Content-Type-Options: nosniff`; images/audio/video inline with sniffed type; everything else (and any HTML/SVG/XML) as `Content-Disposition: attachment` with `application/octet-stream`. Support HTTP range requests (`http.ServeContent`) for media playback.
 - Limits: per-card total ≤ `max_card_bytes`; per-user total ≤ `quota_bytes`. `users.used_bytes` maintained transactionally.
 - Deleting an attachment/day deletes files and decrements `used_bytes`. If the deleted attachment was the card background, style falls back to default.
+- Media library: a header **Media** link (users only; admins get 404) opens `/media`, listing every attachment the user owns across all days, newest first, as thumbnails and filenames. Opening `/media/{id}` shows a larger preview with size, upload time, type, source day, original-file link, and delete (returning to the library). Shared-with-me attachments are not included.
+- Attachment picker: **Add attachments** opens a modal dialog on creation; the card attachment manager uses the same **Media library**, **Upload file**, and **Voice recording** tabs inline within its dialog. Without JavaScript all sections render inline, with recording explicitly unavailable. Picked library items (`library` form values) are copied into independent attachments of the target day, so deleting either copy leaves the other intact. Copies, uploads, and recordings are checked together against the per-card and account quotas before saving attachments (and before creating a new day). Library IDs not owned by the user return 404 and create nothing. New-day library picks are retained after validation or quota errors; files must be selected again.
 
 ---
 
@@ -441,6 +452,8 @@ Deleting a day/collection also deletes shares targeting it (application-level, s
 | `GET/POST /days/{id}/edit`, `POST /days/{id}/delete` | Edit / delete |
 | `POST /days/{id}/archive`, `/unarchive` | Archive toggle |
 | `POST /days/{id}/attachments`, `POST /attachments/{id}/delete`, `GET /attachments/{id}` | Attachments |
+| `GET /media` | Media library: all own attachments across days |
+| `GET /media/{id}` | Owner-only media preview, details, and source |
 | `GET /archive` | Archived days |
 | `GET /collections`, `/collections/{id}` (+CRUD) | Collections |
 | `GET /tags`, `/tags/{id}` (+CRUD) | Tags |
