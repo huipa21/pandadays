@@ -94,7 +94,7 @@ func TestHomeToggleFilteringAndOrdering(t *testing.T) {
 	for _, want := range []string{
 		`<a href="/?when=future" hx-get="/?when=future" hx-target="#home-days" hx-swap="outerHTML" hx-push-url="true" aria-current="page">`,
 		`<span class="day-item-label">2 days left</span>`,
-		`<span class="day-item-label">8h 0m left</span>`,
+		`<span class="day-item-label">08:00 left</span>`,
 		// Repeating days show the effective (next) target, not the original date.
 		`<time datetime="2026-11-01">2026-11-01</time> · <span aria-hidden="true">↻</span> Every year`,
 		`class="day-item day-today"`,
@@ -180,13 +180,50 @@ func TestHomeOwnActiveDaysOnlyWithChips(t *testing.T) {
 	}
 }
 
+func TestDayListsNeverShowReservedGroups(t *testing.T) {
+	s, owner, token := homeServer(t)
+	ctx := context.Background()
+	defaultTag, err := s.tags.DefaultID(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	custom, err := s.tags.Create(ctx, owner, days.GroupInput{Name: "Visible tag"}, homeNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain := mustDay(t, s, owner, days.DayInput{Title: "Only defaults", Date: "2027-01-01"})
+	mustDay(t, s, owner, days.DayInput{Title: "Mixed tags", Date: "2027-01-02", TagIDs: []int64{defaultTag, custom.ID}})
+	for _, path := range []string{"/", "/?q=Only", "/tags/" + strconv.FormatInt(defaultTag, 10)} {
+		body := get(s.Handler(), path, token).Body.String()
+		start := strings.Index(body, `class="day-list"`)
+		if start < 0 {
+			t.Fatalf("%s: missing day list", path)
+		}
+		list := body[start:]
+		if strings.Contains(list, `Default</span>`) {
+			t.Errorf("%s shows reserved labels", path)
+		}
+	}
+	body := get(s.Handler(), "/", token).Body.String()
+	if !strings.Contains(body, "Visible tag</span>") {
+		t.Error("non-default tag hidden")
+	}
+	if err := s.days.SetArchived(ctx, owner, plain.ID, true, homeNow); err != nil {
+		t.Fatal(err)
+	}
+	if body := get(s.Handler(), "/archive", token).Body.String(); strings.Contains(body, "Default</span>") {
+		t.Error("archive shows reserved labels")
+	}
+}
+
 func TestDayCardView(t *testing.T) {
 	s, owner, token := homeServer(t)
 	trip := mustDay(t, s, owner, days.DayInput{Title: "Trip", Date: "2028-01-20", Comment: "pack <light>"})
 	body := get(s.Handler(), dayPath(trip.ID), token).Body.String()
 	for _, want := range []string{
 		`class="card day-card day-future"`,
-		`<span class="countdown-big">459</span> <span class="countdown-caption">days left</span>`,
+		`class="day-calendar-date"><time datetime="2028-01-20">2028-01-20</time>`,
+		`<p class="countdown-caption">left</p>`,
 		`<li><strong>1</strong> year</li><li><strong>3</strong> months</li><li><strong>2</strong> days</li>`,
 		`<rect width="1" height="1"/>`,
 		`⏳`,
@@ -201,17 +238,53 @@ func TestDayCardView(t *testing.T) {
 	if strings.Contains(body, "Next occurrence") {
 		t.Error("non-repeating card shows next occurrence")
 	}
+	previous := -1
+	for _, marker := range []string{`class="day-card-head"`, `class="day-calendar-date"`, `class="day-countdown"`, `class="day-meta"`, `class="day-comment"`, `id="attachments"`} {
+		pos := strings.Index(body, marker)
+		if pos <= previous {
+			t.Errorf("card section %q missing or out of order", marker)
+		}
+		previous = pos
+	}
+	for _, unwanted := range []string{`class="day-facts"`, `href="/collections/`, `href="/tags/`, `danger-zone`} {
+		if strings.Contains(body, unwanted) {
+			t.Errorf("card unexpectedly includes %q", unwanted)
+		}
+		for _, want := range []string{
+			`</article>`,
+			`<section class="card day-menu-section day-attachments" id="attachments" tabindex="-1" aria-labelledby="attachments-heading">`,
+			`<section class="card day-menu-section day-sharing" id="day-sharing" tabindex="-1" aria-labelledby="sharing-heading">`,
+		} {
+			if !strings.Contains(body, want) {
+				t.Errorf("menu-only controls missing %q", want)
+			}
+		}
+		if strings.Index(body, `</article>`) > strings.Index(body, `id="attachments"`) {
+			t.Error("attachments should be outside the calendar card")
+		}
+		if strings.Contains(body, `class="day-section-toggle"`) {
+			t.Error("owner card should not duplicate Share or Attachment menu entries with section toggles")
+		}
+	}
+	menuStart := strings.Index(body, `class="dropdown day-actions"`)
+	menuEnd := strings.Index(body[menuStart:], `</details>`) + menuStart
+	menu := body[menuStart:menuEnd]
+	for _, want := range []string{">Edit</a>", ">Archive</button>", ">Delete</button>", ">Share</a>", ">Attachment</a>", `data-confirm="Delete this day? This cannot be undone."`, `name="csrf_token"`, `data-expand-section="attachments"`, `data-expand-section="day-sharing"`} {
+		if !strings.Contains(menu, want) {
+			t.Errorf("actions menu missing %q", want)
+		}
+	}
 
 	bday := mustDay(t, s, owner, days.DayInput{Title: "Birthday", Date: "2023-10-25", Time: "09:30",
 		Repeat: days.RepeatYearly, StyleColor: "#ff0000", StyleIcon: "🎂"})
 	body = get(s.Handler(), dayPath(bday.ID), token).Body.String()
 	for _, want := range []string{
-		`<span class="countdown-big">7</span> <span class="countdown-caption">days left</span>`,
-		`<li><strong>6</strong> days</li><li><strong>21</strong> hours</li><li><strong>30</strong> minutes</li>`,
+		`<p class="countdown-caption">left</p>`,
+		`<li><strong>6</strong> days</li><li class="day-clock">21:30</li>`,
 		`<span aria-hidden="true">🎉</span> 3rd anniversary`,
 		"Since the original date (2023-10-25)",
 		`<li><strong>2</strong> years</li><li><strong>11</strong> months</li>`,
-		`Next occurrence</dt><dd><time datetime="2026-10-25">2026-10-25</time> 09:30</dd>`,
+		`Next occurrence: <time datetime="2026-10-25">2026-10-25</time> 09:30</p>`,
 		`fill="#ff0000"`,
 		`🎂`,
 	} {
@@ -225,7 +298,8 @@ func TestDayCardView(t *testing.T) {
 		t.Fatal(err)
 	}
 	body = get(s.Handler(), dayPath(past.ID), token).Body.String()
-	for _, want := range []string{`class="card day-card day-past day-archived"`, `<span class="countdown-big">1</span> <span class="countdown-caption">day ago</span>`,
+	for _, want := range []string{`class="card day-card day-past day-archived"`, `<li><strong>1</strong> day</li>`, `<p class="countdown-caption">ago</p>`,
+		`/unarchive"`, `>Unarchive</button>`,
 		`<span class="badge badge-archived"><span aria-hidden="true">📦</span> Archived</span>`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("archived card missing %q", want)
@@ -234,7 +308,7 @@ func TestDayCardView(t *testing.T) {
 
 	today := mustDay(t, s, owner, days.DayInput{Title: "Now", Date: "2026-10-18"})
 	body = get(s.Handler(), dayPath(today.ID), token).Body.String()
-	if !strings.Contains(body, `<span class="countdown-big">Today</span></p>`) || strings.Contains(body, `class="breakdown"`) {
+	if !strings.Contains(body, `<p class="countdown-caption">Today</p>`) || strings.Contains(body, `class="breakdown"`) {
 		t.Error("today card should show Today without a breakdown")
 	}
 
@@ -242,10 +316,44 @@ func TestDayCardView(t *testing.T) {
 		t.Fatal(err)
 	}
 	body = get(s.Handler(), dayPath(bday.ID), token).Body.String()
-	for _, want := range []string{`<span class="countdown-caption">天后</span>`, `<span aria-hidden="true">🎉</span> 3 周年`, `<strong>21</strong> 小时`} {
+	for _, want := range []string{`<p class="countdown-caption">后</p>`, `<span aria-hidden="true">🎉</span> 3 周年`, `<li class="day-clock">21:30</li>`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("zh card missing %q", want)
 		}
+	}
+}
+
+func TestDayClockDisplay(t *testing.T) {
+	s, owner, token := homeServer(t)
+	s.now = func() time.Time { return homeNow.Add(15 * time.Second) }
+	for _, tc := range []struct {
+		title, date, clock, wantClock, direction, listLabel string
+	}{
+		{"Under a minute", "2026-10-18", "12:01", "00:00", "left", "00:00 left"},
+		{"Under a day", "2026-10-19", "12:00", "23:59", "left", "23:59 left"},
+		{"Over a day", "2026-10-19", "12:01", "00:00", "left", "1 day left"},
+		{"Elapsed", "2026-10-18", "09:05", "02:55", "ago", "02:55 ago"},
+		{"Long elapsed", "2023-08-16", "09:05", "02:55", "ago", ""},
+	} {
+		t.Run(tc.title, func(t *testing.T) {
+			d := mustDay(t, s, owner, days.DayInput{Title: tc.title, Date: tc.date, Time: tc.clock})
+			rr := get(s.Handler(), dayPath(d.ID), token)
+			body := rr.Body.String()
+			for _, want := range []string{`<li class="day-clock">` + tc.wantClock + `</li>`, `<p class="countdown-caption">` + tc.direction + `</p>`} {
+				if rr.Code != 200 || !strings.Contains(body, want) {
+					t.Errorf("detail status %d missing %q", rr.Code, want)
+				}
+			}
+			if tc.listLabel != "" {
+				path := "/"
+				if tc.direction == "ago" {
+					path = "/?when=past"
+				}
+				if body := get(s.Handler(), path, token).Body.String(); !strings.Contains(body, `class="day-item-label">`+tc.listLabel+`</span>`) {
+					t.Errorf("list missing %q", tc.listLabel)
+				}
+			}
+		})
 	}
 }
 

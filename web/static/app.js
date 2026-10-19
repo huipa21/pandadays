@@ -201,7 +201,6 @@
       });
       fallback.hidden = true;
       editor.hidden = false;
-      picker.querySelector("[data-tag-help]").hidden = false;
       drawChips();
     });
 
@@ -304,6 +303,32 @@
   }
   initPickers(document);
 
+  document.querySelectorAll(".day-menu-section").forEach(function (section) {
+    var dialog = document.createElement("dialog");
+    if (!dialog.showModal) return;
+    dialog.className = "card confirm-dialog day-action-dialog";
+    dialog.setAttribute("aria-labelledby", section.getAttribute("aria-labelledby"));
+    section.before(dialog);
+    dialog.append(section);
+    dialog.addEventListener("close", function () {
+      if (window.location.hash === "#" + section.id) {
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
+    });
+  });
+  function openDaySection(id) {
+    var section = document.getElementById(id);
+    if (!section) return;
+    if (section.tagName === "DETAILS") section.open = true;
+    var dialog = section.closest("dialog");
+    if (dialog && !dialog.open) dialog.showModal();
+  }
+  function openDayHash() {
+    openDaySection(window.location.hash.slice(1));
+  }
+  window.addEventListener("hashchange", openDayHash);
+  if (document.querySelector(".day-menu-section")) openDayHash();
+
   document.querySelectorAll("dialog[data-auto-open]").forEach(function (dialog) {
     dialog.close();
     dialog.showModal();
@@ -314,6 +339,9 @@
     function dayFormValues() {
       return JSON.stringify(Array.from(new FormData(dayForm).entries()).filter(function (entry) {
         return entry[0] !== "csrf_token";
+      }).map(function (entry) {
+        var value = entry[1];
+        return [entry[0], typeof value === "string" ? value : [value.name, value.size, value.lastModified, value.type]];
       }));
     }
     var initialDayValues = dayFormValues();
@@ -345,6 +373,16 @@
   });
 
   document.addEventListener("click", function (event) {
+    var sectionLink = event.target.closest ? event.target.closest("[data-expand-section]") : null;
+    if (sectionLink) {
+      var section = document.getElementById(sectionLink.dataset.expandSection);
+      if (section) {
+        openDaySection(sectionLink.dataset.expandSection);
+        if (section.closest("dialog")) event.preventDefault();
+        var sectionMenu = sectionLink.closest(".dropdown");
+        if (sectionMenu) sectionMenu.open = false;
+      }
+    }
     var opener = event.target.closest ? event.target.closest("[data-open-dialog]") : null;
     if (opener) {
       var dialog = document.getElementById(opener.dataset.openDialog);
@@ -401,6 +439,11 @@
 
   document.addEventListener("keydown", function (event) {
     if (event.key !== "Escape") return;
+    var dialog = document.querySelector("dialog[open]");
+    if (dialog) {
+      event.preventDefault();
+      dialog.close();
+    }
     document.querySelectorAll(".dropdown[open]").forEach(function (menu) {
       menu.open = false;
       menu.querySelector("summary").focus();

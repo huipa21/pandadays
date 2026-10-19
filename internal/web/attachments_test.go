@@ -60,6 +60,144 @@ func csrfTokenForTest(t *testing.T, s *Server, token string) string {
 	return sessionCSRF(t, s, token)
 }
 
+func createDayWithFiles(t *testing.T, s *Server, token, csrf string, headerCSRF bool, values url.Values, files ...string) *httptest.ResponseRecorder {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for key, entries := range values {
+		for _, value := range entries {
+			if err := writer.WriteField(key, value); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if !headerCSRF {
+		if err := writer.WriteField("csrf_token", csrf); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i, contents := range files {
+		part, err := writer.CreateFormFile("file", "file"+strconv.Itoa(i)+".txt")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := io.WriteString(part, contents); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest(http.MethodPost, "/days", &body)
+	r.Header.Set("Content-Type", writer.FormDataContentType())
+	if headerCSRF {
+		r.Header.Set("X-CSRF-Token", csrf)
+	}
+	if token != "" {
+		r.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
+	}
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, r)
+	return rr
+}
+
+func TestDayCreateAttachments(t *testing.T) {
+	for _, headerCSRF := range []bool{false, true} {
+		t.Run(strconv.FormatBool(headerCSRF), func(t *testing.T) {
+			s, _, owner, token := authenticatedServer(t)
+			csrf := sessionCSRF(t, s, token)
+			rr := createDayWithFiles(t, s, token, csrf, headerCSRF, dayValues(), "hello", "world")
+			if rr.Code != http.StatusSeeOther {
+				t.Fatalf("create: %d %s", rr.Code, rr.Body.String())
+			}
+			d := onlyDay(t, s, owner.ID)
+			files, err := s.media.ListDay(context.Background(), owner.ID, d.ID)
+			if err != nil || len(files) != 2 {
+				t.Fatalf("attachments: %v %v", files, err)
+			}
+			usage, err := s.media.Usage(context.Background(), owner.ID, d.ID)
+			if err != nil || usage.CardUsed != 10 || usage.UserUsed != 10 {
+				t.Fatalf("usage: %+v %v", usage, err)
+			}
+			for _, file := range files {
+				data, err := os.ReadFile(s.media.Path(owner.ID, file))
+				if err != nil || (string(data) != "hello" && string(data) != "world") {
+					t.Fatalf("file contents: %q %v", data, err)
+				}
+			}
+		})
+	}
+}
+
+func TestDayCreateAttachmentsValidationAndAuthorization(t *testing.T) {
+	s, db, owner, token := authenticatedServer(t)
+	csrf := sessionCSRF(t, s, token)
+	if _, err := db.Exec(`UPDATE users SET max_card_bytes = 5, quota_bytes = 7 WHERE id = ?`, owner.ID); err != nil {
+		t.Fatal(err)
+	}
+	other, _ := secondUser(t, s)
+	foreignCollection, err := s.collections.DefaultID(context.Background(), other.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, token, csrf string
+		form              url.Values
+		files             []string
+		status            int
+	}{
+		{"anonymous", "", "", dayValues(), []string{"x"}, http.StatusSeeOther},
+		{"csrf", token, "invalid", dayValues(), []string{"x"}, http.StatusForbidden},
+		{"invalid fields", token, csrf, dayValues("title", ""), []string{"x"}, http.StatusUnprocessableEntity},
+		{"foreign collection", token, csrf, dayValues("collection", strconv.FormatInt(foreignCollection, 10)), []string{"x"}, http.StatusUnprocessableEntity},
+		{"combined card quota", token, csrf, dayValues(), []string{"123", "456"}, http.StatusRequestEntityTooLarge},
+		{"body limit", token, csrf, dayValues(), []string{strings.Repeat("x", 140<<10)}, http.StatusRequestEntityTooLarge},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := createDayWithFiles(t, s, tc.token, tc.csrf, false, tc.form, tc.files...)
+			if rr.Code != tc.status {
+				t.Fatalf("status: %d %s", rr.Code, rr.Body.String())
+			}
+			var count int
+			if err := db.QueryRow(`SELECT COUNT(*) FROM days WHERE owner_id = ?`, owner.ID).Scan(&count); err != nil || count != 0 {
+				t.Fatalf("failed create left days: %d %v", count, err)
+			}
+		})
+	}
+	if _, err := db.Exec(`UPDATE users SET used_bytes = 5 WHERE id = ?`, owner.ID); err != nil {
+		t.Fatal(err)
+	}
+	if rr := createDayWithFiles(t, s, token, csrf, true, dayValues(), "123"); rr.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("account quota: %d", rr.Code)
+	}
+	if _, err := db.Exec(`UPDATE users SET quota_bytes = 5 WHERE id = ?`, owner.ID); err != nil {
+		t.Fatal(err)
+	}
+	if rr := createDayWithFiles(t, s, token, csrf, false, dayValues()); rr.Code != http.StatusSeeOther {
+		t.Fatalf("creating without files at full quota: %d %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestDayCreateAttachmentFailureKeepsSavedDay(t *testing.T) {
+	s, _, owner, token := authenticatedServer(t)
+	blocked := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(blocked, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s.media = media.New(s.db, blocked)
+	rr := createDayWithFiles(t, s, token, sessionCSRF(t, s, token), false, dayValues(), "hello")
+	d := onlyDay(t, s, owner.ID)
+	if rr.Code != http.StatusInternalServerError || !strings.Contains(rr.Body.String(), "The day was saved") ||
+		!strings.Contains(rr.Body.String(), `action="`+dayPath(d.ID)+`/edit"`) ||
+		!strings.Contains(rr.Body.String(), `href="`+dayPath(d.ID)+`#attachments"`) {
+		t.Fatalf("upload failure lost saved day or retry link: %d %s", rr.Code, rr.Body.String())
+	}
+	usage, err := s.media.Usage(context.Background(), owner.ID, d.ID)
+	if err != nil || usage.UserUsed != 0 || usage.CardUsed != 0 {
+		t.Fatalf("failed upload changed usage: %+v %v", usage, err)
+	}
+}
+
 func attachmentRequest(s *Server, method, path, token, csrf string) *httptest.ResponseRecorder {
 	r := sessionRequest(method, path, token)
 	if csrf != "" {
@@ -186,7 +324,7 @@ func TestAttachmentAuthorizationSafeDownloadRangeAndDelete(t *testing.T) {
 	}
 	csrf := csrfTokenForTest(t, s, token)
 	deleted := attachmentRequest(s, http.MethodPost, path+"/delete", token, csrf)
-	if deleted.Code != http.StatusSeeOther || deleted.Header().Get("Location") != dayPath(day.ID) {
+	if deleted.Code != http.StatusSeeOther || deleted.Header().Get("Location") != dayPath(day.ID)+"#attachments" {
 		t.Fatalf("delete response: %d %q", deleted.Code, deleted.Header().Get("Location"))
 	}
 	var used int64
@@ -223,7 +361,7 @@ func TestAttachmentNativeMultipartFormRemainsSupported(t *testing.T) {
 	r.Header.Set("Content-Type", writer.FormDataContentType())
 	rr := httptest.NewRecorder()
 	s.Handler().ServeHTTP(rr, r)
-	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != dayPath(day.ID) {
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != dayPath(day.ID)+"#attachments" {
 		t.Fatalf("native multipart form: %d %q %s", rr.Code, rr.Header().Get("Location"), rr.Body.String())
 	}
 }

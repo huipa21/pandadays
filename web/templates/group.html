@@ -2,14 +2,12 @@
 {{define "content"}}
 <section class="stack">
   <p><a href="{{.Section.Base}}">← {{t (printf "%s.title" .Section.Key)}}</a></p>
-  <h1 class="group-heading">{{template "swatch" .Group.Color}} {{template "group-name" .Group}}
-    {{if .Group.Reserved}}<span class="badge">{{t "groups.reserved"}}</span>{{end}}</h1>
-  <p class="hint">{{if eq .Group.DayCount 1}}{{t "groups.days.one" .Group.DayCount}}{{else}}{{t "groups.days.other" .Group.DayCount}}{{end}}</p>
-  {{if eq .Section.Key "collections"}}{{with .Group.Comment}}<p class="collection-description">{{.}}</p>{{end}}{{end}}
   {{template "group-days" .}}
+  {{$path := printf "%s/%d" .Section.Base .Group.ID}}{{if .HideArchived}}{{$path = printf "%s?hide_archived=1" $path}}{{end}}
   {{if eq .Section.Key "collections"}}
-  <section class="card form">
-    <h2>{{t "sharing.manage"}}</h2>
+  <dialog id="group-share" class="card confirm-dialog" aria-labelledby="group-share-title"{{if eq .Dialog "share"}} open data-auto-open{{end}}>
+  <section class="form">
+    <h2 id="group-share-title">{{t "sharing.manage"}}</h2>
     <p class="hint">{{t "sharing.collection_live"}}</p>
     <p class="hint">{{t "sharing.identifiers_hint"}}</p>
     <form method="post" action="/collections/{{.Group.ID}}/shares" class="form">
@@ -30,33 +28,64 @@
       <button type="submit" class="link-button">{{t "sharing.revoke"}}</button>
     </form>
     {{end}}
+    <div class="actions dialog-actions"><a class="btn btn-secondary" href="{{$path}}" data-close-dialog>{{t "admin.cancel"}}</a></div>
   </section>
+  </dialog>
   {{end}}
-  {{with .Error}}<p class="alert" role="alert">{{t .}}</p>{{end}}
-  <form method="post" action="{{.Section.Base}}/{{.Group.ID}}/edit" class="card form">
+  <dialog id="group-edit" class="card confirm-dialog" aria-labelledby="group-edit-title"{{if eq .Dialog "edit"}} open data-auto-open{{end}}>
+  <form method="post" action="{{.Section.Base}}/{{.Group.ID}}/edit{{if .HideArchived}}?hide_archived=1{{end}}" class="form">
     {{template "csrf-field" .}}
-    <h2>{{t "groups.edit"}}</h2>
+    <h2 id="group-edit-title">{{t "groups.edit"}}</h2>
+    {{with .Error}}<p class="alert" role="alert">{{t .}}</p>{{end}}
     {{if .Group.Reserved}}<p class="hint">{{t "groups.reserved_hint"}}</p>{{else}}
     <label>{{t "groups.name"}}
       <input type="text" name="name" value="{{.Form.Name}}" maxlength="100" required>
     </label>{{end}}
     {{template "group-color-fields" .Form}}
     {{if eq .Section.Key "collections"}}<label>{{t "collections.comment"}}<textarea name="comment" rows="3" maxlength="10000">{{.Form.Comment}}</textarea></label>{{end}}
-    <button type="submit" class="btn">{{t "groups.save"}}</button>
+    <div class="actions dialog-actions">
+      <a class="btn btn-secondary" href="{{$path}}" data-close-dialog>{{t "admin.cancel"}}</a>
+      <button type="submit" class="btn">{{t "groups.save"}}</button>
+    </div>
   </form>
+  </dialog>
   {{if not .Group.Reserved}}
-  <form method="post" action="{{.Section.Base}}/{{.Group.ID}}/delete" class="card form danger-zone"
-        hx-post="{{.Section.Base}}/{{.Group.ID}}/delete" hx-confirm="{{t (printf "%s.delete_confirm" .Section.Key)}}">
+  <dialog id="group-delete" class="card confirm-dialog" aria-labelledby="group-delete-title"{{if eq .Dialog "delete"}} open data-auto-open{{end}}>
+  <form method="post" action="{{.Section.Base}}/{{.Group.ID}}/delete" class="form">
     {{template "csrf-field" .}}
+    <h2 id="group-delete-title">{{t "groups.delete"}}</h2>
+    <p>{{t (printf "%s.delete_confirm" .Section.Key)}}</p>
     <p class="hint">{{t (printf "%s.delete_hint" .Section.Key)}}</p>
-    <button type="submit" class="btn btn-danger">{{t "groups.delete"}}</button>
+    <div class="actions dialog-actions">
+      <a class="btn btn-secondary" href="{{$path}}" data-close-dialog>{{t "admin.cancel"}}</a>
+      <button type="submit" class="btn btn-danger">{{t "groups.delete"}}</button>
+    </div>
   </form>
+  </dialog>
   {{end}}
 </section>
 {{end}}
 {{define "group-days"}}<div id="group-days" class="stack">
-  {{$url := printf "%s/%d" .Section.Base .Group.ID}}{{if not .HideArchived}}{{$url = printf "%s?hide_archived=1" $url}}{{end}}
-  <p><a class="btn" href="{{$url}}" hx-get="{{$url}}" hx-target="#group-days" hx-swap="outerHTML" hx-push-url="true">{{if .HideArchived}}{{t "groups.show_archived"}}{{else}}{{t "groups.hide_archived"}}{{end}}</a></p>
+  {{$path := printf "%s/%d" .Section.Base .Group.ID}}
+  {{$url := $path}}{{if not .HideArchived}}{{$url = printf "%s?hide_archived=1" $url}}{{end}}
+  {{$dialogURL := printf "%s?dialog=" $path}}{{if .HideArchived}}{{$dialogURL = printf "%s?hide_archived=1&dialog=" $path}}{{end}}
+  <header class="group-toolbar">
+    <h1 class="group-heading">{{template "swatch" .Group.Color}} <span class="group-name">{{template "group-name" .Group}}</span>
+      {{if .Group.Reserved}}<span class="badge">{{t "groups.reserved"}}</span>{{end}}</h1>
+    <div class="group-actions">
+      <form method="get" action="{{$path}}" class="inline-form">
+      {{if not .HideArchived}}<input type="hidden" name="hide_archived" value="1">{{end}}
+      <button type="submit" class="icon-button archive-toggle" hx-get="{{$url}}" hx-params="none" hx-target="#group-days" hx-swap="outerHTML" hx-push-url="true" aria-label="{{if .HideArchived}}{{t "groups.show_archived"}}{{else}}{{t "groups.hide_archived"}}{{end}}" title="{{if .HideArchived}}{{t "groups.show_archived"}}{{else}}{{t "groups.hide_archived"}}{{end}}" aria-pressed="{{if .HideArchived}}true{{else}}false{{end}}">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h18v4H3zM5 7v14h14V7M10 11h4"/>{{if .HideArchived}}<path d="m3 21 18-18"/>{{end}}</svg>
+      </button>
+      </form>
+      <a class="icon-button" href="{{$dialogURL}}edit" data-open-dialog="group-edit" aria-label="{{t "groups.edit"}}" title="{{t "groups.edit"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m16 3 5 5-12 12-6 1 1-6ZM14 5l5 5"/></svg></a>
+      {{if not .Group.Reserved}}<a class="icon-button danger-text" href="{{$dialogURL}}delete" data-open-dialog="group-delete" aria-label="{{t "groups.delete"}}" title="{{t "groups.delete"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/></svg></a>{{end}}
+      {{if eq .Section.Key "collections"}}<a class="icon-button" href="{{$dialogURL}}share" data-open-dialog="group-share" aria-label="{{t "sharing.manage"}}" title="{{t "sharing.manage"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m9 10.5 6-4m-6 7 6 4"/></svg></a>{{end}}
+    </div>
+  </header>
+  <p class="hint">{{if eq .Group.DayCount 1}}{{t "groups.days.one" .Group.DayCount}}{{else}}{{t "groups.days.other" .Group.DayCount}}{{end}}</p>
+  {{if eq .Section.Key "collections"}}{{with .Group.Comment}}<p class="collection-description">{{.}}</p>{{end}}{{end}}
   {{if .Items}}<ul class="day-list">{{range .Items}}{{template "day-item" .}}{{end}}</ul>
   {{else}}<p class="empty-list">{{t "groups.empty_days"}}</p>{{end}}
 </div>{{end}}

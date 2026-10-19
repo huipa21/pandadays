@@ -101,14 +101,16 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 		if !safe {
 			provided := r.Header.Get("X-CSRF-Token")
 			if provided == "" {
-				multipartForm := isAttachmentUpload(r) || isImportUpload(r)
+				multipartForm := isAttachmentUpload(r) || isImportUpload(r) || isDayCreateUpload(r)
 				if multipartForm {
 					if CurrentUser(r.Context()) == nil {
 						authRedirect(w, r, "/login")
 						return
 					}
 					var limited bool
-					if isImportUpload(r) {
+					if isDayCreateUpload(r) {
+						limited = s.limitDayCreateForm(w, r)
+					} else if isImportUpload(r) {
 						limited = s.limitImportForm(w, r)
 					} else {
 						limited = s.limitAttachmentForm(w, r)
@@ -122,6 +124,9 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 				var parseErr error
 				if multipartForm {
 					parseErr = r.ParseMultipartForm(32 << 20)
+					if r.MultipartForm != nil {
+						defer r.MultipartForm.RemoveAll()
+					}
 				} else {
 					parseErr = r.ParseForm()
 				}
@@ -155,6 +160,25 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), csrfContextKey{}, token)))
 	})
+}
+
+func isDayCreateUpload(r *http.Request) bool {
+	if r.Method != http.MethodPost || r.URL.Path != "/days" {
+		return false
+	}
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	return err == nil && strings.EqualFold(mediaType, "multipart/form-data")
+}
+
+func (s *Server) limitDayCreateForm(w http.ResponseWriter, r *http.Request) bool {
+	remaining, err := s.media.NewDayRemaining(r.Context(), CurrentUser(r.Context()).ID)
+	if err != nil {
+		s.attachmentError(w, r, "check new day upload allowance", err)
+		return false
+	}
+	// Allow the day fields in addition to multipart boundaries and file bytes.
+	r.Body = http.MaxBytesReader(w, r.Body, multipartBodyLimit(multipartBodyLimit(remaining)))
+	return true
 }
 
 func isAttachmentUpload(r *http.Request) bool {

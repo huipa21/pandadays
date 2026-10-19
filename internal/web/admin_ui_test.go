@@ -28,14 +28,14 @@ func TestAdminSiteOnlyNavigationAndAccess(t *testing.T) {
 		t.Fatalf("admin landing: %d %s", rr.Code, rr.Header().Get("Location"))
 	}
 	for _, path := range []string{"/archive", "/days/new", "/days/1", "/collections", "/collections/1",
-		"/tags", "/tags/1", "/shared", "/attachments/1", "/settings/export", "/settings/import"} {
+		"/tags", "/tags/1", "/shared", "/messages", "/attachments/1", "/settings/export", "/settings/import"} {
 		if rr := get(s.Handler(), path, token); rr.Code != http.StatusNotFound {
 			t.Errorf("admin GET %s: %d", path, rr.Code)
 		}
 	}
 	for _, path := range []string{"/days", "/days/1/edit", "/days/1/archive", "/collections", "/tags",
 		"/days/1/attachments", "/days/1/shares", "/collections/1/shares",
-		"/shares/1/revoke", "/shared/1/hide", "/settings/import", "/settings/import/confirm"} {
+		"/shares/1/revoke", "/shared/1/hide", "/messages/1/accept", "/messages/1/reject", "/settings/import", "/settings/import/confirm"} {
 		if rr := sessionPost(t, s, path, token, nil); rr.Code != http.StatusNotFound {
 			t.Errorf("admin POST %s: %d", path, rr.Code)
 		}

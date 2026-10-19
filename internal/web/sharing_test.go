@@ -51,9 +51,10 @@ func TestSharingFlowAndReadOnlyRecipientViews(t *testing.T) {
 		"recipients":   {"bob, CAROL@example.com"},
 		"show_comment": {"1"},
 	})
-	if create.Code != http.StatusSeeOther || create.Header().Get("Location") != dayPath(day.ID) {
+	if create.Code != http.StatusSeeOther || create.Header().Get("Location") != dayPath(day.ID)+"#day-sharing" {
 		t.Fatalf("create share: %d %q %s", create.Code, create.Header().Get("Location"), create.Body.String())
 	}
+	acceptAllInvitations(t, s, bobToken, bob.ID)
 
 	home := get(s.Handler(), "/", bobToken)
 	for _, want := range []string{"Shared birthday", "day-shared", "From @Alice"} {
@@ -69,7 +70,7 @@ func TestSharingFlowAndReadOnlyRecipientViews(t *testing.T) {
 		}
 	}
 	for _, forbidden := range []string{"Owner-private collection", "Owner-private tag", dayPath(day.ID) + "/edit",
-		dayPath(day.ID) + "/delete", `name="file"`, `name="show_comment"`} {
+		dayPath(day.ID) + "/delete", `name="file"`, `name="show_comment"`, `day-menu-section`} {
 		if strings.Contains(body, forbidden) {
 			t.Errorf("shared card leaked or offered owner-only field %q", forbidden)
 		}
@@ -126,7 +127,7 @@ func TestSharingFlowAndReadOnlyRecipientViews(t *testing.T) {
 
 func TestCollectionSharingIsLiveAndHidesArchivedDays(t *testing.T) {
 	s, _, owner, ownerToken := authenticatedServer(t)
-	_, bobToken := secondUser(t, s)
+	bob, bobToken := secondUser(t, s)
 	collection, err := s.collections.Create(context.Background(), owner.ID, days.GroupInput{Name: "Live"}, time.Now())
 	if err != nil {
 		t.Fatal(err)
@@ -142,6 +143,7 @@ func TestCollectionSharingIsLiveAndHidesArchivedDays(t *testing.T) {
 	if shareResponse.Code != http.StatusSeeOther {
 		t.Fatalf("create collection share: %d %s", shareResponse.Code, shareResponse.Body.String())
 	}
+	acceptAllInvitations(t, s, bobToken, bob.ID)
 	second, err := s.days.Create(context.Background(), owner.ID, days.DayInput{
 		Title: "Added after share", Date: "2027-02-01", CollectionID: collection.ID,
 	}, time.Now())

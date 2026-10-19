@@ -119,7 +119,13 @@ func (s *Store) Update(ctx context.Context, ownerID, shareID int64, identifiers 
 	if err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM share_recipients WHERE share_id = ?`, shareID); err != nil {
+	args := []any{shareID}
+	for _, recipient := range recipients {
+		args = append(args, recipient.ID)
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(recipients)), ",")
+	if _, err := tx.ExecContext(ctx, `DELETE FROM share_recipients WHERE share_id = ?
+		AND recipient_id NOT IN (`+placeholders+`)`, args...); err != nil {
 		return fmt.Errorf("replace share recipients: %w", err)
 	}
 	if err := insertRecipients(ctx, tx, shareID, recipients); err != nil {
@@ -194,7 +200,8 @@ func resolveRecipients(ctx context.Context, q recipientQuerier, ownerID int64, i
 
 func insertRecipients(ctx context.Context, tx *sql.Tx, shareID int64, recipients []Recipient) error {
 	for _, recipient := range recipients {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO share_recipients (share_id, recipient_id) VALUES (?, ?)`,
+		if _, err := tx.ExecContext(ctx, `INSERT INTO share_recipients (share_id, recipient_id, status)
+			VALUES (?, ?, 'pending') ON CONFLICT(share_id, recipient_id) DO NOTHING`,
 			shareID, recipient.ID); err != nil {
 			return fmt.Errorf("insert share recipient: %w", err)
 		}
@@ -275,7 +282,7 @@ func (s *Store) Target(ctx context.Context, ownerID, shareID int64) (TargetType,
 const accessPredicate = `EXISTS (
 	SELECT 1 FROM shares sh
 	JOIN share_recipients sr ON sr.share_id = sh.id
-	WHERE sh.owner_id = d.owner_id AND sr.recipient_id = ?
+	WHERE sh.owner_id = d.owner_id AND sr.recipient_id = ? AND sr.status = 'accepted'
 	AND ((sh.target_type = 'day' AND sh.target_id = d.id)
 		OR (sh.target_type = 'collection' AND sh.target_id = d.collection_id AND d.archived_at IS NULL))
 )`
@@ -286,7 +293,7 @@ func (s *Store) CanView(ctx context.Context, viewerID, dayID int64) (bool, bool,
 		COALESCE((SELECT MAX(sh.show_comment) FROM shares sh
 			JOIN share_recipients sr ON sr.share_id = sh.id
 			JOIN days d ON d.id = ?
-			WHERE sh.owner_id = d.owner_id AND sr.recipient_id = ?
+			WHERE sh.owner_id = d.owner_id AND sr.recipient_id = ? AND sr.status = 'accepted'
 			AND ((sh.target_type = 'day' AND sh.target_id = d.id)
 				OR (sh.target_type = 'collection' AND sh.target_id = d.collection_id AND d.archived_at IS NULL))), 0)
 		FROM days d WHERE d.id = ?`, viewerID, dayID, viewerID, dayID).Scan(&allowed, &showComment)
@@ -364,7 +371,7 @@ func (s *Store) queryShared(ctx context.Context, viewerID int64, includeHidden b
 		JOIN shares sh ON sh.owner_id = d.owner_id
 			AND ((sh.target_type = 'day' AND sh.target_id = d.id)
 				OR (sh.target_type = 'collection' AND sh.target_id = d.collection_id AND d.archived_at IS NULL))
-		JOIN share_recipients sr ON sr.share_id = sh.id AND sr.recipient_id = ?
+		JOIN share_recipients sr ON sr.share_id = sh.id AND sr.recipient_id = ? AND sr.status = 'accepted'
 		WHERE ` + where + `
 		GROUP BY d.id ORDER BY d.id`
 	// The access predicate receives the viewer before the hidden expression.

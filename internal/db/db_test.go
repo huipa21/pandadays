@@ -3,6 +3,7 @@ package db_test
 import (
 	"context"
 	"database/sql"
+	"io/fs"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -15,6 +16,47 @@ import (
 )
 
 var epoch = time.Unix(1_700_000_000, 0).UTC()
+
+func TestInvitationMigrationPreservesExistingRecipients(t *testing.T) {
+	conn, _ := openRaw(t)
+	ctx := context.Background()
+	old := fstest.MapFS{}
+	all, err := db.LoadMigrations(migrations.FS())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, migration := range all {
+		if migration.Version >= 5 {
+			continue
+		}
+		content, err := fs.ReadFile(migrations.FS(), migration.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		old[migration.Name] = &fstest.MapFile{Data: content}
+	}
+	if err := db.MigrateFS(ctx, conn, old, epoch); err != nil {
+		t.Fatal(err)
+	}
+	for _, query := range []string{
+		`INSERT INTO users(id,username,email,password_hash) VALUES(1,'Alice','alice@example.com','unused'),(2,'Bob','bob@example.com','unused')`,
+		`INSERT INTO shares(id,owner_id,target_type,target_id) VALUES(1,1,'day',1)`,
+		`INSERT INTO share_recipients(share_id,recipient_id) VALUES(1,2)`,
+	} {
+		if _, err := conn.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Migrate(ctx, conn, epoch); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM share_recipients WHERE recipient_id = 2 AND status = 'accepted'`); n != 1 {
+		t.Fatalf("existing accepted recipients = %d", n)
+	}
+	if _, err := conn.Exec(`UPDATE share_recipients SET status = 'invalid'`); err == nil {
+		t.Fatal("invalid invitation status accepted")
+	}
+}
 
 func openRaw(t *testing.T) (*sql.DB, string) {
 	t.Helper()

@@ -1,0 +1,27 @@
+{{define "title"}}{{t "messages.title"}} - {{t "app.name"}}{{end}}
+{{define "content"}}
+<section class="stack">
+  <h1>{{t "messages.title"}}</h1>
+  <p class="hint">{{t "messages.hint"}}</p>
+  <ul class="message-list stack">
+    {{template "message-page" .}}
+  </ul>
+</section>
+{{end}}
+{{define "message-page"}}
+{{range .Invitations}}
+<li class="card stack">
+  <div>
+    <h2 class="day-heading">{{.Title}}</h2>
+    <p class="hint">{{t "sharing.from" .OwnerUsername}} · {{t (printf "messages.target.%s" .TargetType)}} · {{localtime .CreatedAt}}</p>
+    <p>{{t (printf "messages.status.%s" .Status)}}</p>
+  </div>
+  <div class="page-actions">
+    {{if ne .Status "accepted"}}<form method="post" action="/messages/{{.ShareID}}/accept">{{template "csrf-field" $}}<button class="btn" type="submit">{{t "messages.accept"}}</button></form>{{end}}
+    {{if ne .Status "rejected"}}<form method="post" action="/messages/{{.ShareID}}/reject">{{template "csrf-field" $}}<button class="btn btn-secondary" type="submit">{{t "messages.reject"}}</button></form>{{end}}
+    {{if eq .Status "accepted"}}{{if eq .TargetType "day"}}<a class="btn btn-secondary" href="/days/{{.TargetID}}">{{t "messages.view"}}</a>{{else}}<a class="btn btn-secondary" href="/shared">{{t "messages.view"}}</a>{{end}}{{end}}
+  </div>
+</li>
+{{else}}<li class="empty-list">{{t "messages.empty"}}</li>{{end}}
+{{if .Next}}<li class="load-more"><a class="btn btn-secondary" href="/messages?before={{.Next}}" hx-get="/messages?before={{.Next}}" hx-target="closest li" hx-swap="outerHTML">{{t "messages.more"}}</a></li>{{end}}
+{{end}}

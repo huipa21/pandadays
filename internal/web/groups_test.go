@@ -259,8 +259,74 @@ func TestGroupPagesLocalized(t *testing.T) {
 	if _, err := db.Exec(`UPDATE users SET lang = 'zh' WHERE id = ?`, u.ID); err != nil {
 		t.Fatal(err)
 	}
+
 	body := get(s.Handler(), "/collections", token).Body.String()
 	if !strings.Contains(body, "默认") || !strings.Contains(body, "新建合集") {
 		t.Fatal("collections page not localized")
+	}
+}
+
+func TestGroupDetailActionDialogs(t *testing.T) {
+	s, _, u, token := authenticatedServer(t)
+	_, bobToken := secondUser(t, s)
+	for _, tc := range []struct {
+		base  string
+		store *days.Groups
+	}{{"/collections", s.collections}, {"/tags", s.tags}} {
+		g, err := tc.store.Create(context.Background(), u.ID, days.GroupInput{Name: "Action test"}, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := tc.base + "/" + strconv.FormatInt(g.ID, 10)
+		body := get(s.Handler(), path, token).Body.String()
+		for _, want := range []string{`class="group-toolbar"`, `class="icon-button archive-toggle"`,
+			`aria-pressed="false"`, `data-open-dialog="group-edit"`, `data-open-dialog="group-delete"`,
+			`aria-labelledby="group-edit-title"`, `aria-labelledby="group-delete-title"`} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s missing %q", path, want)
+			}
+		}
+		if strings.Contains(body, ` open data-auto-open`) {
+			t.Errorf("%s should show only the day list, not open action dialogs", path)
+		}
+		dialogs := []string{"edit", "delete"}
+		if tc.base == "/collections" {
+			dialogs = append(dialogs, "share")
+			if !strings.Contains(body, `data-open-dialog="group-share"`) {
+				t.Error("collection missing share icon")
+			}
+		} else if strings.Contains(body, `id="group-share"`) {
+			t.Error("tag must not have sharing controls")
+		}
+		for _, dialog := range dialogs {
+			body = get(s.Handler(), path+"?dialog="+dialog+"&hide_archived=1", token).Body.String()
+			want := `aria-labelledby="group-` + dialog + `-title" open data-auto-open`
+			if !strings.Contains(body, want) {
+				t.Errorf("%s missing no-JS popup %q", path, want)
+			}
+		}
+		req := sessionRequest("GET", path+"?hide_archived=1", token)
+		req.Header.Set("HX-Request", "true")
+		rr := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rr, req)
+		body = rr.Body.String()
+		if rr.Code != http.StatusOK || !strings.Contains(body, `aria-pressed="true"`) ||
+			!strings.Contains(body, `data-open-dialog="group-edit"`) || strings.Contains(body, "<dialog") ||
+			strings.Contains(body, "<!doctype") {
+			t.Fatalf("%s toggle partial: %d %s", path, rr.Code, body)
+		}
+		rr = sessionPost(t, s, path+"/edit?hide_archived=1", token, url.Values{"name": {""}, "color": {"#123456"}})
+		body = rr.Body.String()
+		if rr.Code != http.StatusUnprocessableEntity ||
+			!strings.Contains(body, `aria-labelledby="group-edit-title" open data-auto-open`) ||
+			!strings.Contains(body, `value="#123456"`) ||
+			!strings.Contains(body, "Please enter a name.") {
+			t.Fatalf("%s edit validation: %d %s", path, rr.Code, body)
+		}
+		for _, dialog := range dialogs {
+			if rr := get(s.Handler(), path+"?dialog="+dialog, bobToken); rr.Code != http.StatusNotFound {
+				t.Errorf("%s %s as another owner: %d", path, dialog, rr.Code)
+			}
+		}
 	}
 }

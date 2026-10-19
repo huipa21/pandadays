@@ -16,6 +16,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -120,11 +121,12 @@ func (s *Server) Close() error {
 // templateFuncs are placeholders for parsing; execute rebinds "t" to the request language
 // and "asset" to the content-versioned static URL.
 var templateFuncs = template.FuncMap{
-	"t":         func(key string, _ ...any) string { return key },
-	"asset":     func(name string) string { return "/static/" + name },
-	"bytes":     formatBytes,
-	"megabytes": formatMegabytes,
-	"localtime": func(time.Time) template.HTML { return "" },
+	"t":             func(key string, _ ...any) string { return key },
+	"asset":         func(name string) string { return "/static/" + name },
+	"bytes":         formatBytes,
+	"megabytes":     formatMegabytes,
+	"localtime":     func(time.Time) template.HTML { return "" },
+	"pendingShares": func() int { return 0 },
 }
 
 // localTime renders t in the viewer's timezone. Without a saved timezone the
@@ -279,6 +281,7 @@ type pageData struct {
 	User        *auth.User
 	ReturnTo    string
 	LanguageURL string
+	SearchQuery string
 	// CaptureTimezone loads the script that posts the browser timezone (SPEC §4.5).
 	CaptureTimezone bool
 }
@@ -293,12 +296,17 @@ func newPageData(r *http.Request) pageData {
 	}
 	q.Set("lang", nextLang)
 	u.RawQuery = q.Encode()
+	searchQuery := ""
+	if r.URL.Path == "/" {
+		searchQuery = strings.TrimSpace(r.URL.Query().Get("q"))
+	}
 	return pageData{
 		Lang:            i18n.LangFrom(r.Context()),
 		CSRFToken:       CSRFToken(r.Context()),
 		User:            user,
 		ReturnTo:        r.URL.RequestURI(),
 		LanguageURL:     u.RequestURI(),
+		SearchQuery:     searchQuery,
 		CaptureTimezone: user != nil && user.Timezone == "" && !user.MustChangePassword,
 	}
 }
@@ -329,10 +337,19 @@ func (s *Server) execute(w http.ResponseWriter, r *http.Request, page, name stri
 		s.authError(w, r, "error.internal", http.StatusInternalServerError)
 		return
 	}
+	pending := 0
+	if user := CurrentUser(r.Context()); name == "layout" && user != nil && !user.IsAdmin && s.shares != nil {
+		pending, err = s.shares.PendingCount(r.Context(), user.ID)
+		if err != nil {
+			s.shareError(w, r, "count invitations", err)
+			return
+		}
+	}
 	t.Funcs(template.FuncMap{
-		"t":         s.i18n.Func(i18n.LangFrom(r.Context())),
-		"asset":     func(name string) string { return "/static/" + name + "?v=" + s.assetVersion },
-		"localtime": localTime(CurrentUser(r.Context())),
+		"t":             s.i18n.Func(i18n.LangFrom(r.Context())),
+		"asset":         func(name string) string { return "/static/" + name + "?v=" + s.assetVersion },
+		"localtime":     localTime(CurrentUser(r.Context())),
+		"pendingShares": func() int { return pending },
 	})
 
 	var buf bytes.Buffer

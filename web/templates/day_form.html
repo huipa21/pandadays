@@ -4,7 +4,7 @@
   {{if .Day.ID}}<p><a href="/days/{{.Day.ID}}">← {{.Day.Title}}</a></p>{{else}}<p><a href="/">← {{t "nav.home"}}</a></p>{{end}}
   <h1>{{if .Day.ID}}{{t "days.edit"}}{{else}}{{t "days.new"}}{{end}}</h1>
   {{with .Error}}<p class="alert" role="alert">{{t .}}</p>{{end}}
-  <form method="post" action="{{if .Day.ID}}/days/{{.Day.ID}}/edit{{else}}/days{{end}}" class="card form" data-day-form data-unsaved="{{if .Error}}true{{else}}false{{end}}">
+  <form method="post" action="{{if .Day.ID}}/days/{{.Day.ID}}/edit{{else}}/days{{end}}"{{if not .Day.ID}} enctype="multipart/form-data"{{end}} class="card form" data-day-form data-unsaved="{{if .Error}}true{{else}}false{{end}}">
     {{template "csrf-field" .}}
     <p class="hint">{{t "days.unsaved_hint"}}</p>
     <label>{{t "days.field.title"}}
@@ -42,9 +42,8 @@
         <p class="hint" data-tag-empty role="status" hidden>{{t "days.tags.empty"}}</p>
       </div>
       <label class="tag-query-label" data-tag-query-label for="tag-query"><span data-tag-query-text>{{t "days.tags.search"}}</span>
-        <textarea id="tag-query" name="tag_query" rows="2" maxlength="100" placeholder="{{t "days.tags.placeholder"}}" aria-describedby="tag-hint" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="tag-suggestions">{{.Form.TagQuery}}</textarea>
+        <textarea id="tag-query" name="tag_query" rows="2" maxlength="100" placeholder="{{t "days.tags.placeholder"}}" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="tag-suggestions">{{.Form.TagQuery}}</textarea>
       </label>
-      <p id="tag-hint" class="hint"><span data-tag-help>{{t "days.tags.hint"}} </span>{{t "days.field.tags_hint"}}</p>
     </fieldset>
     <label>{{t "days.field.comment"}}
       <textarea name="comment" rows="4" maxlength="10000">{{.Form.Comment}}</textarea>
@@ -60,6 +59,14 @@
         <div class="icon-options" data-icon-options role="group" aria-label="{{t "days.icons.choose"}}" hidden></div>
         <button type="button" class="link-button" data-icon-clear hidden>{{t "days.icons.clear"}}</button>
       </div>
+    </fieldset>
+    <fieldset class="choice-group">
+      <legend>{{t "days.attachments"}}</legend>
+      {{if .Day.ID}}<a href="/days/{{.Day.ID}}#attachments">{{t "days.action.attachment"}}</a>
+      {{else}}
+      <label>{{t "attachments.choose_file"}}<input type="file" name="file" multiple></label>
+      <p class="hint">{{t "attachments.create_hint"}}</p>
+      {{end}}
     </fieldset>
     <button type="submit" class="btn">{{if .Day.ID}}{{t "days.save"}}{{else}}{{t "days.create"}}{{end}}</button>
   </form>

@@ -19,8 +19,12 @@ func TestDayListScreenReaderText(t *testing.T) {
 	ctx := context.Background()
 	t1, _ := s.tags.Create(ctx, u.ID, days.GroupInput{Name: "Birthday"}, time.Now())
 	t2, _ := s.tags.Create(ctx, u.ID, days.GroupInput{Name: "Mom"}, time.Now())
+	col, err := s.collections.Create(ctx, u.ID, days.GroupInput{Name: "Family"}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
 	form := url.Values{"title": {"Mom's birthday"}, "date": {"1960-03-15"}, "repeat": {"yearly"},
-		"tags": {strconv.FormatInt(t1.ID, 10), strconv.FormatInt(t2.ID, 10)}}
+		"tags": {strconv.FormatInt(t1.ID, 10), strconv.FormatInt(t2.ID, 10)}, "collection": {strconv.FormatInt(col.ID, 10)}}
 	if rr := sessionPost(t, s, "/days", token, form); rr.Code != http.StatusSeeOther {
 		t.Fatalf("create: %d %s", rr.Code, rr.Body.String())
 	}

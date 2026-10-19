@@ -135,7 +135,7 @@ func (s *Server) saveAttachment(w http.ResponseWriter, r *http.Request, ownerID,
 		s.attachmentError(w, r, "upload", err)
 		return
 	}
-	authRedirect(w, r, dayPath(dayID))
+	authRedirect(w, r, dayPath(dayID)+"#attachments")
 }
 
 func (s *Server) uploadReadError(w http.ResponseWriter, r *http.Request, err error) {
@@ -169,7 +169,7 @@ func (s *Server) handleAttachmentDelete(w http.ResponseWriter, r *http.Request) 
 	case err != nil:
 		s.attachmentError(w, r, "delete", err)
 	default:
-		authRedirect(w, r, dayPath(attachment.DayID))
+		authRedirect(w, r, dayPath(attachment.DayID)+"#attachments")
 	}
 }
 
@@ -189,7 +189,7 @@ func (s *Server) handleAttachmentBackground(w http.ResponseWriter, r *http.Reque
 	case err != nil:
 		s.attachmentError(w, r, "set background", err)
 	default:
-		authRedirect(w, r, dayPath(dayID))
+		authRedirect(w, r, dayPath(dayID)+"#attachments")
 	}
 }
 

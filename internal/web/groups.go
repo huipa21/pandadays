@@ -42,6 +42,7 @@ type groupPage struct {
 	HideArchived bool
 	Items        []dayItem
 	ShareRows    []shareRow
+	Dialog       string
 }
 
 const defaultGroupColor = "#2f855a"
@@ -169,6 +170,21 @@ func (h *groupHandlers) renderDetail(w http.ResponseWriter, r *http.Request, sta
 	}
 	page := groupPage{pageData: newPageData(r), Section: h.section,
 		Group: g, Form: form, Error: errKey, HideArchived: hideArchived, Items: items}
+	switch dialog := r.URL.Query().Get("dialog"); dialog {
+	case "edit":
+		page.Dialog = dialog
+	case "delete":
+		if !g.Reserved {
+			page.Dialog = dialog
+		}
+	case "share":
+		if h.section.Key == "collections" {
+			page.Dialog = dialog
+		}
+	}
+	if errKey != "" {
+		page.Dialog = "edit"
+	}
 	if h.section.Key == "collections" {
 		shares, err := h.s.shares.List(r.Context(), owner, share.TargetCollection, g.ID)
 		if err != nil {
@@ -178,7 +194,7 @@ func (h *groupHandlers) renderDetail(w http.ResponseWriter, r *http.Request, sta
 		page.ShareRows = shareRows(shares)
 	}
 	w.Header().Add("Vary", "HX-Request")
-	if r.Method == http.MethodGet && isHTMX(r) && r.Header.Get("HX-History-Restore-Request") == "" {
+	if r.Method == http.MethodGet && isHTMX(r) && r.Header.Get("HX-History-Restore-Request") == "" && page.Dialog == "" {
 		h.s.renderPartial(w, r, "group.html", "group-days", page)
 		return
 	}

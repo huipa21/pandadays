@@ -9,10 +9,12 @@
 </section>
 {{end}}
 {{define "home-days"}}<div id="home-days" class="stack">
+  {{if .SearchQuery}}<div class="page-actions"><h2 class="day-heading">{{t "search.results" .SearchQuery}}</h2><a href="/">{{t "search.clear"}}</a></div>{{else}}
   <nav class="segmented" aria-label="{{t "home.when"}}">
     <a href="/?when=future" hx-get="/?when=future" hx-target="#home-days" hx-swap="outerHTML" hx-push-url="true"{{if eq .When "future"}} aria-current="page"{{end}}><span aria-hidden="true">⏳</span> {{t "home.future"}}</a>
     <a href="/?when=past" hx-get="/?when=past" hx-target="#home-days" hx-swap="outerHTML" hx-push-url="true"{{if eq .When "past"}} aria-current="page"{{end}}><span aria-hidden="true">✓</span> {{t "home.past"}}</a>
   </nav>
+  {{end}}
   {{if .Items}}<ul class="day-list">{{range .Items}}{{template "day-item" .}}{{end}}</ul>
-  {{else}}<p class="empty-list">{{if eq .When "past"}}{{t "home.empty_past"}}{{else}}{{t "home.empty_future"}}{{end}}</p>{{end}}
+  {{else}}<p class="empty-list">{{if .SearchQuery}}{{t "search.empty"}}{{else if eq .When "past"}}{{t "home.empty_past"}}{{else}}{{t "home.empty_future"}}{{end}}</p>{{end}}
 </div>{{end}}

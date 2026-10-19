@@ -76,11 +76,18 @@ Create and edit forms warn through the browser's native exit confirmation when
 unsaved fields would be lost by navigation, reload, or closing the tab. Unchanged
 forms and valid save submissions do not prompt; validation errors remain unsaved.
 Draft contents are not stored in browser storage.
+New-day forms include optional multiple-file attachments, uploaded on creation
+under the existing per-day and account quotas. Invalid fields or oversized files
+do not create a day; files must be selected again after validation errors. If a
+storage failure occurs after the day is saved, the error explicitly identifies
+the saved day and links to its attachment manager rather than inviting duplicate
+creation. Selected files participate in unsaved-change warnings.
 
 With JavaScript, tags use a multiline editor: typing `#` filters the owner's
 existing tags, with click or arrow-key/Enter selection, Escape dismissal, and
 removable selected chips that do not display the trigger `#`. A nonmatching name
-offers a create option. New tag names and any remaining `#name` input are resolved
+offers a create option. The automatic reserved Default tag is omitted from the
+picker; no explanatory text is shown beneath the tag editor. New tag names and any remaining `#name` input are resolved
 case-insensitively against the owner's tags or created atomically with a successful
 day save; failed validation or authorization never leaves orphan tags. Without
 JavaScript, existing tag checkboxes and a `#name` text field remain available.
@@ -106,6 +113,13 @@ rather than full-width rows. A `+` button opens the create dialog. Both tag and
 collection dialogs retain validation errors and entered fields, support Escape
 and Cancel, and have a link-based creation fallback without JavaScript.
 
+Tag and collection detail pages show their day list without inline management
+forms. Icon-only actions beside the name toggle archived entries and open Edit
+and Delete dialogs; collections also have a Share settings icon. Reserved groups
+retain color editing but cannot be renamed or deleted. Dialogs support Escape,
+Cancel, and link-based opening without JavaScript; edit validation reopens the
+dialog with the submitted fields and error.
+
 Reserved names are displayed localized ("Default" / "默认") but stored with `is_reserved=1`; users cannot create another collection/tag literally named the reserved name.
 
 ### 3.4 Countdown / elapsed calculation
@@ -116,8 +130,11 @@ Reserved names are displayed localized ("Default" / "默认") but stored with `i
 - Monthly repeat on day 29–31: clamp to the last day of shorter months.
 - Yearly repeat on Feb 29: Feb 28 in non-leap years.
 - Display:
-  - List: `N days left` / `N days ago` / `Today`. With time: also hours/minutes when < 1 day.
-  - Card: large number + breakdown in years/months/days (+h/m if time set). For repeating days, also show occurrence ordinal (e.g. "3rd anniversary") and time since the original date.
+  - List: `N days left` / `N days ago` / `Today`. Timed differences under 24 hours use zero-padded `HH:MM left` / `HH:MM ago`, without seconds.
+  - Card: centered square calendar (up to 32rem wide, growing vertically for long content), calendar-style icon/title row, large date row, then calendar years/months/days and `HH:MM` (if time set), labeled as remaining or elapsed. For repeating days, also show the next occurrence, occurrence ordinal (e.g. "3rd anniversary"), and time since the original date.
+  - Below a separator, recurrence, non-default collection, and non-default tags share a wrapping row without collection/tag labels. Owners have a right-aligned three-dot menu for Edit, Archive/Unarchive, Delete (with confirmation), Share, and Attachment. Shared recipients remain read-only.
+  - The optional visible comment follows the metadata row. Owner Share and Attachment menu links open modal dialogs outside the calendar, with Close and Escape support. Without JavaScript, the links open fixed overlays with Close links. Attachment and share actions redirect back to the appropriate open dialog. Shared attachments remain read-only and expandable.
+  - Day list entries omit reserved Default collection and tag badges, even when no other groups are assigned. Non-default group badges remain visible in home, search, subgroup, and archive lists. Shared recipients retain an expandable read-only attachments section. Menu actions use consistent plain styling, with Delete distinguished by its danger color.
 - Classification: **future** (target > now or repeating), **today**, **past** (target < now, non-repeating).
 - Date-engine conventions:
   - All-day comparisons and day counts use local civil dates, not elapsed 24-hour periods. An all-day repeat remains on today until local midnight. A timed repeat advances as soon as its scheduled instant has passed; exact equality still selects that occurrence.
@@ -142,15 +159,19 @@ Badges are never removed by custom styles so states remain distinguishable witho
 - Archived days are visible in: Archive page, Collection detail, Tag detail (with a filter to hide them).
 
 ### 3.7 Sharing
+- Regular users have a header search bar for active owned day titles and accepted, non-hidden shared day titles. Matching is case-insensitive and literal (including Chinese), across future and past. Archived owned days, hidden shared days, and unaccepted shares are excluded; clearing search restores normal Home date tabs.
 - Targets: a single **day** or a whole **collection**.
 - Recipients: one or more users, identified by **username or email** (case-insensitive). Unknown identifiers return a generic error (no user enumeration). Cannot share to self.
 - One share has many recipients (`share_recipients` table).
+- New recipients receive a pending invitation and have no shared day or attachment access until accepting it. Existing recipients at upgrade remain accepted.
+- The profile avatar shows the number of pending invitations; its Messages menu opens `/messages`, a newest-first queue with 20 invitations per page and Load more (with a JavaScript-free next-page fallback).
+- Accept/reject decisions are per recipient. Rejected invitations remain in Messages and can be accepted later; accepted invitations can also be rejected. Revoked/deleted shares are no longer actionable. Editing a share preserves retained recipients' decisions; newly added recipients start pending.
 - Per-share `show_comment` toggle (default off). Recipients see title, date, time, repeat, style, attachments; they see the comment only if `show_comment=1`. Owner's collection and tags are never exposed.
 - Collection share is live: recipients see all current non-archived days of that collection.
 - Shared items are **read-only** for recipients.
 - Recipients may hide a shared day from their Home (`share_hidden`); still listed under "Shared with me".
 - Owner can edit recipients, toggle comment visibility, or revoke shares.
-- If the same day is reachable through multiple shares, it appears once; comment visible if any applicable share has `show_comment=1`.
+- If the same day is reachable through multiple accepted shares, it appears once; comment visible if any applicable accepted share has `show_comment=1`.
 
 ### 3.8 Quotas & limits (admin-adjustable)
 | Setting | Default | Scope |
@@ -413,7 +434,7 @@ Deleting a day/collection also deletes shares targeting it (application-level, s
 | `GET/POST /setup` | Initial admin creation with token |
 | `GET/POST /login`, `POST /logout` | Auth |
 | `GET/POST /password` | Change password (forced when flagged) |
-| `GET /` | Home: list of active own + shared days, toggle **Future / Past** (htmx partial `?when=future|past`) |
+| `GET /` | Home: list of active own + accepted shared days, toggle **Future / Past** (htmx partial `?when=future|past`); `?q=...` searches visible day titles across both |
 | `GET /days/new`, `POST /days` | Create |
 | `GET /days/{id}` | Calendar card view (countdown, comment, attachments, style) |
 | `GET/POST /days/{id}/edit`, `POST /days/{id}/delete` | Edit / delete |
@@ -423,6 +444,9 @@ Deleting a day/collection also deletes shares targeting it (application-level, s
 | `GET /collections`, `/collections/{id}` (+CRUD) | Collections |
 | `GET /tags`, `/tags/{id}` (+CRUD) | Tags |
 | `GET /shared` | Shared with me |
+| `GET /messages` | Received share invitations; `?before=share_id` loads the next 20, with an htmx append fragment |
+| `POST /messages/{id}/accept` | Accept or re-accept a share invitation (recipient only) |
+| `POST /messages/{id}/reject` | Reject a share invitation, retaining it for later acceptance (recipient only) |
 | `GET /shares`, share CRUD on days/collections | My shares |
 | `POST /shared/{day_id}/hide`, `/unhide` | Recipient hide |
 | `GET/POST /settings` | Language, timezone, password link |

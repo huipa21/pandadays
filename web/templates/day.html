@@ -8,61 +8,54 @@
     <header class="day-card-head">
       <span class="day-card-icon" aria-hidden="true">{{template "day-icon" .}}</span>
       <h1 class="day-heading">{{.Day.Title}}</h1>
-      {{if .Shared}}<p class="badge badge-shared">{{t "sharing.from" .ShareOwner}}</p>{{end}}
-      {{if .Day.ArchivedAt}}<p class="chips">{{template "day-badges" .}}</p>{{end}}
     </header>
-    <p class="countdown"><span class="countdown-big">{{.Big}}</span>{{with .Caption}} <span class="countdown-caption">{{.}}</span>{{end}}</p>
-    {{with .Breakdown}}<ul class="breakdown">{{range .}}<li><strong>{{.Value}}</strong> {{.Unit}}</li>{{end}}</ul>{{end}}
-    {{with .Ordinal}}<p class="day-ordinal"><span aria-hidden="true">🎉</span> {{.}}</p>{{end}}
-    {{with .Since}}<div class="day-since">
-      <p class="hint">{{t "days.card.since" $.Day.Date}}</p>
-      <ul class="breakdown breakdown-small">{{range .}}<li><strong>{{.Value}}</strong> {{.Unit}}</li>{{end}}</ul>
-    </div>{{end}}
-    <dl class="day-facts">
-      <dt>{{t "days.field.date"}}</dt><dd><time datetime="{{.Day.Date}}">{{.Day.Date}}</time>{{with .Day.Time}} {{.}}{{else}} · {{t "days.all_day"}}{{end}}</dd>
-      {{if ne .Day.Repeat "none"}}<dt>{{t "days.next"}}</dt><dd>{{template "day-when" .}}</dd>{{end}}
-      <dt>{{t "days.field.repeat"}}</dt><dd>{{t (printf "days.repeat.%s" .Day.Repeat)}}</dd>
-      {{if not .Shared}}<dt>{{t "days.field.collection"}}</dt><dd><a class="chip" href="/collections/{{.Collection.ID}}">{{template "swatch" .Collection.Color}} {{template "group-name" .Collection}}</a></dd>
-      <dt>{{t "days.field.tags"}}</dt><dd class="chips">{{range .Tags}}<a class="chip" href="/tags/{{.ID}}">{{template "swatch" .Color}} {{template "group-name" .}}</a>{{end}}</dd>{{end}}
-    </dl>
-    {{if or (not .Shared) .ShowComment}}{{with .Day.Comment}}<p class="day-comment">{{.}}</p>{{end}}{{end}}
-    {{if not .Shared}}
-    <div class="chips">
-      <a class="btn" href="/days/{{.Day.ID}}/edit">{{t "days.edit"}}</a>
-      <form method="post" action="/days/{{.Day.ID}}/{{if .Day.ArchivedAt}}unarchive{{else}}archive{{end}}" class="inline-form"
-            hx-post="/days/{{.Day.ID}}/{{if .Day.ArchivedAt}}unarchive{{else}}archive{{end}}">
-        {{template "csrf-field" .}}
-        <button type="submit" class="btn">{{if .Day.ArchivedAt}}{{t "days.unarchive"}}{{else}}{{t "days.archive"}}{{end}}</button>
-      </form>
+    {{if .Shared}}<p class="day-state"><span class="badge badge-shared">{{t "sharing.from" .ShareOwner}}</span></p>{{end}}
+    {{if .Day.ArchivedAt}}<p class="day-state">{{template "day-badges" .}}</p>{{end}}
+    <p class="day-calendar-date"><time datetime="{{.Day.Date}}">{{.Day.Date}}</time>{{with .Day.Time}}<span class="day-calendar-time">{{.}}</span>{{else}}<span class="visually-hidden">{{t "days.all_day"}}</span>{{end}}</p>
+    <div class="day-countdown">
+      {{if or .Breakdown .Clock}}<ul class="breakdown">{{range .Breakdown}}<li><strong>{{.Value}}</strong> {{.Unit}}</li>{{end}}{{with .Clock}}<li class="day-clock">{{.}}</li>{{end}}</ul>{{end}}
+      <p class="countdown-caption">{{.Direction}}</p>
     </div>
-    {{end}}
+    {{if ne .Day.Repeat "none"}}<p class="day-next hint">{{t "days.next"}}: {{template "day-when" .}}</p>{{end}}
+    {{with .Ordinal}}<p class="day-ordinal"><span aria-hidden="true">🎉</span> {{.}}</p>{{end}}
+    {{if or .Since .SinceClock}}<div class="day-since">
+      <p class="hint">{{t "days.card.since" .Day.Date}}</p>
+      <ul class="breakdown breakdown-small">{{range .Since}}<li><strong>{{.Value}}</strong> {{.Unit}}</li>{{end}}{{with .SinceClock}}<li class="day-clock">{{.}}</li>{{end}}</ul>
+    </div>{{end}}
+    <div class="day-meta">
+      <div class="day-meta-groups">
+        <span class="day-repeat"><span aria-hidden="true">↻</span> {{t (printf "days.repeat.%s" .Day.Repeat)}}</span>
+        {{if not .Shared}}
+        {{if not .Collection.Reserved}}<a class="chip chip-small" href="/collections/{{.Collection.ID}}">{{template "swatch" .Collection.Color}} {{template "group-name" .Collection}}</a>{{end}}
+        {{range .Tags}}{{if not .Reserved}}<a class="chip chip-small" href="/tags/{{.ID}}">{{template "swatch" .Color}} {{template "group-name" .}}</a>{{end}}{{end}}
+        {{end}}
+      </div>
+      {{if not .Shared}}<details class="dropdown day-actions">
+        <summary class="dots" aria-label="{{t "days.actions"}}" title="{{t "days.actions"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></summary>
+        <div class="dropdown-panel">
+          <a href="/days/{{.Day.ID}}/edit">{{t "days.action.edit"}}</a>
+          <form method="post" action="/days/{{.Day.ID}}/{{if .Day.ArchivedAt}}unarchive{{else}}archive{{end}}" hx-post="/days/{{.Day.ID}}/{{if .Day.ArchivedAt}}unarchive{{else}}archive{{end}}">
+            {{template "csrf-field" .}}
+            <button type="submit" class="link-button">{{if .Day.ArchivedAt}}{{t "days.action.unarchive"}}{{else}}{{t "days.action.archive"}}{{end}}</button>
+          </form>
+          <form method="post" action="/days/{{.Day.ID}}/delete" data-confirm="{{t "days.delete_confirm"}}">
+            {{template "csrf-field" .}}
+            <button type="submit" class="link-button danger-text">{{t "days.action.delete"}}</button>
+          </form>
+          <a href="#day-sharing" data-expand-section="day-sharing">{{t "days.action.share"}}</a>
+          <a href="#attachments" data-expand-section="attachments">{{t "days.action.attachment"}}</a>
+        </div>
+      </details>{{end}}
+    </div>
+    {{if or (not .Shared) .ShowComment}}{{with .Day.Comment}}<p class="day-comment">{{.}}</p>{{end}}{{end}}
   </article>
-  {{if not .Shared}}
-  <section class="card form">
-    <h2>{{t "sharing.manage"}}</h2>
-    <p class="hint">{{t "sharing.identifiers_hint"}}</p>
-    <form method="post" action="/days/{{.Day.ID}}/shares" class="form">
-      {{template "csrf-field" .}}
-      <label>{{t "sharing.recipients"}}<textarea name="recipients" rows="3" required></textarea></label>
-      <label class="check"><input type="checkbox" name="show_comment" value="1"> {{t "sharing.show_comment"}}</label>
-      <button type="submit" class="btn">{{t "sharing.create"}}</button>
-    </form>
-    {{range .ShareRows}}
-    <form method="post" action="/shares/{{.Share.ID}}/edit" class="form share-entry">
-      {{template "csrf-field" $}}
-      <label>{{t "sharing.recipients"}}<textarea name="recipients" rows="2" required>{{.RecipientNames}}</textarea></label>
-      <label class="check"><input type="checkbox" name="show_comment" value="1"{{if .Share.ShowComment}} checked{{end}}> {{t "sharing.show_comment"}}</label>
-      <button type="submit" class="btn">{{t "sharing.save"}}</button>
-    </form>
-    <form method="post" action="/shares/{{.Share.ID}}/revoke" class="inline-form" hx-post="/shares/{{.Share.ID}}/revoke" hx-confirm="{{t "sharing.revoke_confirm"}}">
-      {{template "csrf-field" $}}
-      <button type="submit" class="link-button">{{t "sharing.revoke"}}</button>
-    </form>
+    {{if .Shared}}<details class="day-attachments card" id="attachments">
+      <summary class="day-section-toggle">{{t "days.attachments"}}<svg class="icon expand-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+    {{else}}<section class="card day-menu-section day-attachments" id="attachments" tabindex="-1" aria-labelledby="attachments-heading">
+      <a class="day-dialog-close link-button" href="#" data-close-dialog>{{t "days.dialog.close"}}</a>
+      <h2 class="day-section-heading" id="attachments-heading">{{t "days.attachments"}}</h2>
     {{end}}
-  </section>
-  {{end}}
-  <section class="card day-attachments" id="attachments">
-    <h2>{{t "days.attachments"}}</h2>
+      <div class="day-attachments-body">
     {{if not .Shared}}
     <p class="hint">{{t "attachments.card_usage" (bytes .Usage.CardUsed) (bytes .Usage.CardLimit)}}</p>
     <progress aria-label="{{t "attachments.card_usage" (bytes .Usage.CardUsed) (bytes .Usage.CardLimit)}}" max="{{if gt .Usage.CardLimit 0}}{{.Usage.CardLimit}}{{else}}1{{end}}" value="{{.Usage.CardUsed}}"></progress>
@@ -111,10 +104,35 @@
       <span role="status" aria-live="polite" data-record-status></span>
     </div>
     {{end}}
-  </section>
+      </div>
+    {{if .Shared}}</details>{{else}}</section>{{end}}
   {{if not .Shared}}
+  <section class="card day-menu-section day-sharing" id="day-sharing" tabindex="-1" aria-labelledby="sharing-heading">
+    <a class="day-dialog-close link-button" href="#" data-close-dialog>{{t "days.dialog.close"}}</a>
+    <h2 class="day-section-heading" id="sharing-heading">{{t "sharing.manage"}}</h2>
+    <div class="form">
+      <p class="hint">{{t "sharing.identifiers_hint"}}</p>
+      <form method="post" action="/days/{{.Day.ID}}/shares" class="form">
+        {{template "csrf-field" .}}
+        <label>{{t "sharing.recipients"}}<textarea name="recipients" rows="3" required></textarea></label>
+        <label class="check"><input type="checkbox" name="show_comment" value="1"> {{t "sharing.show_comment"}}</label>
+        <button type="submit" class="btn">{{t "sharing.create"}}</button>
+      </form>
+      {{range .ShareRows}}
+      <form method="post" action="/shares/{{.Share.ID}}/edit" class="form share-entry">
+        {{template "csrf-field" $}}
+        <label>{{t "sharing.recipients"}}<textarea name="recipients" rows="2" required>{{.RecipientNames}}</textarea></label>
+        <label class="check"><input type="checkbox" name="show_comment" value="1"{{if .Share.ShowComment}} checked{{end}}> {{t "sharing.show_comment"}}</label>
+        <button type="submit" class="btn">{{t "sharing.save"}}</button>
+      </form>
+      <form method="post" action="/shares/{{.Share.ID}}/revoke" class="inline-form" hx-post="/shares/{{.Share.ID}}/revoke" hx-confirm="{{t "sharing.revoke_confirm"}}">
+        {{template "csrf-field" $}}
+        <button type="submit" class="link-button">{{t "sharing.revoke"}}</button>
+      </form>
+      {{end}}
+    </div>
+  </section>
   <script src="{{asset "attachments.js"}}" defer></script>
-  {{template "day-delete" .}}
   {{end}}
 </section>
 {{end}}

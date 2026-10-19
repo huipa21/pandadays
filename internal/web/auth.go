@@ -87,7 +87,7 @@ func adminSiteOnly(next http.Handler) http.Handler {
 				authRedirect(w, r, "/admin/users")
 				return
 			}
-			for _, prefix := range []string{"/days", "/archive", "/collections", "/tags", "/shared", "/shares", "/attachments", "/settings/export", "/settings/import"} {
+			for _, prefix := range []string{"/days", "/archive", "/collections", "/tags", "/shared", "/shares", "/messages", "/attachments", "/settings/export", "/settings/import"} {
 				if r.URL.Path == prefix || strings.HasPrefix(r.URL.Path, prefix+"/") {
 					http.NotFound(w, r)
 					return
@@ -118,6 +118,10 @@ func authRedirect(w http.ResponseWriter, r *http.Request, target string) {
 	w.Header().Set("Cache-Control", "no-store")
 	if strings.EqualFold(r.Header.Get("HX-Request"), "true") {
 		w.Header().Set("HX-Redirect", target)
+		// Fragment-only navigation does not fetch the updated page after a mutation.
+		if strings.Contains(target, "#") {
+			w.Header().Set("HX-Refresh", "true")
+		}
 		w.WriteHeader(http.StatusOK)
 		return
 	}

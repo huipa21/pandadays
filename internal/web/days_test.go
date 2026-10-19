@@ -59,11 +59,12 @@ func TestDayNewFormDefaults(t *testing.T) {
 	today := time.Now().In(userLocation(&auth.User{Timezone: "Pacific/Kiritimati"})).Format(time.DateOnly)
 	for _, want := range []string{
 		`action="/days"`,
+		`enctype="multipart/form-data"`,
+		`<input type="file" name="file" multiple>`,
 		`data-day-form data-unsaved="false"`,
 		`name="date" value="` + today + `"`,
 		`<option value="none" selected>Does not repeat</option>`,
 		`<option value="` + strconv.FormatInt(defCol, 10) + `" selected>Default</option>`,
-		`name="tags" value="` + strconv.FormatInt(defTag, 10) + `" checked>`,
 		`name="tags" value="` + strconv.FormatInt(other.ID, 10) + `">`,
 		`name="no_color" value="1" checked>`,
 		`data-tag-picker data-remove-label="Remove tag"`,
@@ -80,6 +81,14 @@ func TestDayNewFormDefaults(t *testing.T) {
 	}
 	if rr.Code != 200 || strings.Contains(body, "/delete") {
 		t.Fatalf("new form: %d", rr.Code)
+	}
+	for _, unwanted := range []string{
+		`name="tags" value="` + strconv.FormatInt(defTag, 10) + `"`,
+		`id="tag-hint"`, `data-tag-help`, `aria-describedby="tag-hint"`,
+	} {
+		if strings.Contains(body, unwanted) {
+			t.Errorf("new form includes automatic tag or help: %q", unwanted)
+		}
 	}
 }
 
@@ -103,7 +112,8 @@ func TestDayCreateAppliesDefaults(t *testing.T) {
 	}
 	view := get(s.Handler(), dayPath(d.ID), token)
 	if view.Code != 200 || !strings.Contains(view.Body.String(), "Trip") || !strings.Contains(view.Body.String(), "All day") ||
-		!strings.Contains(view.Body.String(), "/collections/"+strconv.FormatInt(defCol, 10)) {
+		strings.Contains(view.Body.String(), `href="/collections/`+strconv.FormatInt(defCol, 10)+`"`) ||
+		strings.Contains(view.Body.String(), `href="/tags/`+strconv.FormatInt(defTag, 10)+`"`) {
 		t.Fatalf("view: %d", view.Code)
 	}
 }
@@ -129,6 +139,15 @@ func TestDayCreateWithAllFields(t *testing.T) {
 	if strings.Contains(body, "<b>cake</b>") || !strings.Contains(body, "&lt;b&gt;cake&lt;/b&gt;") ||
 		!strings.Contains(body, "Every year") || !strings.Contains(body, "Birthday") || !strings.Contains(body, "Mom") {
 		t.Fatal("view does not escape comment or misses fields")
+	}
+	for _, want := range []string{
+		`href="/collections/` + strconv.FormatInt(col.ID, 10) + `"`,
+		`href="/tags/` + strconv.FormatInt(t1.ID, 10) + `"`,
+		`href="/tags/` + strconv.FormatInt(t2.ID, 10) + `"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("detail missing custom group link %q", want)
+		}
 	}
 }
 

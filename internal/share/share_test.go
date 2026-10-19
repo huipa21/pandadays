@@ -62,6 +62,9 @@ func TestSharesRecipientsAccessAndCommentVisibility(t *testing.T) {
 		t.Fatalf("deduplicated recipients = %d, want 2", len(direct.Recipients))
 	}
 	for _, userID := range []int64{bob, carol} {
+		if err := store.Respond(ctx, userID, direct.ID, true); err != nil {
+			t.Fatal(err)
+		}
 		allowed, showComment, err := store.CanView(ctx, userID, dayID)
 		if err != nil || !allowed || !showComment {
 			t.Errorf("CanView(%d) = %v, %v, %v", userID, allowed, showComment, err)
@@ -74,6 +77,9 @@ func TestSharesRecipientsAccessAndCommentVisibility(t *testing.T) {
 	collection, err := store.Create(ctx, owner, TargetCollection, collectionID,
 		[]string{"bob@example.com"}, false, now)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Respond(ctx, bob, collection.ID, true); err != nil {
 		t.Fatal(err)
 	}
 	list, err := store.ListForUser(ctx, bob, false)
@@ -126,8 +132,11 @@ func TestSharesRecipientsAccessAndCommentVisibility(t *testing.T) {
 func TestCollectionShareIsLiveAndExcludesArchivedDays(t *testing.T) {
 	store, owner, bob, _, collectionID, first, second := shareFixture(t)
 	ctx := context.Background()
-	_, err := store.Create(ctx, owner, TargetCollection, collectionID, []string{"bob"}, false, time.Now())
+	sh, err := store.Create(ctx, owner, TargetCollection, collectionID, []string{"bob"}, false, time.Now())
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Respond(ctx, bob, sh.ID, true); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.db.ExecContext(ctx, `UPDATE days SET archived_at = 1 WHERE id = ?`, first); err != nil {
@@ -163,6 +172,9 @@ func TestShareUpdateReplacesRecipientsAndCommentVisibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := store.Update(ctx, owner, sh.ID, []string{"CAROL@example.com"}, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Respond(ctx, carol, sh.ID, true); err != nil {
 		t.Fatal(err)
 	}
 	if allowed, _, err := store.CanView(ctx, bob, dayID); err != nil || allowed {

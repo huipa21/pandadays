@@ -49,11 +49,12 @@ type dayPage struct {
 	Day         days.Day
 	State       days.Classification
 	Target      time.Time // effective target in the user's timezone
-	Big         string    // countdown figure
-	Caption     string    // countdown unit and direction, empty for "Today"
+	Direction   string
+	Clock       string
 	Breakdown   []breakdownPart
 	Ordinal     string // repeating days from the first repeat on
 	Since       []breakdownPart
+	SinceClock  string
 	Collection  days.Group
 	Tags        []days.Group
 	Attachments []media.Attachment
@@ -227,7 +228,9 @@ func (s *Server) renderDayForm(w http.ResponseWriter, r *http.Request, status in
 		page.Collections = append(page.Collections, groupOption{Group: g, Selected: g.ID == form.CollectionID})
 	}
 	for _, g := range tags {
-		page.Tags = append(page.Tags, groupOption{Group: g, Selected: selectedTags[g.ID]})
+		if !g.Reserved {
+			page.Tags = append(page.Tags, groupOption{Group: g, Selected: selectedTags[g.ID]})
+		}
 	}
 	s.renderStatus(w, r, "day_form.html", status, page)
 }
@@ -239,16 +242,10 @@ func (s *Server) handleDayNew(w http.ResponseWriter, r *http.Request) {
 		s.dayFail(w, r, "default collection for", err)
 		return
 	}
-	tag, err := s.tags.DefaultID(r.Context(), u.ID)
-	if err != nil {
-		s.dayFail(w, r, "default tag for", err)
-		return
-	}
 	form := dayForm{
 		Date:         s.now().In(userLocation(u)).Format(time.DateOnly),
 		Repeat:       string(days.RepeatNone),
 		CollectionID: col,
-		TagIDs:       []int64{tag},
 		Color:        defaultGroupColor,
 		NoColor:      true,
 	}
@@ -256,12 +253,42 @@ func (s *Server) handleDayNew(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDayCreate(w http.ResponseWriter, r *http.Request) {
+	if isDayCreateUpload(r) {
+		if r.MultipartForm == nil {
+			if !s.limitDayCreateForm(w, r) {
+				return
+			}
+			if err := r.ParseMultipartForm(32 << 20); err != nil {
+				if r.MultipartForm != nil {
+					r.MultipartForm.RemoveAll()
+				}
+				s.uploadReadError(w, r, err)
+				return
+			}
+		}
+		defer r.MultipartForm.RemoveAll()
+	}
 	if err := r.ParseForm(); err != nil {
 		s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 		return
 	}
 	form := parseDayForm(r)
-	d, err := s.days.Create(r.Context(), CurrentUser(r.Context()).ID, form.input(), time.Now())
+	owner := CurrentUser(r.Context()).ID
+	if r.MultipartForm != nil {
+		remaining, err := s.media.NewDayRemaining(r.Context(), owner)
+		if err != nil {
+			s.attachmentError(w, r, "check new day attachments", err)
+			return
+		}
+		for _, file := range r.MultipartForm.File["file"] {
+			if remaining <= 0 || file.Size > remaining {
+				s.renderDayForm(w, r, http.StatusRequestEntityTooLarge, days.Day{}, form, "attachments.error.limit")
+				return
+			}
+			remaining -= file.Size
+		}
+	}
+	d, err := s.days.Create(r.Context(), owner, form.input(), s.now())
 	if key, ok := dayErrorKey(err); ok {
 		if form.NoColor || form.Color == "" {
 			form.Color, form.NoColor = defaultGroupColor, true
@@ -272,6 +299,24 @@ func (s *Server) handleDayCreate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.dayFail(w, r, "create", err)
 		return
+	}
+	if r.MultipartForm != nil {
+		for _, header := range r.MultipartForm.File["file"] {
+			file, err := header.Open()
+			if err == nil {
+				_, err = s.media.Upload(r.Context(), owner, d.ID, header.Filename, file)
+				closeErr := file.Close()
+				if err == nil {
+					err = closeErr
+				}
+			}
+			if err != nil {
+				s.log.Error("upload attachment for new day", "day_id", d.ID, "err", err)
+				// Keep the saved day and successful uploads; retries must not create duplicates.
+				s.renderDayForm(w, r, http.StatusInternalServerError, d, formFromDay(d), "attachments.create_error")
+				return
+			}
+		}
 	}
 	http.Redirect(w, r, dayPath(d.ID), http.StatusSeeOther)
 }
@@ -316,13 +361,26 @@ func (s *Server) handleDayView(w http.ResponseWriter, r *http.Request) {
 	lang := i18n.LangFrom(r.Context())
 	timed := d.Time != ""
 	page.State, page.Target = calc.Classification, calc.Target
-	page.Big, page.Caption = s.countdown(lang, calc.ListLabel)
-	page.Breakdown = s.breakdownParts(lang, calc.Breakdown, timed)
+	page.Direction = s.i18n.T(lang, "days.today")
+	if calc.ListLabel.Key != "days.today" {
+		direction := "left"
+		if calc.Classification == days.Past {
+			direction = "ago"
+		}
+		page.Direction = s.i18n.T(lang, "days.card.time."+direction)
+	}
+	page.Breakdown = s.breakdownParts(lang, calc.Breakdown)
+	if timed {
+		page.Clock = s.i18n.T(lang, "days.card.hm", calc.Breakdown.Hours, calc.Breakdown.Minutes)
+	}
 	if d.Repeat != days.RepeatNone && calc.OccurrenceOrdinal > 0 {
 		page.Ordinal = s.i18n.T(lang, "days.card.ordinal."+string(d.Repeat), ordinalNumber(lang, calc.OccurrenceOrdinal))
 	}
 	if calc.SinceOriginal != nil {
-		page.Since = s.breakdownParts(lang, *calc.SinceOriginal, timed)
+		page.Since = s.breakdownParts(lang, *calc.SinceOriginal)
+		if timed {
+			page.SinceClock = s.i18n.T(lang, "days.card.hm", calc.SinceOriginal.Hours, calc.SinceOriginal.Minutes)
+		}
 	}
 	if !shared {
 		if page.Collection, err = s.collections.Get(r.Context(), u.ID, d.CollectionID); err != nil {

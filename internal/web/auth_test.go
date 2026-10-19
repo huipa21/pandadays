@@ -39,6 +39,25 @@ func sessionRequest(method, path, token string) *http.Request {
 	return r
 }
 
+func TestHTMXRedirectRefreshesFragmentTargets(t *testing.T) {
+	for _, target := range []string{"/days/1#attachments", "/days/1#day-sharing", "/days/1"} {
+		r := httptest.NewRequest(http.MethodPost, "/days/1/attachments", nil)
+		r.Header.Set("HX-Request", "true")
+		w := httptest.NewRecorder()
+		authRedirect(w, r, target)
+		if w.Code != http.StatusOK || w.Header().Get("HX-Redirect") != target {
+			t.Fatalf("redirect to %s: %d %v", target, w.Code, w.Header())
+		}
+		want := ""
+		if strings.Contains(target, "#") {
+			want = "true"
+		}
+		if got := w.Header().Get("HX-Refresh"); got != want {
+			t.Errorf("refresh for %s = %q, want %q", target, got, want)
+		}
+	}
+}
+
 func TestCurrentUserAndLanguage(t *testing.T) {
 	s, db, u, token := authenticatedServer(t)
 	if _, err := db.Exec(`UPDATE users SET lang = 'zh', timezone = 'Asia/Shanghai' WHERE id = ?`, u.ID); err != nil {

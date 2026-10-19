@@ -95,7 +95,23 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		sharedByID[d.ID] = d
 	}
 	list = append(list, sharedDays...)
-	entries := days.HomeList(list, when, s.now(), userLocation(u))
+	pageData := newPageData(r)
+	if pageData.SearchQuery != "" {
+		query := strings.ToLower(pageData.SearchQuery)
+		matches := make([]days.Day, 0, len(list))
+		for _, day := range list {
+			if strings.Contains(strings.ToLower(day.Title), query) {
+				matches = append(matches, day)
+			}
+		}
+		list = matches
+	}
+	now, loc := s.now(), userLocation(u)
+	entries := days.HomeList(list, when, now, loc)
+	if pageData.SearchQuery != "" {
+		entries = append(days.HomeList(list, days.WhenFuture, now, loc),
+			days.HomeList(list, days.WhenPast, now, loc)...)
+	}
 	items := s.dayItems(r, entries, groups)
 	for i := range items {
 		if sharedDay, ok := sharedByID[items[i].Day.ID]; ok {
@@ -104,7 +120,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 			items[i].HideAction = "/shared/" + strconv.FormatInt(sharedDay.ID, 10) + "/hide"
 		}
 	}
-	page := homePage{pageData: newPageData(r), When: when,
+	page := homePage{pageData: pageData, When: when,
 		Items: items}
 	w.Header().Add("Vary", "HX-Request")
 	if isHTMX(r) && r.Header.Get("HX-History-Restore-Request") == "" {
@@ -127,9 +143,14 @@ func (s *Server) dayItems(r *http.Request, entries []days.Entry, groups groupInd
 	items := make([]dayItem, 0, len(entries))
 	for _, e := range entries {
 		item := dayItem{Day: e.Day, State: e.Calc.Classification, Target: e.Calc.Target,
-			Label: s.i18n.T(lang, e.Calc.ListLabel.Key, e.Calc.ListLabel.Args...),
-			Tags:  groups.dayTags(e.Day), CSRFToken: CSRFToken(r.Context())}
-		if c, ok := groups.collections[e.Day.CollectionID]; ok {
+			Label:     s.i18n.T(lang, e.Calc.ListLabel.Key, e.Calc.ListLabel.Args...),
+			CSRFToken: CSRFToken(r.Context())}
+		for _, tag := range groups.dayTags(e.Day) {
+			if !tag.Reserved {
+				item.Tags = append(item.Tags, tag)
+			}
+		}
+		if c, ok := groups.collections[e.Day.CollectionID]; ok && !c.Reserved {
 			item.Collection = &c
 		}
 		items = append(items, item)
@@ -174,15 +195,12 @@ type breakdownPart struct {
 	Unit  string
 }
 
-func (s *Server) breakdownParts(lang string, b days.Breakdown, timed bool) []breakdownPart {
+func (s *Server) breakdownParts(lang string, b days.Breakdown) []breakdownPart {
 	type unitValue struct {
 		n    int
 		unit string
 	}
 	values := []unitValue{{b.Years, "year"}, {b.Months, "month"}, {b.Days, "day"}}
-	if timed {
-		values = append(values, unitValue{b.Hours, "hour"}, unitValue{b.Minutes, "minute"})
-	}
 	var parts []breakdownPart
 	for _, v := range values {
 		if v.n == 0 {
@@ -195,19 +213,6 @@ func (s *Server) breakdownParts(lang string, b days.Breakdown, timed bool) []bre
 		parts = append(parts, breakdownPart{Value: v.n, Unit: s.i18n.T(lang, "days.unit."+v.unit+"."+plural)})
 	}
 	return parts
-}
-
-// countdown splits a list label into the card's big figure and its caption.
-func (s *Server) countdown(lang string, m days.Message) (big, caption string) {
-	switch {
-	case strings.HasPrefix(m.Key, "days.count.") && len(m.Args) == 1:
-		if n, ok := m.Args[0].(int); ok {
-			return strconv.Itoa(n), s.i18n.T(lang, "days.card."+strings.TrimPrefix(m.Key, "days."))
-		}
-	case strings.HasPrefix(m.Key, "days.time.") && len(m.Args) == 2:
-		return s.i18n.T(lang, "days.card.hm", m.Args...), s.i18n.T(lang, "days.card."+strings.TrimPrefix(m.Key, "days."))
-	}
-	return s.i18n.T(lang, m.Key, m.Args...), ""
 }
 
 // ordinalNumber formats n as an ordinal figure for lang ("3rd" in English, "3" otherwise).

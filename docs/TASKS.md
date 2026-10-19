@@ -220,6 +220,51 @@ Status legend: `[ ]` todo, `[x]` done.
 - **Done when**: business-rule and ownership tests, full Go tests/vet, JavaScript tests, and 375px/1280px browser checks pass.
 - Verified: full `go test ./...`, `go vet ./...`, CGO-free build, and all 16 dependency-free JavaScript tests pass. Chromium checks confirmed identical icon/color field widths (294px at 375px and 1167px at 1280px), no document overflow, compact counted tags, notebook membership/counts, comment create/edit persistence, modal create/error/cancel/Escape flows, draft tag retention/removal/reselection, and no-JavaScript creation. English/Chinese and light/dark layouts checked.
 
+### [x] T26 Share invitation inbox
+- Profile-avatar pending count and Messages queue with 20-item cursor pagination and Load more.
+- Per-recipient accept/reject, including accepting a previously rejected invitation.
+- Pending/rejected invitations grant no day, comment, or attachment access; existing shares remain accepted at upgrade.
+- Preserve retained recipients' decisions when editing shares; new recipients start pending.
+- **Done when**: business-rule, authorization, pagination, migration compatibility, full Go tests/vet, and 375px/1280px UI checks pass.
+- Verified: full Go tests/vet; Chromium checks at 375px/1280px, 20-to-23-item Load more without duplicates, badge update, reject then accept, and shared detail access.
+
+### [x] T27 Header day search
+- Top search bar for regular users, matching active owned and accepted, visible shared day titles case-insensitively across future/past.
+- Preserve authorization, shared-day deduplication, and normal Home date tabs when not searching.
+- Localized search results, empty state, and clear-search link.
+- **Done when**: targeted search/authorization tests, full Go tests/vet, and 375px/1280px browser checks pass.
+- Verified: full Go tests/vet and CGO-free build; Chromium checks in light/dark at 375px/1280px without horizontal overflow, mixed-case future/past search, Chinese search, empty state, and clear search. Messages localization and JavaScript-disabled pagination also checked.
+
+### [x] T28 Calendar-style day detail
+- Omit the automatic Default tag and explanatory help from the day tag editor.
+- Use minute-precision HH:MM for sub-day list countdowns and timed detail breakdowns.
+- Calendar card with icon/title, prominent date, countdown/elapsed time, compact non-default metadata, and owner action menu.
+- Keep comments, expandable attachments, sharing controls, confirmation, and shared read-only authorization intact.
+- **Done when**: targeted rendering/authorization tests, JavaScript tests, full Go tests/vet, and 375px/1280px UI checks pass.
+- Verified: full Go tests/vet and all 18 JavaScript tests pass; CGO-free server and 375px/1280px browser checks confirm minute-precision clocks, icon/title alignment, larger date, hidden defaults/help, custom metadata, unclipped action menu, section expansion, archive/unarchive, and canceled deletion. English/light and Chinese/dark layouts have no horizontal overflow.
+
+### [x] T29 Square calendar and menu-only controls
+- Center a responsive square day card; allow long content to grow without clipping.
+- Style all action menu entries consistently, retaining the Delete danger color.
+- Remove duplicate owner attachment/sharing toggles; show those controls only through their menu links, including without JavaScript.
+- Preserve shared recipients' read-only attachment access.
+- **Done when**: rendering/authorization tests, JavaScript tests, full Go tests/vet, and 375px/1280px browser checks pass.
+- Verified: full Go tests/vet and all 18 JavaScript tests pass. Browser checks measure 343x343 and 512x512 cards at 375px/1280px, confirm hidden-by-default owner controls, consistent menu styling, menu-only section switching with scripts enabled/blocked, and long-content growth without clipping or horizontal overflow.
+
+### [x] T30 Day metadata, action dialogs, and creation attachments
+- Hide reserved Default collection/tag badges in every day list, including default-only entries.
+- Open Share and Attachment menu controls in accessible modal dialogs, retaining no-JavaScript overlays and redirect reopening.
+- Add optional multiple-file uploads to day creation with quota checks, CSRF/ownership validation, explicit failure handling, and unsaved-file protection.
+- **Done when**: targeted tests, full Go tests/vet, JavaScript tests, and 375px/1280px browser checks pass.
+- Verified: full Go tests/vet and all 20 JavaScript tests pass. Browser checks at 375px/1280px confirm hidden default-only badges, modal Share/Attachment controls, Close/Escape, no-JavaScript fixed overlays, multi-file creation, and refreshed attachment lists after upload with dialog reopening. English/light and Chinese/dark dialogs have no horizontal overflow.
+
+### [x] T31 Compact group detail actions
+- Keep tag and collection detail pages focused on their day lists.
+- Place icon-only archive, edit, and delete actions beside the group name, plus collection sharing.
+- Open management forms in accessible dialogs with Cancel/Escape and no-JavaScript fallbacks; retain reserved-group protection and edit validation.
+- **Done when**: group rendering/authorization tests, full Go tests/vet, and 375px/1280px browser checks pass.
+- Verified: Go tests/vet and JavaScript tests pass. Browser checks at 375px/1280px confirm icon-only actions, modal Edit/Delete/Share dialogs without overflow, Escape/Cancel, archive filtering after htmx swaps, successful rename/delete, and link-based dialogs with scripts blocked.
+
 ## Dependency Graph
 
 ```mermaid

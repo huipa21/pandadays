@@ -11,6 +11,9 @@ import (
 )
 
 func (s *Server) registerShareRoutes(mux *http.ServeMux) {
+	mux.Handle("GET /messages", RequireLogin(http.HandlerFunc(s.handleInbox)))
+	mux.Handle("POST /messages/{id}/accept", RequireLogin(http.HandlerFunc(s.acceptInvitation)))
+	mux.Handle("POST /messages/{id}/reject", RequireLogin(http.HandlerFunc(s.rejectInvitation)))
 	mux.Handle("GET /shared", RequireLogin(http.HandlerFunc(s.handleSharedList)))
 	mux.Handle("POST /days/{id}/shares", RequireLogin(http.HandlerFunc(s.createDayShare)))
 	mux.Handle("POST /collections/{id}/shares", RequireLogin(http.HandlerFunc(s.createCollectionShare)))
@@ -18,6 +21,58 @@ func (s *Server) registerShareRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /shares/{id}/revoke", RequireLogin(http.HandlerFunc(s.revokeShare)))
 	mux.Handle("POST /shared/{id}/hide", RequireLogin(http.HandlerFunc(s.hideSharedDay)))
 	mux.Handle("POST /shared/{id}/unhide", RequireLogin(http.HandlerFunc(s.unhideSharedDay)))
+}
+
+func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
+	before := int64(0)
+	if raw := r.URL.Query().Get("before"); raw != "" {
+		var err error
+		before, err = strconv.ParseInt(raw, 10, 64)
+		if err != nil || before <= 0 {
+			s.authError(w, r, "error.bad_request", http.StatusBadRequest)
+			return
+		}
+	}
+	items, more, err := s.shares.Inbox(r.Context(), CurrentUser(r.Context()).ID, before)
+	if err != nil {
+		s.shareError(w, r, "list invitations", err)
+		return
+	}
+	next := int64(0)
+	if more {
+		next = items[len(items)-1].ShareID
+	}
+	page := struct {
+		pageData
+		Invitations []share.Invitation
+		Next        int64
+	}{newPageData(r), items, next}
+	w.Header().Add("Vary", "HX-Request")
+	if isHTMX(r) && r.Header.Get("HX-History-Restore-Request") == "" {
+		s.renderPartial(w, r, "messages.html", "message-page", page)
+		return
+	}
+	s.render(w, r, "messages.html", page)
+}
+
+func (s *Server) acceptInvitation(w http.ResponseWriter, r *http.Request) {
+	s.respondInvitation(w, r, true)
+}
+
+func (s *Server) rejectInvitation(w http.ResponseWriter, r *http.Request) {
+	s.respondInvitation(w, r, false)
+}
+
+func (s *Server) respondInvitation(w http.ResponseWriter, r *http.Request, accept bool) {
+	id, ok := s.sharePathID(w, r)
+	if !ok {
+		return
+	}
+	if err := s.shares.Respond(r.Context(), CurrentUser(r.Context()).ID, id, accept); err != nil {
+		s.shareError(w, r, "respond to invitation", err)
+		return
+	}
+	authRedirect(w, r, "/messages")
 }
 
 func (s *Server) createDayShare(w http.ResponseWriter, r *http.Request) {
@@ -109,7 +164,7 @@ func (s *Server) sharePathID(w http.ResponseWriter, r *http.Request) (int64, boo
 func shareTargetPath(targetType share.TargetType, id int64) string {
 	switch targetType {
 	case share.TargetDay:
-		return dayPath(id)
+		return dayPath(id) + "#day-sharing"
 	case share.TargetCollection:
 		return "/collections/" + strconv.FormatInt(id, 10)
 	default:

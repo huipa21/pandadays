@@ -62,12 +62,12 @@ func (s *Store) usage(ctx context.Context, q interface {
 		       u.used_bytes,
 		       COALESCE(SUM(a.size), 0)
 		FROM users u
-		JOIN days d ON d.owner_id = u.id
+		LEFT JOIN days d ON d.owner_id = u.id AND d.id = ?
 		JOIN settings mc ON mc.key = 'default_max_card_bytes'
 		JOIN settings qb ON qb.key = 'default_quota_bytes'
 		LEFT JOIN attachments a ON a.day_id = d.id AND a.owner_id = u.id
-		WHERE u.id = ? AND d.id = ?
-		GROUP BY u.id`, ownerID, dayID).
+		WHERE u.id = ? AND (? = 0 OR d.id IS NOT NULL)
+		GROUP BY u.id`, dayID, ownerID, dayID).
 		Scan(&cardLimit, &userLimit, &u.UserUsed, &u.CardUsed)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Usage{}, ErrNotFound
@@ -90,6 +90,9 @@ func (s *Store) usage(ctx context.Context, q interface {
 }
 
 func (s *Store) Usage(ctx context.Context, ownerID, dayID int64) (Usage, error) {
+	if dayID <= 0 {
+		return Usage{}, ErrNotFound
+	}
 	return s.usage(ctx, s.db, ownerID, dayID)
 }
 
@@ -98,6 +101,19 @@ func (s *Store) Remaining(ctx context.Context, ownerID, dayID int64) (int64, err
 	if err != nil {
 		return 0, err
 	}
+	return u.remaining(), nil
+}
+
+// NewDayRemaining checks the account and per-card allowance before a day exists.
+func (s *Store) NewDayRemaining(ctx context.Context, ownerID int64) (int64, error) {
+	u, err := s.usage(ctx, s.db, ownerID, 0)
+	if err != nil {
+		return 0, err
+	}
+	return u.remaining(), nil
+}
+
+func (u Usage) remaining() int64 {
 	card, user := u.CardLimit-u.CardUsed, u.UserLimit-u.UserUsed
 	if card < 0 {
 		card = 0
@@ -106,12 +122,15 @@ func (s *Store) Remaining(ctx context.Context, ownerID, dayID int64) (int64, err
 		user = 0
 	}
 	if user < card {
-		return user, nil
+		return user
 	}
-	return card, nil
+	return card
 }
 
 func (s *Store) Upload(ctx context.Context, ownerID, dayID int64, filename string, src io.Reader) (Attachment, error) {
+	if dayID <= 0 {
+		return Attachment{}, ErrNotFound
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Attachment{}, fmt.Errorf("begin attachment upload: %w", err)
@@ -289,7 +308,7 @@ func (s *Store) ListAccessibleDay(ctx context.Context, viewerID, dayID int64) ([
 			d.owner_id = ? OR EXISTS (
 				SELECT 1 FROM shares sh
 				JOIN share_recipients sr ON sr.share_id = sh.id
-				WHERE sh.owner_id = d.owner_id AND sr.recipient_id = ?
+				WHERE sh.owner_id = d.owner_id AND sr.recipient_id = ? AND sr.status = 'accepted'
 				AND ((sh.target_type = 'day' AND sh.target_id = d.id)
 					OR (sh.target_type = 'collection' AND sh.target_id = d.collection_id AND d.archived_at IS NULL))
 			)
@@ -340,7 +359,7 @@ func (s *Store) GetAccessible(ctx context.Context, viewerID, id int64) (Attachme
 				SELECT 1
 				FROM shares sh
 				JOIN share_recipients sr ON sr.share_id = sh.id
-				WHERE sh.owner_id = a.owner_id AND sr.recipient_id = ?
+				WHERE sh.owner_id = a.owner_id AND sr.recipient_id = ? AND sr.status = 'accepted'
 				AND (
 					(sh.target_type = 'day' AND sh.target_id = d.id)
 					OR (sh.target_type = 'collection' AND sh.target_id = d.collection_id AND d.archived_at IS NULL)
