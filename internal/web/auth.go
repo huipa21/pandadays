@@ -87,7 +87,7 @@ func adminSiteOnly(next http.Handler) http.Handler {
 				authRedirect(w, r, "/admin/users")
 				return
 			}
-			for _, prefix := range []string{"/days", "/archive", "/collections", "/tags", "/shared", "/shares", "/messages", "/attachments", "/media", "/settings/export", "/settings/import"} {
+			for _, prefix := range []string{"/days", "/archive", "/collections", "/tags", "/sharing", "/shared", "/shares", "/messages", "/attachments", "/media", "/settings/export", "/settings/import"} {
 				if r.URL.Path == prefix || strings.HasPrefix(r.URL.Path, prefix+"/") {
 					http.NotFound(w, r)
 					return

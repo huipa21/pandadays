@@ -1,10 +1,10 @@
 {{define "title"}}{{t "media.title"}} · {{t "app.name"}}{{end}}
 {{define "content"}}
 <section class="stack">
-  <div class="page-heading">
+  {{if not .Item.ID}}<div class="page-heading">
     <h1>{{t "media.title"}}</h1>
     {{if .Items}}<p class="hint">{{t "media.summary" (len .Items) (bytes .Total)}}</p>{{end}}
-  </div>
+  </div>{{end}}
   {{if .Item.ID}}
   <p><a href="/media">← {{t "media.title"}}</a></p>
   <article class="card media-detail">

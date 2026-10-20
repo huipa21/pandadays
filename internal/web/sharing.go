@@ -15,6 +15,7 @@ func (s *Server) registerShareRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /messages/{id}/accept", RequireLogin(http.HandlerFunc(s.acceptInvitation)))
 	mux.Handle("POST /messages/{id}/reject", RequireLogin(http.HandlerFunc(s.rejectInvitation)))
 	mux.Handle("GET /shared", RequireLogin(http.HandlerFunc(s.handleSharedList)))
+	mux.Handle("GET /sharing", RequireLogin(http.HandlerFunc(s.handleSharing)))
 	mux.Handle("POST /days/{id}/shares", RequireLogin(http.HandlerFunc(s.createDayShare)))
 	mux.Handle("POST /collections/{id}/shares", RequireLogin(http.HandlerFunc(s.createCollectionShare)))
 	mux.Handle("POST /shares/{id}/edit", RequireLogin(http.HandlerFunc(s.updateShare)))
@@ -214,6 +215,22 @@ func (s *Server) setSharedDayHidden(w http.ResponseWriter, r *http.Request, hidd
 	authRedirect(w, r, target)
 }
 
+type sharingPage struct {
+	pageData
+	Received bool
+	Items    []dayItem
+	Targets  []share.SharedTarget
+}
+
+func (s *Server) handleSharing(w http.ResponseWriter, r *http.Request) {
+	targets, err := s.shares.ListOwnedTargets(r.Context(), CurrentUser(r.Context()).ID)
+	if err != nil {
+		s.shareError(w, r, "list outgoing shares", err)
+		return
+	}
+	s.render(w, r, "shared.html", sharingPage{pageData: newPageData(r), Targets: targets})
+}
+
 func (s *Server) handleSharedList(w http.ResponseWriter, r *http.Request) {
 	u := CurrentUser(r.Context())
 	list, err := s.shares.ListForUser(r.Context(), u.ID, true)
@@ -243,10 +260,7 @@ func (s *Server) handleSharedList(w http.ResponseWriter, r *http.Request) {
 			items[i].HideAction = "/shared/" + strconv.FormatInt(sharedDay.ID, 10) + "/unhide?from=shared"
 		}
 	}
-	s.render(w, r, "shared.html", struct {
-		pageData
-		Items []dayItem
-	}{newPageData(r), items})
+	s.render(w, r, "shared.html", sharingPage{pageData: newPageData(r), Received: true, Items: items})
 }
 
 type shareRow struct {

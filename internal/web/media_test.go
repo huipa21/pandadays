@@ -84,6 +84,12 @@ func TestMediaDetailIsOwnerScoped(t *testing.T) {
 			if rr.Code != http.StatusOK || !strings.Contains(body, want) {
 				t.Fatalf("detail missing %q: %d", want, rr.Code)
 			}
+			if strings.Contains(body, `<div class="page-heading">`) {
+				t.Error("media detail retains the library page heading")
+			}
+			if !strings.Contains(body, `<h2>beach.txt</h2>`) {
+				t.Error("media detail lost its filename")
+			}
 		}
 	}
 	for _, path := range []string{path, "/media/999999", "/media/invalid"} {

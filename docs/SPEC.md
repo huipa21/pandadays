@@ -89,7 +89,8 @@ The edit form contains day fields and Save only; attachments and deletion remain
 in the card menu. An image background can be cleared without deleting its attachment.
 The media library uses a compact thumbnail/name grid. Opening an item shows its
 preview with details, source day, original-file link, and Delete in a side column
-(stacked below the preview on mobile).
+(stacked below the preview on mobile), without repeating the Media page heading.
+The filename remains visible in the details.
 
 With JavaScript, tags use a multiline editor: typing `#` filters the owner's
 existing tags, with click or arrow-key/Enter selection, Escape dismissal, and
@@ -167,6 +168,8 @@ Badges are never removed by custom styles so states remain distinguishable witho
 - Archived days are visible in: Archive page, Collection detail, Tag detail (with a filter to hide them).
 
 ### 3.7 Sharing
+- Regular users have Home, Collections, Tags, and Media in the header. Archive and Sharing live in the avatar dropdown alongside Messages, Profile, Settings, and Sign out. Owned day detail pages do not repeat a Home link.
+- Sharing opens `/sharing` with **Shared to Others** and **Shared to Me** tabs. Shared to Others lists each day or collection the current user shares once, including pending/rejected invitations and archived owned days, linking to its share settings. Revoked shares and deleted targets are omitted. Shared to Me keeps `/shared` and the existing accepted-day list, including hidden days.
 - Regular users have a header search bar for active owned day titles and accepted, non-hidden shared day titles. Matching is case-insensitive and literal (including Chinese), across future and past. Archived owned days, hidden shared days, and unaccepted shares are excluded; clearing search restores normal Home date tabs.
 - Targets: a single **day** or a whole **collection**.
 - Recipients: one or more users, identified by **username or email** (case-insensitive). Unknown identifiers return a generic error (no user enumeration). Cannot share to self.
@@ -177,7 +180,7 @@ Badges are never removed by custom styles so states remain distinguishable witho
 - Per-share `show_comment` toggle (default off). Recipients see title, date, time, repeat, style, attachments; they see the comment only if `show_comment=1`. Owner's collection and tags are never exposed.
 - Collection share is live: recipients see all current non-archived days of that collection.
 - Shared items are **read-only** for recipients.
-- Recipients may hide a shared day from their Home (`share_hidden`); still listed under "Shared with me".
+- Recipients may hide a shared day from their Home (`share_hidden`); still listed under "Shared to Me".
 - Owner can edit recipients, toggle comment visibility, or revoke shares.
 - If the same day is reachable through multiple accepted shares, it appears once; comment visible if any applicable accepted share has `show_comment=1`.
 

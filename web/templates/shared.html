@@ -2,7 +2,21 @@
 {{define "content"}}
 <section class="stack">
   <h1>{{t "sharing.title"}}</h1>
-  {{if .Items}}<ul class="day-list">{{range .Items}}{{template "day-item" .}}{{end}}</ul>
-  {{else}}<p class="empty-list">{{t "sharing.empty"}}</p>{{end}}
+  <nav class="segmented" aria-label="{{t "sharing.title"}}">
+    <a href="/sharing"{{if not .Received}} aria-current="page"{{end}}>{{t "sharing.sent"}}</a>
+    <a href="/shared"{{if .Received}} aria-current="page"{{end}}>{{t "sharing.received"}}</a>
+  </nav>
+  {{if .Received}}
+    {{if .Items}}<ul class="day-list">{{range .Items}}{{template "day-item" .}}{{end}}</ul>
+    {{else}}<p class="empty-list">{{t "sharing.empty"}}</p>{{end}}
+  {{else}}
+    {{if .Targets}}<ul class="day-list">{{range .Targets}}<li>
+      <a class="day-item" href="{{if eq .TargetType "day"}}/days/{{.TargetID}}#day-sharing{{else}}/collections/{{.TargetID}}{{end}}">
+        <span class="day-item-title">{{if .Reserved}}{{t "groups.default"}}{{else}}{{.Title}}{{end}}</span>
+        <span class="hint">{{if eq .TargetType "day"}}{{t "sharing.target_day"}}{{else}}{{t "days.field.collection"}}{{end}}</span>
+      </a>
+    </li>{{end}}</ul>
+    {{else}}<p class="empty-list">{{t "sharing.sent_empty"}}</p>{{end}}
+  {{end}}
 </section>
 {{end}}

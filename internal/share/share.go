@@ -250,6 +250,40 @@ func (s *Store) List(ctx context.Context, ownerID int64, targetType TargetType, 
 	return shares, nil
 }
 
+type SharedTarget struct {
+	TargetType TargetType
+	TargetID   int64
+	Title      string
+	Reserved   bool
+}
+
+func (s *Store) ListOwnedTargets(ctx context.Context, ownerID int64) ([]SharedTarget, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT sh.target_type, sh.target_id,
+		COALESCE(d.title, c.name), COALESCE(c.is_reserved, 0)
+		FROM shares sh
+		LEFT JOIN days d ON sh.target_type = 'day' AND d.id = sh.target_id AND d.owner_id = sh.owner_id
+		LEFT JOIN collections c ON sh.target_type = 'collection' AND c.id = sh.target_id AND c.owner_id = sh.owner_id
+		WHERE sh.owner_id = ? AND (d.id IS NOT NULL OR c.id IS NOT NULL)
+		AND EXISTS (SELECT 1 FROM share_recipients sr WHERE sr.share_id = sh.id)
+		ORDER BY COALESCE(d.title, c.name) COLLATE NOCASE, sh.target_type, sh.target_id`, ownerID)
+	if err != nil {
+		return nil, fmt.Errorf("list owned share targets: %w", err)
+	}
+	defer rows.Close()
+	var targets []SharedTarget
+	for rows.Next() {
+		var target SharedTarget
+		if err := rows.Scan(&target.TargetType, &target.TargetID, &target.Title, &target.Reserved); err != nil {
+			return nil, fmt.Errorf("scan owned share target: %w", err)
+		}
+		targets = append(targets, target)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate owned share targets: %w", err)
+	}
+	return targets, nil
+}
+
 func (s *Store) Revoke(ctx context.Context, ownerID, shareID int64) error {
 	result, err := s.db.ExecContext(ctx, `DELETE FROM shares WHERE owner_id = ? AND id = ?`, ownerID, shareID)
 	if err != nil {

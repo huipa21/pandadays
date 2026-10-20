@@ -16,6 +16,88 @@ import (
 	"pandadays/internal/share"
 )
 
+func TestSharingTabsAndOutgoingTargets(t *testing.T) {
+	s, _, owner, token := authenticatedServer(t)
+	bob, bobToken := secondUser(t, s)
+	ctx := context.Background()
+	now := time.Now()
+	collection, err := s.collections.Create(ctx, owner.ID, days.GroupInput{Name: "Shared collection"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	day, err := s.days.Create(ctx, owner.ID, days.DayInput{Title: "Outgoing day", Date: "2027-01-01"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range []struct {
+		kind share.TargetType
+		id   int64
+	}{{share.TargetDay, day.ID}, {share.TargetCollection, collection.ID}} {
+		if _, err := s.shares.Create(ctx, owner.ID, target.kind, target.id, []string{bob.Username}, false, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, lang := range []string{"en", "zh"} {
+		rr := get(s.Handler(), "/sharing?lang="+lang, token)
+		body := rr.Body.String()
+		for _, want := range []string{`href="/sharing" aria-current="page"`, `href="/shared">`,
+			`href="` + dayPath(day.ID) + `#day-sharing"`, `href="/collections/` + strconv.FormatInt(collection.ID, 10) + `"`,
+			"Outgoing day", "Shared collection"} {
+			if rr.Code != http.StatusOK || !strings.Contains(body, want) {
+				t.Errorf("outgoing %s missing %q: %d", lang, want, rr.Code)
+			}
+		}
+		body = get(s.Handler(), "/shared?lang="+lang, token).Body.String()
+		if !strings.Contains(body, `href="/shared" aria-current="page"`) || strings.Contains(body, "Outgoing day") {
+			t.Errorf("incoming tab mixes outgoing targets: %s", lang)
+		}
+		body = get(s.Handler(), "/sharing?lang="+lang, bobToken).Body.String()
+		if strings.Contains(body, "Outgoing day") || strings.Contains(body, "Shared collection") {
+			t.Errorf("recipient sees another owner's outgoing targets: %s", lang)
+		}
+	}
+	if rr := get(s.Handler(), "/sharing", ""); rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/login" {
+		t.Fatalf("anonymous outgoing shares: %d", rr.Code)
+	}
+	acceptAllInvitations(t, s, bobToken, bob.ID)
+	body := get(s.Handler(), "/shared", bobToken).Body.String()
+	if !strings.Contains(body, "Outgoing day") || !strings.Contains(body, `href="/shared" aria-current="page"`) {
+		t.Fatal("accepted incoming share missing from Sharing")
+	}
+}
+
+func TestUserHeaderAndDayNavigation(t *testing.T) {
+	s, _, owner, token := authenticatedServer(t)
+	day, err := s.days.Create(context.Background(), owner.ID, days.DayInput{Title: "Day", Date: "2027-01-01"}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, lang := range []string{"en", "zh"} {
+		body := get(s.Handler(), dayPath(day.ID)+"?lang="+lang, token).Body.String()
+		header, _, ok := strings.Cut(body, "</header>")
+		if !ok {
+			t.Fatal("missing site header")
+		}
+		mainNav, account, ok := strings.Cut(header, `<details class="dropdown account-menu">`)
+		if !ok {
+			t.Fatal("missing avatar dropdown")
+		}
+		if !strings.Contains(mainNav, `<a href="/">`) {
+			t.Error("header missing Home menu")
+		}
+		for _, path := range []string{"/archive", "/sharing"} {
+			link := `href="` + path + `"`
+			if strings.Contains(mainNav, link) || !strings.Contains(account, link) {
+				t.Errorf("%s not exclusively in avatar dropdown", path)
+			}
+		}
+		_, main, ok := strings.Cut(body, `<main `)
+		if !ok || strings.Contains(main, `href="/"`) {
+			t.Error("day detail retains redundant Home link")
+		}
+	}
+}
+
 func TestSharingFlowAndReadOnlyRecipientViews(t *testing.T) {
 	s, _, owner, ownerToken := authenticatedServer(t)
 	s.media = media.New(s.db, filepath.Join(t.TempDir(), "media"))

@@ -49,6 +49,69 @@ func shareFixture(t *testing.T) (*Store, int64, int64, int64, int64, int64, int6
 	return New(db), ids[0], ids[1], ids[2], collectionID, insertDay("One"), insertDay("Two")
 }
 
+func TestListOwnedTargets(t *testing.T) {
+	store, owner, bob, _, collectionID, dayID, unsharedID := shareFixture(t)
+	ctx := context.Background()
+	now := time.Unix(1_700_000_000, 0)
+	var shares []Share
+	for _, target := range []struct {
+		kind TargetType
+		id   int64
+	}{{TargetDay, dayID}, {TargetDay, dayID}, {TargetCollection, collectionID}} {
+		sh, err := store.Create(ctx, owner, target.kind, target.id, []string{"Bob", "Carol"}, false, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		shares = append(shares, sh)
+	}
+	// Outgoing shares include pending/rejected invitations and archived targets.
+	if err := store.Respond(ctx, bob, shares[0].ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.db.ExecContext(ctx, `UPDATE days SET archived_at = ? WHERE owner_id = ? AND id = ?`,
+		now.Unix(), owner, dayID); err != nil {
+		t.Fatal(err)
+	}
+	targets, err := store.ListOwnedTargets(ctx, owner)
+	if err != nil || len(targets) != 2 {
+		t.Fatalf("deduplicated targets: %+v, %v", targets, err)
+	}
+	if targets[0].TargetType != TargetDay || targets[0].TargetID != dayID || targets[0].Title != "One" ||
+		targets[1].TargetType != TargetCollection || targets[1].TargetID != collectionID || targets[1].Title != "Trips" {
+		t.Fatalf("target metadata: %+v", targets)
+	}
+	for _, id := range []int64{bob, 999999} {
+		if targets, err := store.ListOwnedTargets(ctx, id); err != nil || len(targets) != 0 {
+			t.Fatalf("owner isolation for %d: %+v, %v", id, targets, err)
+		}
+	}
+	for _, sh := range shares[:2] {
+		if err := store.Revoke(ctx, owner, sh.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if targets, err := store.ListOwnedTargets(ctx, owner); err != nil || len(targets) != 1 || targets[0].TargetID == unsharedID {
+		t.Fatalf("revoked targets: %+v, %v", targets, err)
+	}
+	if _, err := store.db.ExecContext(ctx, `UPDATE collections SET is_reserved = 1 WHERE owner_id = ? AND id = ?`,
+		owner, collectionID); err != nil {
+		t.Fatal(err)
+	}
+	if targets, err := store.ListOwnedTargets(ctx, owner); err != nil || len(targets) != 1 || !targets[0].Reserved {
+		t.Fatalf("reserved collection: %+v, %v", targets, err)
+	}
+	if _, err := store.db.ExecContext(ctx, `DELETE FROM days WHERE owner_id = ?`, owner); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.db.ExecContext(ctx, `DELETE FROM collections WHERE owner_id = ? AND id = ?`,
+		owner, collectionID); err != nil {
+		t.Fatal(err)
+	}
+	if targets, err := store.ListOwnedTargets(ctx, owner); err != nil || len(targets) != 0 {
+		t.Fatalf("deleted targets: %+v, %v", targets, err)
+	}
+}
+
 func TestSharesRecipientsAccessAndCommentVisibility(t *testing.T) {
 	store, owner, bob, carol, collectionID, dayID, secondDayID := shareFixture(t)
 	ctx := context.Background()

@@ -1,7 +1,7 @@
 {{define "title"}}{{.Day.Title}} · {{t "app.name"}}{{end}}
 {{define "content"}}
 <section class="stack">
-  <p><a href="{{if .Shared}}/shared{{else}}/{{end}}">← {{if .Shared}}{{t "sharing.title"}}{{else}}{{t "nav.home"}}{{end}}</a></p>
+  {{if .Shared}}<p><a href="/shared">← {{t "sharing.received"}}</a></p>{{end}}
   <article class="card day-card day-{{.State}}{{if .Shared}} day-shared{{end}}{{if .Day.ArchivedAt}} day-archived{{end}}">
     {{template "day-accent" .Day.StyleColor}}
     {{range .Attachments}}{{if eq $.Day.StyleBgAttachmentID .ID}}<img class="day-background" src="/attachments/{{.ID}}" alt="">{{end}}{{end}}

@@ -288,6 +288,13 @@ Status legend: `[ ]` todo, `[x]` done.
 - **Done when**: ownership, combined quota, background-preservation and UI tests pass; full Go tests/vet and browser checks at 375px/1280px pass.
 - Verified: full Go tests/vet and all 26 JavaScript tests pass. Browser checks at 375px/1280px cover tab layout and keyboard navigation, Save-only edit forms, compact media grids and responsive preview details, background removal preserving attachments, and creation with a library copy, upload, and mocked microphone recording. Existing-day library copies also save through the tabbed manager.
 
+### [x] T35 Streamlined navigation and Sharing overview
+- Move Archive and Sharing into the avatar dropdown; add Home to the regular-user header and remove the redundant Home link on owned day details.
+- Sharing has Shared to Others (owner-scoped, deduplicated day/collection targets with share-setting links) and Shared to Me (existing accepted/hidden shared days) tabs.
+- Media details omit the repeated Media page heading while keeping the filename and controls.
+- **Done when**: outgoing target lifecycle/authorization, localized menu/tab/detail tests, full Go tests/vet, and 375px/1280px browser checks pass.
+- Verified: full Go tests/vet pass; Chromium checks at 375px/1280px confirm the avatar menu, sharing tabs and target links, Home-only header navigation, and responsive media details without the repeated heading. English and Chinese layouts have no horizontal overflow.
+
 ## Dependency Graph
 
 ```mermaid

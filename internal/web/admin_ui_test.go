@@ -28,7 +28,7 @@ func TestAdminSiteOnlyNavigationAndAccess(t *testing.T) {
 		t.Fatalf("admin landing: %d %s", rr.Code, rr.Header().Get("Location"))
 	}
 	for _, path := range []string{"/archive", "/days/new", "/days/1", "/collections", "/collections/1",
-		"/tags", "/tags/1", "/shared", "/messages", "/attachments/1", "/media", "/settings/export", "/settings/import"} {
+		"/tags", "/tags/1", "/sharing", "/shared", "/messages", "/attachments/1", "/media", "/settings/export", "/settings/import"} {
 		if rr := get(s.Handler(), path, token); rr.Code != http.StatusNotFound {
 			t.Errorf("admin GET %s: %d", path, rr.Code)
 		}
@@ -45,7 +45,7 @@ func TestAdminSiteOnlyNavigationAndAccess(t *testing.T) {
 	}
 	for _, lang := range []string{"en", "zh"} {
 		body := get(s.Handler(), "/admin/users?lang="+lang, token).Body.String()
-		for _, link := range []string{"/archive", "/shared", "/collections", "/tags", "/media"} {
+		for _, link := range []string{"/archive", "/sharing", "/shared", "/collections", "/tags", "/media"} {
 			if strings.Contains(body, `href="`+link+`"`) {
 				t.Errorf("admin navigation exposes %s", link)
 			}
@@ -67,7 +67,7 @@ func TestAdminSiteOnlyNavigationAndAccess(t *testing.T) {
 		}
 	}
 	_, regularToken := secondUser(t, s)
-	for _, path := range []string{"/", "/collections", "/tags", "/archive", "/shared", "/media", "/profile", "/settings"} {
+	for _, path := range []string{"/", "/collections", "/tags", "/archive", "/sharing", "/shared", "/media", "/profile", "/settings"} {
 		if rr := get(s.Handler(), path, regularToken); rr.Code != http.StatusOK {
 			t.Errorf("regular user %s: %d", path, rr.Code)
 		}

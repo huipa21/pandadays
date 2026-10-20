@@ -24,8 +24,7 @@
   {{template "header-toggles" .}}
   {{with .User}}<nav class="nav" aria-label="{{t "nav.main"}}">
     {{if not .IsAdmin}}
-    <a href="/archive">{{t "nav.archive"}}</a>
-    <a href="/shared">{{t "sharing.title"}}</a>
+    <a href="/">{{t "nav.home"}}</a>
     <a href="/collections">{{t "nav.collections"}}</a>
     <a href="/tags">{{t "nav.tags"}}</a>
     <a href="/media">{{t "nav.media"}}</a>
@@ -36,7 +35,9 @@
     <details class="dropdown account-menu">
       <summary><span class="avatar-notification">{{template "user-avatar" .}}{{if not .IsAdmin}}{{if pendingShares}}<span class="notification-badge" aria-label="{{t "messages.pending_count" (pendingShares)}}">{{pendingShares}}</span>{{end}}{{end}}</span><span>{{.Username}}</span></summary>
       <div class="dropdown-panel">
-        {{if not .IsAdmin}}<a href="/messages">{{t "messages.title"}}{{if pendingShares}} ({{pendingShares}}){{end}}</a>{{end}}
+        {{if not .IsAdmin}}<a href="/messages">{{t "messages.title"}}{{if pendingShares}} ({{pendingShares}}){{end}}</a>
+        <a href="/archive">{{t "nav.archive"}}</a>
+        <a href="/sharing">{{t "sharing.title"}}</a>{{end}}
         <a href="/profile">{{t "nav.profile"}}</a>
         <a href="/settings">{{t "nav.settings"}}</a>
         <form method="post" action="/logout">{{template "csrf-field" $}}<button type="submit" class="link-button">{{t "nav.logout"}}</button></form>
