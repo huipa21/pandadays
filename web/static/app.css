@@ -410,11 +410,32 @@ a.btn { text-decoration: none; }
 .day-attachments progress { display: block; width: 100%; height: 0.75rem; margin: -0.5rem 0 0.75rem; accent-color: var(--accent); }
 .attachment-list { list-style: none; display: grid; gap: 0.75rem; margin: 1rem 0; padding: 0; }
 .attachment-item { min-width: 0; display: grid; gap: 0.5rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; }
+.attachment-row { display: flex; align-items: center; gap: 0.375rem; min-width: 0; flex-wrap: wrap; }
+.attachment-name { min-width: 0; flex: 1 1 0; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-row > .hint { margin-left: auto; white-space: nowrap; font-size: 0.75rem; }
+.attachment-action { display: inline-flex; align-items: center; justify-content: center; width: 2.25rem; min-height: 2.75rem; padding: 0; }
+.attachment-edit > summary { list-style: none; cursor: pointer; }
+.attachment-edit > summary::-webkit-details-marker { display: none; }
+.attachment-edit[open] { display: contents; }
+.attachment-rename { flex-basis: 100%; order: 1; min-width: 0; }
+.attachment-rename input { width: 100%; min-width: 0; }
+.attachment-add > summary { display: inline-flex; cursor: pointer; list-style: none; }
+.attachment-add > summary::-webkit-details-marker { display: none; }
+.attachment-upload .media-panel-head { display: none; }
 .attachment-preview { min-width: 0; display: grid; gap: 0.5rem; overflow-wrap: anywhere; }
 .attachment-preview img { display: block; max-height: 18rem; object-fit: contain; border-radius: 6px; }
 .attachment-preview audio, .attachment-preview video { width: 100%; }
 .voice-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
 .voice-controls[hidden] { display: none; }
+.voice-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; width: 100%; }
+.voice-timer { font-variant-numeric: tabular-nums; }
+.voice-level { display: flex; align-items: center; gap: 0.5rem; }
+.voice-level meter { width: 8rem; height: 1.25rem; }
+.audio-player { display: grid; gap: 0.5rem; width: 100%; min-width: 0; margin: 0; padding: 0.625rem; border: 1px solid var(--border); border-radius: 0.75rem; }
+.audio-player[hidden] { display: none; }
+.audio-player figcaption { overflow-wrap: anywhere; font-size: 0.875rem; }
+.audio-player audio { width: 100%; min-width: 0; }
+.audio-player .alert { margin: 0; }
 .attachment-upload { margin-top: 1rem; }
 .day-attachments .upload-progress { margin: 0; }
 
@@ -520,7 +541,7 @@ a.btn { text-decoration: none; }
 .day-section-toggle::-webkit-details-marker { display: none; }
 .expand-icon { transition: transform 0.15s; }
 details[open] > .day-section-toggle .expand-icon { transform: rotate(180deg); }
-.day-attachments-body { display: grid; gap: 0.75rem; padding-top: 0.75rem; min-width: 0; }
+.day-attachments-body { display: grid; gap: 0.75rem; padding-top: 0.75rem; min-width: 0; clear: both; }
 .day-attachments-body > * { margin: 0; }
 .day-sharing > .form { padding-top: 0.75rem; }
 .day-menu-section { display: none; }
@@ -671,7 +692,8 @@ details[open] > .day-section-toggle .expand-icon { transform: rotate(180deg); }
 .media-detail-preview audio { width: 100%; }
 .media-detail .media-card-body { gap: 0.75rem; }
 .media-detail h2 { margin: 0; font-size: 1.125rem; }
-.voice-controls audio { display: block; max-width: 100%; margin-top: 0.75rem; }
+.voice-controls audio { display: block; width: 100%; margin-top: 0.75rem; }
+.voice-controls audio[hidden] { display: none; }
 @media (min-width: 48rem) {
   .media-detail { grid-template-columns: minmax(0, 1fr) minmax(14rem, 20rem); }
 }

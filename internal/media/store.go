@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 var (
@@ -21,6 +22,8 @@ var (
 	ErrQuota        = errors.New("attachment quota exceeded")
 	ErrTooLarge     = errors.New("attachment exceeds upload limit")
 	ErrUploadStream = errors.New("invalid attachment stream")
+	ErrFileMissing  = errors.New("stored attachment file is missing")
+	ErrFilename     = errors.New("invalid attachment filename")
 )
 
 type Attachment struct {
@@ -341,12 +344,24 @@ func (s *Store) CopyToDay(ctx context.Context, ownerID, attachmentID, dayID int6
 	if err != nil {
 		return Attachment{}, err
 	}
-	f, err := os.Open(s.Path(ownerID, src))
+	f, err := s.Open(src)
 	if err != nil {
 		return Attachment{}, fmt.Errorf("open library attachment: %w", err)
 	}
 	defer f.Close()
 	return s.Upload(ctx, ownerID, dayID, src.Filename, f)
+}
+
+// Open reads an attachment after its metadata has been authorized by the caller.
+func (s *Store) Open(a Attachment) (*os.File, error) {
+	f, err := os.Open(s.Path(a.OwnerID, a))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("%w: %w", ErrFileMissing, err)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("open stored attachment: %w", err)
+	}
+	return f, nil
 }
 
 func (s *Store) ListAccessibleDay(ctx context.Context, viewerID, dayID int64) ([]Attachment, error) {
@@ -395,6 +410,32 @@ func (s *Store) Get(ctx context.Context, ownerID, id int64) (Attachment, error) 
 	}
 	a.CreatedAt = time.Unix(created, 0).UTC()
 	return a, nil
+}
+
+// Rename changes only display metadata, leaving storage and quota usage intact.
+func (s *Store) Rename(ctx context.Context, ownerID, id int64, filename string) error {
+	if _, err := s.Get(ctx, ownerID, id); err != nil {
+		return err
+	}
+	filename = strings.TrimSpace(filename)
+	if !utf8.ValidString(filename) || utf8.RuneCountInString(filename) > 255 ||
+		filename == "" || filename == "." || filename == ".." ||
+		strings.ContainsAny(filename, "/\\") || safeFilename(filename) != filename {
+		return ErrFilename
+	}
+	res, err := s.db.ExecContext(ctx, `UPDATE attachments SET filename = ? WHERE owner_id = ? AND id = ?`,
+		filename, ownerID, id)
+	if err != nil {
+		return fmt.Errorf("rename attachment: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check attachment rename: %w", err)
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *Store) GetAccessible(ctx context.Context, viewerID, id int64) (Attachment, error) {

@@ -17,6 +17,7 @@ func (s *Server) registerAttachmentRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /days/{id}/attachments/{attachment_id}/remove", RequireLogin(http.HandlerFunc(s.handleAttachmentRemove)))
 	mux.Handle("POST /days/{id}/attachments/{attachment_id}/background", RequireLogin(http.HandlerFunc(s.handleAttachmentBackground)))
 	mux.Handle("POST /attachments/{id}/delete", RequireLogin(http.HandlerFunc(s.handleAttachmentDelete)))
+	mux.Handle("POST /attachments/{id}/rename", RequireLogin(http.HandlerFunc(s.handleAttachmentRename)))
 	mux.Handle("GET /attachments/{id}", RequireLogin(http.HandlerFunc(s.handleAttachmentServe)))
 }
 
@@ -210,6 +211,32 @@ func (s *Server) handleAttachmentDelete(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+func (s *Server) handleAttachmentRename(w http.ResponseWriter, r *http.Request) {
+	id, ok := attachmentID(w, r, "id")
+	if !ok {
+		return
+	}
+	ownerID := CurrentUser(r.Context()).ID
+	a, err := s.media.Get(r.Context(), ownerID, id)
+	if err == nil {
+		err = s.media.Rename(r.Context(), ownerID, id, r.PostFormValue("filename"))
+	}
+	switch {
+	case errors.Is(err, media.ErrNotFound):
+		http.NotFound(w, r)
+	case errors.Is(err, media.ErrFilename):
+		s.authError(w, r, "attachments.error.filename", http.StatusUnprocessableEntity)
+	case err != nil:
+		s.attachmentError(w, r, "rename", err)
+	default:
+		if r.PostFormValue("return_to") == "/media" {
+			authRedirect(w, r, fmt.Sprintf("/media/%d", id))
+			return
+		}
+		authRedirect(w, r, dayPath(a.DayID)+"#attachments")
+	}
+}
+
 func (s *Server) handleAttachmentBackground(w http.ResponseWriter, r *http.Request) {
 	dayID, ok := attachmentID(w, r, "id")
 	if !ok {
@@ -250,7 +277,7 @@ func (s *Server) handleAttachmentServe(w http.ResponseWriter, r *http.Request) {
 		s.attachmentError(w, r, "get", err)
 		return
 	}
-	f, err := os.Open(s.media.Path(a.OwnerID, a))
+	f, err := s.media.Open(a)
 	if err != nil {
 		s.attachmentError(w, r, "open", err)
 		return
@@ -275,6 +302,15 @@ func (s *Server) handleAttachmentServe(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) attachmentError(w http.ResponseWriter, r *http.Request, op string, err error) {
 	s.log.Error(op+" attachment", "err", err)
+	w.Header().Set("Cache-Control", "private, no-store")
+	if errors.Is(err, media.ErrFileMissing) {
+		s.authError(w, r, "attachments.error.missing_file", http.StatusGone)
+		return
+	}
+	if errors.Is(err, os.ErrPermission) {
+		s.authError(w, r, "attachments.error.file_permission", http.StatusInternalServerError)
+		return
+	}
 	s.authError(w, r, "error.internal", http.StatusInternalServerError)
 }
 

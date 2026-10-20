@@ -10,7 +10,7 @@
   <article class="card media-detail">
     <div class="media-detail-preview">
       {{if eq .Item.Kind "image"}}<img src="/attachments/{{.Item.ID}}" alt="{{.Item.Filename}}">
-      {{else if eq .Item.Kind "audio"}}<audio controls src="/attachments/{{.Item.ID}}"></audio>
+      {{else if eq .Item.Kind "audio"}}{{template "audio-player" .Item}}
       {{else if eq .Item.Kind "video"}}<video controls playsinline src="/attachments/{{.Item.ID}}"></video>
       {{else}}{{template "media-thumb" .Item}}{{end}}
     </div>
@@ -20,6 +20,14 @@
       <span class="hint">{{bytes .Item.Size}} · {{localtime .Item.CreatedAt}}</span>
       <span class="hint">{{.Item.MIME}}</span>
       <span>{{t "media.from"}} <a href="/days/{{.Item.DayID}}">{{.Item.DayTitle}}</a></span>
+      <details>
+        <summary class="link-button">{{t "attachments.edit"}}</summary>
+        <form method="post" action="/attachments/{{.Item.ID}}/rename" class="form">
+          {{template "csrf-field" .}}<input type="hidden" name="return_to" value="/media">
+          <label>{{t "attachments.filename"}}<input type="text" name="filename" value="{{.Item.Filename}}" required maxlength="255"></label>
+          <button type="submit" class="btn">{{t "days.save"}}</button>
+        </form>
+      </details>
       <form method="post" action="/attachments/{{.Item.ID}}/delete" class="inline-form"
             hx-post="/attachments/{{.Item.ID}}/delete" hx-confirm="{{t "attachments.delete_confirm"}}">
         {{template "csrf-field" .}}<input type="hidden" name="return_to" value="/media">

@@ -3,7 +3,9 @@ package web
 import (
 	"bytes"
 	"context"
+	"html"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -18,7 +20,285 @@ import (
 	"pandadays/internal/auth"
 	"pandadays/internal/days"
 	"pandadays/internal/media"
+	"pandadays/internal/share"
 )
+
+func TestAudioPlaybackBelowCardComment(t *testing.T) {
+	s, owner, token, day := attachmentServer(t)
+	ctx := context.Background()
+	if _, err := s.db.Exec(`UPDATE days SET comment = ? WHERE id = ? AND owner_id = ?`, "Voice comment", day.ID, owner); err != nil {
+		t.Fatal(err)
+	}
+	audio := []byte("RIFF\x24\x00\x00\x00WAVEfmt ")
+	if rr := uploadAttachment(t, s, token, day.ID, "voice.wav", audio); rr.Code != http.StatusSeeOther {
+		t.Fatalf("upload: %d %s", rr.Code, rr.Body.String())
+	}
+	files, err := s.media.ListDay(ctx, owner, day.ID)
+	if err != nil || len(files) != 1 || files[0].Kind != "audio" {
+		t.Fatalf("audio attachment: %v %v", files, err)
+	}
+	src := "/attachments/" + strconv.FormatInt(files[0].ID, 10)
+	assertCard := func(token string, comment bool) {
+		t.Helper()
+		rr := get(s.Handler(), dayPath(day.ID), token)
+		card, _, ok := strings.Cut(rr.Body.String(), "</article>")
+		player := `<audio controls preload="metadata" src="` + src + `" aria-label="voice.wav"></audio>`
+		if rr.Code != http.StatusOK || !ok || !strings.Contains(card, player) {
+			t.Fatalf("audio player missing from card: %d %s", rr.Code, card)
+		}
+		if !strings.Contains(card, `<figcaption><a href="`+src+`">voice.wav</a></figcaption>`) {
+			t.Fatal("filename missing inside player")
+		}
+		pos := strings.Index(card, `<p class="day-comment">Voice comment</p>`)
+		if comment && (pos < 0 || pos > strings.Index(card, player)) {
+			t.Fatal("audio must follow the comment")
+		}
+		if !comment && pos >= 0 {
+			t.Fatal("hidden shared comment was exposed")
+		}
+		if served := get(s.Handler(), src, token); served.Code != http.StatusOK || !bytes.Equal(served.Body.Bytes(), audio) {
+			t.Fatalf("audio not playable through authenticated endpoint: %d", served.Code)
+		}
+	}
+	assertCard(token, true)
+	bob, bobToken := secondUser(t, s)
+	if rr := get(s.Handler(), dayPath(day.ID), bobToken); rr.Code != http.StatusNotFound {
+		t.Fatalf("unshared day: %d", rr.Code)
+	}
+	if rr := get(s.Handler(), src, bobToken); rr.Code != http.StatusNotFound {
+		t.Fatalf("unshared audio: %d", rr.Code)
+	}
+	shared, err := s.shares.Create(ctx, owner, share.TargetDay, day.ID, []string{bob.Username}, false, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	acceptAllInvitations(t, s, bobToken, bob.ID)
+	assertCard(bobToken, false)
+	if err := s.shares.Revoke(ctx, owner, shared.ID); err != nil {
+		t.Fatal(err)
+	}
+	if rr := get(s.Handler(), src, bobToken); rr.Code != http.StatusNotFound {
+		t.Fatalf("revoked audio: %d", rr.Code)
+	}
+	if rr := sessionPost(t, s, dayPath(day.ID)+"/attachments/"+strconv.FormatInt(files[0].ID, 10)+"/remove", token, nil); rr.Code != http.StatusSeeOther {
+		t.Fatalf("remove audio: %d", rr.Code)
+	}
+	card, _, _ := strings.Cut(get(s.Handler(), dayPath(day.ID), token).Body.String(), "</article>")
+	if strings.Contains(card, src) {
+		t.Fatal("removed audio remained on card")
+	}
+}
+
+func TestMissingAttachmentFileErrorsAndLibraryCopies(t *testing.T) {
+	s, owner, token, day := attachmentServer(t)
+	if rr := uploadAttachment(t, s, token, day.ID, "voice.wav", []byte("RIFF\x24\x00\x00\x00WAVEfmt ")); rr.Code != http.StatusSeeOther {
+		t.Fatalf("upload: %d", rr.Code)
+	}
+	files, err := s.media.ListDay(context.Background(), owner, day.ID)
+	if err != nil || len(files) != 1 {
+		t.Fatalf("attachments: %v %v", files, err)
+	}
+	a := files[0]
+	path := "/attachments/" + strconv.FormatInt(a.ID, 10)
+	csrf := sessionCSRF(t, s, token)
+	for i := 0; i < 2; i++ {
+		rr := postMediaFiles(t, s, dayPath(day.ID)+"/attachments", token, csrf, false, url.Values{"library": {strconv.FormatInt(a.ID, 10)}})
+		if rr.Code != http.StatusSeeOther {
+			t.Fatalf("copying the same available file %d: %d %s", i, rr.Code, rr.Body.String())
+		}
+	}
+	if err := os.Remove(s.media.Path(owner, a)); err != nil {
+		t.Fatal(err)
+	}
+	usage, err := s.media.Usage(context.Background(), owner, day.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, lang := range []string{"en", "zh"} {
+		rr := get(s.Handler(), path+"?lang="+lang, token)
+		want := s.i18n.T(lang, "attachments.error.missing_file")
+		if rr.Code != http.StatusGone || !strings.Contains(rr.Body.String(), want) ||
+			strings.Contains(rr.Body.String(), s.cfg.DataDir) || rr.Header().Get("Cache-Control") != "private, no-store" {
+			t.Fatalf("missing original file error: %d %s", rr.Code, rr.Body.String())
+		}
+	}
+	for _, route := range []string{dayPath(day.ID) + "/attachments", "/days"} {
+		values := dayValues()
+		values.Set("library", strconv.FormatInt(a.ID, 10))
+		rr := postMediaFiles(t, s, route, token, csrf, false, values)
+		if rr.Code != http.StatusGone || !strings.Contains(rr.Body.String(), "stored attachment file is missing") {
+			t.Fatalf("missing library file on %s: %d %s", route, rr.Code, rr.Body.String())
+		}
+	}
+	daysList, err := s.days.ListActive(context.Background(), owner)
+	if err != nil || len(daysList) != 1 {
+		t.Fatalf("missing library file created another day: %v %v", daysList, err)
+	}
+	after, err := s.media.Usage(context.Background(), owner, day.ID)
+	if err != nil || usage != after {
+		t.Fatalf("failed copy changed usage: %+v %+v %v", usage, after, err)
+	}
+	_, otherToken := secondUser(t, s)
+	if rr := get(s.Handler(), path, otherToken); rr.Code != http.StatusNotFound {
+		t.Fatalf("missing-file detail exposed to another owner: %d", rr.Code)
+	}
+	rr := get(s.Handler(), "/media/"+strconv.FormatInt(a.ID, 10), token)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "data-audio-error") ||
+		!strings.Contains(rr.Body.String(), `<figcaption><a href="`+path+`">voice.wav</a></figcaption>`) {
+		t.Fatalf("media library player lacks filename/error surface: %d %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestAttachmentPermissionErrorIsActionable(t *testing.T) {
+	s := newTestServer(t)
+	rr := httptest.NewRecorder()
+	s.attachmentError(rr, httptest.NewRequest(http.MethodGet, "/attachments/1", nil), "open",
+		&os.PathError{Op: "open", Path: "private-storage", Err: os.ErrPermission})
+	if rr.Code != http.StatusInternalServerError || !strings.Contains(rr.Body.String(), "storage permissions") ||
+		strings.Contains(rr.Body.String(), "private-storage") {
+		t.Fatalf("permission error: %d %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestAttachmentRenameAndCompactManager(t *testing.T) {
+	s, owner, token, day := attachmentServer(t)
+	ctx := context.Background()
+	_, otherToken := secondUser(t, s)
+	for _, file := range []struct {
+		filename, kind string
+		content        []byte
+	}{
+		{"document.txt", "file", []byte("file content")},
+		{"recording.wav", "audio", []byte("RIFF\x24\x00\x00\x00WAVEfmt ")},
+		{"photo.png", "image", []byte("\x89PNG\r\n\x1a\n")},
+		{"movie.webm", "video", []byte("\x1a\x45\xdf\xa3\x86\x85V_VP8")},
+	} {
+		filename, content := file.filename, file.content
+		if rr := uploadAttachment(t, s, token, day.ID, filename, content); rr.Code != http.StatusSeeOther {
+			t.Fatalf("upload %s: %d", filename, rr.Code)
+		}
+		files, err := s.media.ListDay(ctx, owner, day.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		a := files[len(files)-1]
+		if a.Kind != file.kind {
+			t.Fatalf("fixture kind %s: %s", filename, a.Kind)
+		}
+		path := "/attachments/" + strconv.FormatInt(a.ID, 10)
+		usage, err := s.media.Usage(ctx, owner, day.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{filename, "  renamed-" + filename + "  ", strings.Repeat("名", 255)} {
+			rr := sessionPost(t, s, path+"/rename", token, url.Values{"filename": {name}})
+			if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != dayPath(day.ID)+"#attachments" {
+				t.Fatalf("rename: %d %s", rr.Code, rr.Body.String())
+			}
+			renamed, err := s.media.Get(ctx, owner, a.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := a
+			want.Filename = strings.TrimSpace(name)
+			if renamed != want {
+				t.Fatalf("rename changed other metadata: %+v want %+v", renamed, want)
+			}
+		}
+		for _, name := range []string{"", " ", ".", "..", "../file", `dir\file`, "a\x00b", "a\nb", strings.Repeat("名", 256)} {
+			rr := sessionPost(t, s, path+"/rename", token, url.Values{"filename": {name}})
+			if rr.Code != http.StatusUnprocessableEntity || !strings.Contains(rr.Body.String(), "file name") {
+				t.Fatalf("invalid rename %q: %d %s", name, rr.Code, rr.Body.String())
+			}
+		}
+		if rr := sessionPost(t, s, path+"/rename", otherToken, url.Values{"filename": {"foreign"}}); rr.Code != http.StatusNotFound {
+			t.Fatalf("foreign rename: %d", rr.Code)
+		}
+		request := httptest.NewRequest(http.MethodPost, path+"/rename", strings.NewReader("filename=no+csrf"))
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
+		rr := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rr, request)
+		if rr.Code != http.StatusForbidden {
+			t.Fatalf("rename without CSRF: %d", rr.Code)
+		}
+		after, err := s.media.Usage(ctx, owner, day.ID)
+		if err != nil || after != usage {
+			t.Fatalf("rename changed usage: %+v %+v %v", usage, after, err)
+		}
+		served := get(s.Handler(), path, token)
+		_, params, err := mime.ParseMediaType(served.Header().Get("Content-Disposition"))
+		if served.Code != http.StatusOK || !bytes.Equal(served.Body.Bytes(), content) ||
+			err != nil || params["filename"] != strings.Repeat("名", 255) {
+			t.Fatalf("renamed file download: %d", served.Code)
+		}
+	}
+	if rr := sessionPost(t, s, "/attachments/999999/rename", token, url.Values{"filename": {"missing"}}); rr.Code != http.StatusNotFound {
+		t.Fatalf("missing rename: %d", rr.Code)
+	}
+	usage, err := s.media.Usage(ctx, owner, day.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, lang := range []string{"en", "zh"} {
+		page := get(s.Handler(), dayPath(day.ID)+"?lang="+lang, token).Body.String()
+		_, manager, _ := strings.Cut(page, `id="attachments"`)
+		if !strings.Contains(manager, `<details class="attachment-add">`) ||
+			strings.Contains(manager, `<details class="attachment-add" open`) ||
+			strings.Count(manager, `role="tab"`) != 3 ||
+			strings.Contains(manager, "Account storage") || strings.Contains(manager, "账户存储") ||
+			strings.Contains(manager, "<progress aria-label=") ||
+			!strings.Contains(manager, html.EscapeString(s.i18n.T(lang, "attachments.day_used", formatBytes(usage.CardUsed)))) {
+			t.Fatalf("compact attachment usage/picker missing for %s: %s", lang, manager)
+		}
+		if strings.Count(manager, `class="attachment-name"`) != 4 ||
+			strings.Count(manager, `class="attachment-edit"`) != 4 ||
+			strings.Count(manager, `data-audio-play `) != 1 ||
+			!strings.Contains(manager, `data-attachment-player hidden`) {
+			t.Fatalf("compact attachment rows missing: %s", manager)
+		}
+	}
+}
+
+func TestRetainedAttachmentRenameAndSharedReadOnly(t *testing.T) {
+	s, owner, token, day := attachmentServer(t)
+	ctx := context.Background()
+	if rr := uploadAttachment(t, s, token, day.ID, "file.txt", []byte("hello")); rr.Code != http.StatusSeeOther {
+		t.Fatal(rr.Code)
+	}
+	files, err := s.media.ListDay(ctx, owner, day.ID)
+	if err != nil || len(files) != 1 {
+		t.Fatalf("files: %v %v", files, err)
+	}
+	a := files[0]
+	path := "/attachments/" + strconv.FormatInt(a.ID, 10)
+	bob, bobToken := secondUser(t, s)
+	if _, err := s.shares.Create(ctx, owner, share.TargetDay, day.ID, []string{bob.Username}, false, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	acceptAllInvitations(t, s, bobToken, bob.ID)
+	if rr := sessionPost(t, s, path+"/rename", bobToken, url.Values{"filename": {"not allowed"}}); rr.Code != http.StatusNotFound {
+		t.Fatalf("recipient rename: %d", rr.Code)
+	}
+	html := get(s.Handler(), dayPath(day.ID), bobToken).Body.String()
+	if strings.Contains(html, `class="attachment-edit"`) || strings.Contains(html, `class="attachment-add"`) {
+		t.Fatal("shared manager exposes editing")
+	}
+	if err := s.media.Detach(ctx, owner, day.ID, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	rr := sessionPost(t, s, path+"/rename", token, url.Values{"filename": {"retained.txt"}, "return_to": {"/media"}})
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/media/"+strconv.FormatInt(a.ID, 10) {
+		t.Fatalf("library rename: %d %s", rr.Code, rr.Body.String())
+	}
+	copy, err := s.media.CopyToDay(ctx, owner, a.ID, day.ID)
+	if err != nil || copy.Filename != "retained.txt" {
+		t.Fatalf("copy of renamed library item: %+v %v", copy, err)
+	}
+	if rr := get(s.Handler(), path, bobToken); rr.Code != http.StatusNotFound {
+		t.Fatalf("rename restored recipient access to detached attachment: %d", rr.Code)
+	}
+}
 
 func attachmentServer(t *testing.T) (*Server, int64, string, days.Day) {
 	t.Helper()
@@ -458,7 +738,7 @@ func TestAttachmentSVGIsDownloadAndBackgroundCleanup(t *testing.T) {
 		t.Fatalf("background attachment not cleared: %v", bg)
 	}
 	page := get(s.Handler(), dayPath(day.ID), token)
-	for _, want := range []string{"Card storage:", "Account storage:", "vector.svg", `name="file"`, "Record voice note"} {
+	for _, want := range []string{"This day&#39;s attachments:", "vector.svg", `name="file"`, "Record voice note"} {
 		if !strings.Contains(page.Body.String(), want) {
 			t.Errorf("card missing %q", want)
 		}

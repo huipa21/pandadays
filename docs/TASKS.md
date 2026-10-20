@@ -301,6 +301,29 @@ Status legend: `[ ]` todo, `[x]` done.
 - **Done when**: removal/reuse/authorization/storage and selection-state regression tests pass, full Go tests/vet and JavaScript tests pass, and attachment controls are checked at 375px/1280px.
 - Verified: full Go tests/vet and all 32 JavaScript tests pass. Migration preserves existing attachments, backgrounds, and account usage; export/import does not reattach removed media. Browser checks at 375px/1280px confirm no overflow, disabled empty Upload, selection/clearing for library/files/recordings, and removal preserving library details and file downloads.
 
+### [x] T37 Voice recording feedback and card playback
+- Show a live microphone-level bar and elapsed timer in both recording pickers.
+- Keep stopped recordings playable before saving/uploading and uploaded audio playable beneath the day card comment.
+- Preserve attachment authorization, shared-comment visibility, and removed-media behavior.
+- **Done when**: recording lifecycle and card playback/authorization tests, full Go tests/vet, JavaScript tests, and 375px/1280px browser checks pass.
+- Verified: full Go tests/vet and all 37 JavaScript tests pass. Chromium checks with synthesized microphone audio at 375px/1280px verify changing input levels, elapsed time, playable previews before upload in both pickers, and playable uploaded recordings beneath the comment. English and Chinese controls have no horizontal overflow. CSP permits local recording previews without broadening other resource sources.
+
+### [x] T38 Isolated test storage and actionable named audio players
+- Isolate web test media, backup, and temporary files from default runtime data, including user-deletion tests.
+- Use named audio-player panels on cards, attachment managers, recording previews, and media details.
+- Show authorized, localized missing-file and permission diagnostics for original-file access, library copies, and playback; preserve 404s for unauthorized viewers.
+- Allow repeated copies of available library media and reject missing library files before creating a day.
+- **Done when**: storage-isolation, playback-error, authorization, and repeat-copy regressions, full Go tests/vet, JavaScript tests, and 375px/1280px browser checks pass.
+- Verified: full Go tests/vet and all 44 JavaScript tests pass. The runtime media file list, sizes, and timestamps remained unchanged during full validation. Chromium checks at 375px/1280px cover named local previews, playable card/library audio and original-file ranges, repeated library copies, and localized inline missing-file diagnostics without overflow. The Windows executable was rebuilt.
+
+### [x] T39 Compact attachment manager and renaming
+- Collapse the three add-source tabs behind an Add button; show only this day's used space.
+- Show capped filenames, readable sizes, on-demand audio playback, and trailing rename/remove controls.
+- Allow editing stopped recording names and owner-scoped renaming of every uploaded attachment type, including retained library files.
+- Preserve removal-to-library semantics, stored content, quotas, and shared read-only access.
+- **Done when**: rename/authorization and recording/playback regressions, full Go tests/vet, JavaScript tests, and 375px/1280px browser checks pass.
+- Verified: full Go tests/vet and all 47 JavaScript tests pass. Isolated Chromium checks in English and Chinese at 375px/1280px confirm collapsed Add tabs, single-line attachment rows, full-width content without overflow, capped names, and on-demand playback. Renaming stopped recordings persists through upload; uploaded files and removed library items remain renameable without changing their contents or storage usage.
+
 ## Dependency Graph
 
 ```mermaid

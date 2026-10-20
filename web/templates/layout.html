@@ -10,6 +10,7 @@
 <script src="{{asset "theme.js"}}"></script>
 <script src="{{asset "htmx.min.js"}}" defer></script>
 <script src="{{asset "app.js"}}" defer></script>
+<script src="{{asset "media-player.js"}}" defer></script>
 {{if .CaptureTimezone}}<script src="{{asset "timezone.js"}}" defer></script>{{end}}
 </head>
 <body hx-headers='{"X-CSRF-Token":"{{.CSRFToken}}"}'>
@@ -109,6 +110,12 @@
     <button class="btn btn-danger" type="submit">{{t "admin.delete"}}</button>
   </form>{{end}}{{end}}
 {{define "media-thumb"}}{{if eq .Kind "image"}}<img src="/attachments/{{.ID}}" alt="" loading="lazy">{{else}}<span class="media-thumb-icon" aria-hidden="true">{{if eq .Kind "audio"}}🎵{{else if eq .Kind "video"}}🎬{{else}}📄{{end}}</span>{{end}}{{end}}
+{{define "audio-player"}}<figure class="audio-player" data-audio-player
+    data-error-playback="{{t "attachments.error.playback"}}" data-error-network="{{t "error.network"}}">
+  <figcaption><a href="/attachments/{{.ID}}">{{.Filename}}</a></figcaption>
+  <audio controls preload="metadata" src="/attachments/{{.ID}}" aria-label="{{.Filename}}"></audio>
+  <p class="alert" role="status" hidden data-audio-error></p>
+</figure>{{end}}
 {{define "media-picker-panel"}}
 <div class="media-panel" id="media-panel" data-media-panel>
   <div class="media-panel-head">
@@ -144,7 +151,14 @@
          data-record-error="{{t "attachments.record_error"}}" data-record-ready="{{t "media.voice_ready"}}">
       <button type="button" class="btn" data-record-button>{{t "attachments.record_start"}}</button>
       <span role="status" aria-live="polite" data-record-status></span>
-      <audio controls hidden data-record-preview></audio>
+      <div class="voice-feedback">
+        <span>{{t "attachments.record_duration"}}: <span class="voice-timer" data-record-timer>00:00</span></span>
+        <label class="voice-level">{{t "attachments.record_level"}} <meter min="0" max="1" value="0" data-record-level></meter></label>
+      </div>
+      <figure class="audio-player" hidden data-record-player>
+        <figcaption><label>{{t "attachments.filename"}}<input type="text" required maxlength="255" disabled data-record-name data-filename-error="{{t "attachments.error.filename"}}"></label></figcaption>
+        <audio controls preload="metadata" hidden aria-label="{{t "attachments.record_preview"}}" data-record-preview></audio>
+      </figure>
       <input type="file" name="file" hidden data-record-file>
     </div>
   </div>

@@ -19,7 +19,7 @@ func chain(h http.Handler, mws ...middleware) http.Handler {
 
 const contentSecurityPolicy = "default-src 'self'; " +
 	"img-src 'self' data:; " +
-	"media-src 'self'; " +
+	"media-src 'self' blob:; " +
 	"object-src 'none'; " +
 	"base-uri 'self'; " +
 	"form-action 'self'; " +

@@ -354,6 +354,18 @@ go test ./...
 go vet ./...
 ```
 
+Web tests use independent temporary storage, never the default runtime data
+directory. Native Windows runs default to `\data` on the current drive when
+`DATA_DIR` is unset; the PowerShell example above explicitly uses the project's
+local data directory. Keep using the directory containing your existing database
+and media when restarting; changing `DATA_DIR` does not move existing data.
+
+If an attachment reports that its stored file is missing, its database entry alone
+cannot restore it. Restore the file from backup, or remove the stale attachment
+and upload the original file or record it again. Copying the same missing item
+from the media library does not recover its content. File access errors are
+logged server-side and shown as localized diagnostics in audio players.
+
 Test automatic container versioning and build command wiring without a running
 container engine (PowerShell):
 

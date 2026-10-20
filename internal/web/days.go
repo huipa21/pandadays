@@ -308,6 +308,15 @@ func (s *Server) handleDayCreate(w http.ResponseWriter, r *http.Request) {
 			s.attachmentError(w, r, "get library item for new day", err)
 			return
 		}
+		file, err := s.media.Open(a)
+		if err != nil {
+			s.attachmentError(w, r, "check library file for new day", err)
+			return
+		}
+		if err := file.Close(); err != nil {
+			s.attachmentError(w, r, "close library file for new day", err)
+			return
+		}
 		library = append(library, a)
 	}
 	var uploads []*multipart.FileHeader

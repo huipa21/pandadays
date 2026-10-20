@@ -85,12 +85,36 @@ creation. Selected files participate in unsaved-change warnings.
 Create and the card menu's attachment manager share Media library, Upload file,
 and Voice recording tabs. Recordings can be previewed before saving/uploading;
 unsupported browsers show an explicit microphone/recording availability message.
+While recording, a live microphone-level bar and elapsed minutes/seconds show
+input activity and recording duration. Stopping retains the duration and exposes
+an audio preview before upload (local blob URLs are allowed only for media in
+the content security policy). Uploaded audio attachments are playable directly
+beneath the day card's comment, including on authorized shared cards.
 The edit form contains day fields and Save only; attachments and deletion remain
 in the card menu. An image background can be cleared without deleting its attachment.
 The media library uses a compact thumbnail/name grid. Opening an item shows its
 preview with details, source day, original-file link, and Delete in a side column
 (stacked below the preview on mobile), without repeating the Media page heading.
 The filename remains visible in the details.
+Audio players group the filename, native playback controls, and playback errors
+inside one panel on cards, attachment managers, media details, and recording
+previews. Missing stored files return an authorized, localized HTTP 410 explaining
+backup restoration or replacement; storage permission errors identify the access
+problem without exposing server paths. Playback failures show these diagnostics
+inline instead of leaving only a disabled player. Valid media can be copied from
+the library repeatedly; missing source files cannot be recovered by copying their
+database entries.
+
+The attachment manager shows only this day's used space, without quota progress
+bars or account storage. An Add button expands the three attachment-source tabs.
+Attachment rows show an ellipsized filename (up to 28ch, with the full name in its
+tooltip), human-readable size, and trailing rename/remove controls. Audio rows
+include a Play button that reveals and starts the player below the row. Removal
+keeps the file in the media library. All uploaded attachment types can be renamed
+from the day or media details, including removed library items; this changes only
+their display/download name, not file contents, type, storage ID, or quota usage.
+Stopped recordings have an editable filename before saving/uploading. Renames
+require 1–255 characters without paths or control characters.
 
 With JavaScript, tags use a multiline editor: typing `#` filters the owner's
 existing tags, with click or arrow-key/Enter selection, Escape dismissal, and
@@ -486,7 +510,7 @@ Home list ordering: Future ascending by effective target (soonest first); Past d
 - bcrypt cost ≥ 12; session tokens 32 random bytes, stored hashed.
 - Setup token hashed, 1h TTL, one-time.
 - Templates auto-escape; never use `template.HTML` on user input.
-- Security headers: CSP (`default-src 'self'`; media from self), `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`, `nosniff`.
+- Security headers: CSP (`default-src 'self'`; media from self and local `blob:` recording previews), `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`, `nosniff`.
 - Upload: size limits, content sniffing, random storage names, no inline HTML/SVG.
 - Archive handling: zip-slip/tar-slip and symlink rejection, size caps on user imports.
 - CSV formula-injection escaping.

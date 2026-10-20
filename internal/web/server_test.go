@@ -26,11 +26,36 @@ func newTestServerWith(t *testing.T, getenv func(string) string, database *sql.D
 	if err != nil {
 		t.Fatal(err)
 	}
+	if strings.TrimSpace(getenv("DATA_DIR")) == "" {
+		cfg.DataDir = t.TempDir()
+	}
 	s, err := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), database)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return s
+}
+
+func TestTestServerStorageIsIsolated(t *testing.T) {
+	first := newTestServer(t)
+	second := newTestServer(t)
+	defaults, err := config.Load(func(string) string { return "" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.cfg.DataDir == defaults.DataDir || first.cfg.DataDir == second.cfg.DataDir {
+		t.Fatalf("test servers must use independent temporary storage: %q, %q", first.cfg.DataDir, second.cfg.DataDir)
+	}
+	root := t.TempDir()
+	explicit := newTestServerWith(t, func(key string) string {
+		if key == "DATA_DIR" {
+			return root
+		}
+		return ""
+	}, nil)
+	if explicit.cfg.DataDir != root {
+		t.Fatal("explicit test storage directory was ignored")
+	}
 }
 
 func do(t *testing.T, h http.Handler, method, path string) *httptest.ResponseRecorder {
@@ -101,7 +126,7 @@ func TestSecurityHeaders(t *testing.T) {
 	for _, path := range []string{"/", "/healthz", "/static/app.css", "/nope"} {
 		rr := do(t, h, http.MethodGet, path)
 		hdr := rr.Header()
-		if csp := hdr.Get("Content-Security-Policy"); !strings.Contains(csp, "default-src 'self'") || !strings.Contains(csp, "media-src 'self'") {
+		if csp := hdr.Get("Content-Security-Policy"); !strings.Contains(csp, "default-src 'self';") || !strings.Contains(csp, "media-src 'self' blob:;") {
 			t.Errorf("%s: CSP = %q", path, csp)
 		}
 		checks := map[string]string{
