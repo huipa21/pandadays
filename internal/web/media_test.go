@@ -72,6 +72,106 @@ func TestMediaLibraryEmpty(t *testing.T) {
 	}
 }
 
+func TestRemoveDayAttachmentKeepsReusableLibraryMedia(t *testing.T) {
+	s, _, owner, token := authenticatedServer(t)
+	other, otherToken := secondUser(t, s)
+	ctx := context.Background()
+	d, a := seedMedia(t, s, owner.ID, "Trip", "photo.png", "\x89PNG\r\n\x1a\n")
+	target, _ := seedMedia(t, s, owner.ID, "Party", "cake.txt", "sugar")
+	if err := s.media.SetBackground(ctx, owner.ID, d.ID, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	res, err := s.db.Exec(`INSERT INTO shares (owner_id, target_type, target_id) VALUES (?, 'day', ?)`, owner.ID, d.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shareID, err := res.LastInsertId()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`INSERT INTO share_recipients (share_id, recipient_id) VALUES (?, ?)`, shareID, other.ID); err != nil {
+		t.Fatal(err)
+	}
+	id := strconv.FormatInt(a.ID, 10)
+	download := "/attachments/" + id
+	remove := dayPath(d.ID) + "/attachments/" + id + "/remove"
+	if rr := get(s.Handler(), download, otherToken); rr.Code != http.StatusOK {
+		t.Fatalf("shared attachment before removal: %d", rr.Code)
+	}
+	for _, tc := range []struct {
+		path, token string
+	}{
+		{remove, otherToken},
+		{dayPath(target.ID) + "/attachments/" + id + "/remove", token},
+		{dayPath(d.ID) + "/attachments/999999/remove", token},
+	} {
+		if rr := sessionPost(t, s, tc.path, tc.token, nil); rr.Code != http.StatusNotFound {
+			t.Fatalf("unauthorized removal: %d", rr.Code)
+		}
+	}
+	if rr := attachmentRequest(s, http.MethodPost, remove, token, "invalid"); rr.Code != http.StatusForbidden {
+		t.Fatalf("removal without CSRF: %d", rr.Code)
+	}
+	before, err := s.media.Usage(ctx, owner.ID, d.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rr := sessionPost(t, s, remove, token, nil); rr.Code != http.StatusSeeOther ||
+		rr.Header().Get("Location") != dayPath(d.ID)+"#attachments" {
+		t.Fatalf("remove: %d %s", rr.Code, rr.Body.String())
+	}
+	after, err := s.media.Usage(ctx, owner.ID, d.ID)
+	if err != nil || after.CardUsed != 0 || after.UserUsed != before.UserUsed {
+		t.Fatalf("removal usage: before=%+v after=%+v err=%v", before, after, err)
+	}
+	files, err := s.media.ListDay(ctx, owner.ID, d.ID)
+	if err != nil || len(files) != 0 {
+		t.Fatalf("removed attachment still on day: %+v %v", files, err)
+	}
+	files, err = s.media.ListAccessibleDay(ctx, other.ID, d.ID)
+	if err != nil || len(files) != 0 {
+		t.Fatalf("removed attachment still shared: %+v %v", files, err)
+	}
+	updated, err := s.days.Get(ctx, owner.ID, d.ID)
+	if err != nil || updated.StyleBgAttachmentID != 0 {
+		t.Fatalf("background not cleared: %+v %v", updated, err)
+	}
+	if err := s.media.SetBackground(ctx, owner.ID, d.ID, a.ID); err != media.ErrNotFound {
+		t.Fatalf("removed media can be set as background: %v", err)
+	}
+	if rr := get(s.Handler(), download, otherToken); rr.Code != http.StatusNotFound {
+		t.Fatalf("removed media still downloadable by recipient: %d", rr.Code)
+	}
+	if rr := get(s.Handler(), download, token); rr.Code != http.StatusOK || rr.Body.String() != "\x89PNG\r\n\x1a\n" {
+		t.Fatalf("owner lost media contents: %d %q", rr.Code, rr.Body.String())
+	}
+	for _, path := range []string{"/media", "/media/" + id, "/days/new"} {
+		if rr := get(s.Handler(), path, token); rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "photo.png") {
+			t.Fatalf("removed media missing from %s: %d", path, rr.Code)
+		}
+	}
+	rr := postMediaFiles(t, s, dayPath(target.ID)+"/attachments", token, sessionCSRF(t, s, token), false,
+		url.Values{"library": {id}})
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("reuse removed media: %d %s", rr.Code, rr.Body.String())
+	}
+	files, err = s.media.ListDay(ctx, owner.ID, target.ID)
+	if err != nil || len(files) != 2 {
+		t.Fatalf("reused attachments: %+v %v", files, err)
+	}
+	if rr := sessionPost(t, s, download+"/delete", token, url.Values{"return_to": {"/media"}}); rr.Code != http.StatusSeeOther {
+		t.Fatalf("permanent library deletion: %d", rr.Code)
+	}
+	if _, err := os.Stat(s.media.Path(owner.ID, a)); !os.IsNotExist(err) {
+		t.Fatalf("permanent deletion left original file: %v", err)
+	}
+	for _, file := range files {
+		if _, err := os.Stat(s.media.Path(owner.ID, file)); err != nil {
+			t.Fatalf("permanent deletion removed reused copy: %v", err)
+		}
+	}
+}
+
 func TestMediaDetailIsOwnerScoped(t *testing.T) {
 	s, _, owner, token := authenticatedServer(t)
 	_, otherToken := secondUser(t, s)

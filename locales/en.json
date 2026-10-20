@@ -256,6 +256,8 @@
   "attachments.create_error": "The day was saved, but some attachments could not be uploaded. Use the Attachment link below to review or retry the uploads.",
   "attachments.upload": "Upload",
   "attachments.delete": "Delete",
+  "attachments.remove": "Remove",
+  "attachments.remove_confirm": "Remove this attachment from the Day? The file will stay in your media library.",
   "attachments.delete_confirm": "Delete this attachment?",
   "attachments.set_background": "Use as card background",
   "attachments.background": "Current background",

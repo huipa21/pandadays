@@ -295,6 +295,12 @@ Status legend: `[ ]` todo, `[x]` done.
 - **Done when**: outgoing target lifecycle/authorization, localized menu/tab/detail tests, full Go tests/vet, and 375px/1280px browser checks pass.
 - Verified: full Go tests/vet pass; Chromium checks at 375px/1280px confirm the avatar menu, sharing tabs and target links, Home-only header navigation, and responsive media details without the repeated heading. English and Chinese layouts have no horizontal overflow.
 
+### [x] T36 Preserve removed attachments and guard empty uploads
+- Separate removal from a Day from permanent media-library deletion; retain files for reuse, account usage, and source-day details while clearing card usage, backgrounds, and recipient access.
+- Disable existing-day Upload until library media, a local file, or a completed recording is selected; keep new-day attachments optional.
+- **Done when**: removal/reuse/authorization/storage and selection-state regression tests pass, full Go tests/vet and JavaScript tests pass, and attachment controls are checked at 375px/1280px.
+- Verified: full Go tests/vet and all 32 JavaScript tests pass. Migration preserves existing attachments, backgrounds, and account usage; export/import does not reattach removed media. Browser checks at 375px/1280px confirm no overflow, disabled empty Upload, selection/clearing for library/files/recordings, and removal preserving library details and file downloads.
+
 ## Dependency Graph
 
 ```mermaid

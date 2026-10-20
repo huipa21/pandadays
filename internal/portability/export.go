@@ -228,7 +228,7 @@ func exportTags(ctx context.Context, tx *sql.Tx, ownerID int64, byID map[int64]*
 func (s *Service) exportAttachments(ctx context.Context, tx *sql.Tx, ownerID int64, byID map[int64]*exportDay) ([]exportFile, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT a.id, a.day_id, a.uuid, a.filename, a.size, a.created_at
 		FROM attachments a JOIN days d ON d.id = a.day_id
-		WHERE a.owner_id = ? AND d.owner_id = ? ORDER BY a.created_at, a.id`, ownerID, ownerID)
+		WHERE a.owner_id = ? AND d.owner_id = ? AND a.detached = 0 ORDER BY a.created_at, a.id`, ownerID, ownerID)
 	if err != nil {
 		return nil, fmt.Errorf("export attachments: %w", err)
 	}

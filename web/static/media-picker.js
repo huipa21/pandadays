@@ -2,8 +2,22 @@
 (() => {
   const picker = document.querySelector("[data-media-picker]");
   const panel = picker?.querySelector("[data-media-panel]");
+  if (!panel) return;
+  const submit = picker.querySelector("[data-media-submit]");
+  function hasSelection() {
+    return !!panel.querySelector('input[name="library"]:checked') ||
+      Array.from(panel.querySelectorAll('input[type="file"]')).some((input) => input.files?.length);
+  }
+  if (submit) {
+    const updateSubmit = () => { submit.disabled = !hasSelection(); };
+    panel.addEventListener("change", updateSubmit);
+    picker.addEventListener("submit", (event) => {
+      if (!hasSelection()) event.preventDefault();
+    });
+    updateSubmit();
+  }
   const dialog = document.createElement("dialog");
-  if (!panel || !dialog.showModal) return;
+  if (!dialog.showModal) return;
 
   const bar = picker.querySelector("[data-media-bar]");
   const status = picker.querySelector("[data-media-status]");

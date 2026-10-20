@@ -14,6 +14,7 @@ const multipartOverheadLimit = 64 << 10
 
 func (s *Server) registerAttachmentRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /days/{id}/attachments", RequireLogin(http.HandlerFunc(s.handleAttachmentUpload)))
+	mux.Handle("POST /days/{id}/attachments/{attachment_id}/remove", RequireLogin(http.HandlerFunc(s.handleAttachmentRemove)))
 	mux.Handle("POST /days/{id}/attachments/{attachment_id}/background", RequireLogin(http.HandlerFunc(s.handleAttachmentBackground)))
 	mux.Handle("POST /attachments/{id}/delete", RequireLogin(http.HandlerFunc(s.handleAttachmentDelete)))
 	mux.Handle("GET /attachments/{id}", RequireLogin(http.HandlerFunc(s.handleAttachmentServe)))
@@ -157,6 +158,26 @@ func (s *Server) uploadReadError(w http.ResponseWriter, r *http.Request, err err
 		return
 	}
 	s.authError(w, r, "error.bad_request", http.StatusBadRequest)
+}
+
+func (s *Server) handleAttachmentRemove(w http.ResponseWriter, r *http.Request) {
+	dayID, ok := attachmentID(w, r, "id")
+	if !ok {
+		return
+	}
+	id, ok := attachmentID(w, r, "attachment_id")
+	if !ok {
+		return
+	}
+	err := s.media.Detach(r.Context(), CurrentUser(r.Context()).ID, dayID, id)
+	switch {
+	case errors.Is(err, media.ErrNotFound):
+		http.NotFound(w, r)
+	case err != nil:
+		s.attachmentError(w, r, "remove from day", err)
+	default:
+		authRedirect(w, r, dayPath(dayID)+"#attachments")
+	}
 }
 
 func (s *Server) handleAttachmentDelete(w http.ResponseWriter, r *http.Request) {

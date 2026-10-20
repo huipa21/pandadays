@@ -74,6 +74,42 @@ func (f *fixture) export(t *testing.T, owner int64) []byte {
 	return buf.Bytes()
 }
 
+func TestExportDoesNotReattachRemovedLibraryMedia(t *testing.T) {
+	f := newFixture(t)
+	owner := f.user(t, "alice")
+	ctx := context.Background()
+	d, err := f.days.Create(ctx, owner, days.DayInput{Title: "Trip", Date: "2026-10-18"}, testNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := f.media.Upload(ctx, owner, d.ID, "removed.txt", strings.NewReader("retained"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.media.Detach(ctx, owner, d.ID, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	data := f.export(t, owner)
+	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range zr.File {
+		if strings.HasPrefix(entry.Name, mediaPrefix) {
+			t.Fatalf("removed attachment exported as current day media: %s", entry.Name)
+		}
+	}
+	recipient := f.user(t, "bobby")
+	_, result := f.importData(t, recipient, data)
+	if result.Imported != 1 {
+		t.Fatalf("export lost source day: %+v", result)
+	}
+	items, err := f.media.ListOwner(ctx, recipient)
+	if err != nil || len(items) != 0 {
+		t.Fatalf("import reattached removed media: %+v %v", items, err)
+	}
+}
+
 func (f *fixture) stage(t *testing.T, owner int64, data []byte) string {
 	t.Helper()
 	token, err := f.svc.Stage(owner, bytes.NewReader(data), 1<<30, testNow)

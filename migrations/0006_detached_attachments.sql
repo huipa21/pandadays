@@ -1,0 +1,1 @@
+ALTER TABLE attachments ADD COLUMN detached INTEGER NOT NULL DEFAULT 0 CHECK (detached IN (0, 1));

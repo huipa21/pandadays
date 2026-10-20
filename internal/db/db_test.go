@@ -17,6 +17,55 @@ import (
 
 var epoch = time.Unix(1_700_000_000, 0).UTC()
 
+func TestDetachedAttachmentMigrationPreservesExistingMedia(t *testing.T) {
+	conn, _ := openRaw(t)
+	ctx := context.Background()
+	old := fstest.MapFS{}
+	all, err := db.LoadMigrations(migrations.FS())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, migration := range all {
+		if migration.Version >= 6 {
+			continue
+		}
+		content, err := fs.ReadFile(migrations.FS(), migration.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		old[migration.Name] = &fstest.MapFile{Data: content}
+	}
+	if err := db.MigrateFS(ctx, conn, old, epoch); err != nil {
+		t.Fatal(err)
+	}
+	for _, query := range []string{
+		`INSERT INTO users(id,username,email,password_hash,used_bytes) VALUES(1,'alice','alice@example.com','unused',4)`,
+		`INSERT INTO collections(id,owner_id,name) VALUES(1,1,'Default')`,
+		`INSERT INTO days(id,owner_id,collection_id,title,date) VALUES(1,1,1,'Trip','2026-10-18')`,
+		`INSERT INTO attachments(id,day_id,owner_id,uuid,kind,filename,mime,size) VALUES(1,1,1,'original','image','photo.png','image/png',4)`,
+		`UPDATE days SET style_bg_attachment_id = 1 WHERE id = 1`,
+	} {
+		if _, err := conn.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Migrate(ctx, conn, epoch); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM attachments WHERE id = 1 AND detached = 0 AND uuid = 'original' AND size = 4`); n != 1 {
+		t.Fatal("migration changed existing media")
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM days WHERE id = 1 AND style_bg_attachment_id = 1`); n != 1 {
+		t.Fatal("migration cleared existing background")
+	}
+	if n := count(t, conn, `SELECT used_bytes FROM users WHERE id = 1`); n != 4 {
+		t.Fatalf("migration changed account usage: %d", n)
+	}
+	if _, err := conn.Exec(`UPDATE attachments SET detached = 2 WHERE id = 1`); err == nil {
+		t.Fatal("invalid detached state accepted")
+	}
+}
+
 func TestInvitationMigrationPreservesExistingRecipients(t *testing.T) {
 	conn, _ := openRaw(t)
 	ctx := context.Background()

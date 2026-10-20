@@ -65,7 +65,7 @@ func (s *Store) usage(ctx context.Context, q interface {
 		LEFT JOIN days d ON d.owner_id = u.id AND d.id = ?
 		JOIN settings mc ON mc.key = 'default_max_card_bytes'
 		JOIN settings qb ON qb.key = 'default_quota_bytes'
-		LEFT JOIN attachments a ON a.day_id = d.id AND a.owner_id = u.id
+		LEFT JOIN attachments a ON a.day_id = d.id AND a.owner_id = u.id AND a.detached = 0
 		WHERE u.id = ? AND (? = 0 OR d.id IS NOT NULL)
 		GROUP BY u.id`, dayID, ownerID, dayID).
 		Scan(&cardLimit, &userLimit, &u.UserUsed, &u.CardUsed)
@@ -279,7 +279,7 @@ func newUUID() (string, error) {
 func (s *Store) ListDay(ctx context.Context, ownerID, dayID int64) ([]Attachment, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT a.id, a.day_id, a.owner_id, a.uuid, a.kind, a.filename, a.mime, a.size, a.created_at
 		FROM attachments a JOIN days d ON d.id = a.day_id
-		WHERE a.owner_id = ? AND d.owner_id = ? AND d.id = ? ORDER BY a.created_at, a.id`,
+		WHERE a.owner_id = ? AND d.owner_id = ? AND d.id = ? AND a.detached = 0 ORDER BY a.created_at, a.id`,
 		ownerID, ownerID, dayID)
 	if err != nil {
 		return nil, fmt.Errorf("list attachments: %w", err)
@@ -352,7 +352,7 @@ func (s *Store) CopyToDay(ctx context.Context, ownerID, attachmentID, dayID int6
 func (s *Store) ListAccessibleDay(ctx context.Context, viewerID, dayID int64) ([]Attachment, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT a.id, a.day_id, a.owner_id, a.uuid, a.kind, a.filename, a.mime, a.size, a.created_at
 		FROM attachments a JOIN days d ON d.id = a.day_id
-		WHERE d.id = ? AND (
+		WHERE d.id = ? AND a.detached = 0 AND (
 			d.owner_id = ? OR EXISTS (
 				SELECT 1 FROM shares sh
 				JOIN share_recipients sr ON sr.share_id = sh.id
@@ -403,7 +403,7 @@ func (s *Store) GetAccessible(ctx context.Context, viewerID, id int64) (Attachme
 		FROM attachments a
 		JOIN days d ON d.id = a.day_id
 		WHERE a.id = ? AND (
-			a.owner_id = ? OR EXISTS (
+			a.owner_id = ? OR (a.detached = 0 AND EXISTS (
 				SELECT 1
 				FROM shares sh
 				JOIN share_recipients sr ON sr.share_id = sh.id
@@ -412,7 +412,7 @@ func (s *Store) GetAccessible(ctx context.Context, viewerID, id int64) (Attachme
 					(sh.target_type = 'day' AND sh.target_id = d.id)
 					OR (sh.target_type = 'collection' AND sh.target_id = d.collection_id AND d.archived_at IS NULL)
 				)
-			)
+			))
 		)`, id, viewerID, viewerID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return Attachment{}, ErrNotFound
@@ -421,6 +421,37 @@ func (s *Store) GetAccessible(ctx context.Context, viewerID, id int64) (Attachme
 		return Attachment{}, fmt.Errorf("get accessible attachment: %w", err)
 	}
 	return a, nil
+}
+
+// Detach keeps the file in its owner's library and retains its source day.
+func (s *Store) Detach(ctx context.Context, ownerID, dayID, id int64) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin attachment removal: %w", err)
+	}
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx, `UPDATE attachments SET detached = 1
+		WHERE owner_id = ? AND day_id = ? AND id = ? AND detached = 0
+		AND EXISTS (SELECT 1 FROM days WHERE id = ? AND owner_id = ?)`,
+		ownerID, dayID, id, dayID, ownerID)
+	if err != nil {
+		return fmt.Errorf("remove day attachment: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check attachment removal: %w", err)
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE days SET style_bg_attachment_id = NULL
+		WHERE id = ? AND owner_id = ? AND style_bg_attachment_id = ?`, dayID, ownerID, id); err != nil {
+		return fmt.Errorf("clear removed attachment background: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit attachment removal: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) Delete(ctx context.Context, ownerID, id int64) error {
@@ -476,7 +507,7 @@ func (s *Store) SetBackground(ctx context.Context, ownerID, dayID, attachmentID 
 		SET style_bg_attachment_id = ?
 		WHERE id = ? AND owner_id = ? AND EXISTS (
 			SELECT 1 FROM attachments a WHERE a.id = ? AND a.day_id = days.id
-			AND a.owner_id = days.owner_id AND a.kind = 'image'
+			AND a.owner_id = days.owner_id AND a.kind = 'image' AND a.detached = 0
 		)`, attachmentID, dayID, ownerID, attachmentID)
 	if err != nil {
 		return fmt.Errorf("set attachment background: %w", err)

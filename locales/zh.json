@@ -256,6 +256,8 @@
   "attachments.create_error": "纪念日已保存，但部分附件未能上传。请使用下方的附件链接查看或重试上传。",
   "attachments.upload": "上传",
   "attachments.delete": "删除",
+  "attachments.remove": "移除",
+  "attachments.remove_confirm": "确定从此纪念日移除此附件吗？文件仍会保留在媒体库中。",
   "attachments.delete_confirm": "确定删除此附件吗？",
   "attachments.set_background": "设为卡片背景",
   "attachments.background": "当前背景",

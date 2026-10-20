@@ -80,10 +80,10 @@
             {{if eq $.Day.StyleBgAttachmentID .ID}}<input type="hidden" name="clear" value="1">{{end}}
             <button type="submit" class="link-button">{{if eq $.Day.StyleBgAttachmentID .ID}}{{t "attachments.clear_background"}}{{else}}{{t "attachments.set_background"}}{{end}}</button>
           </form>{{end}}
-          <form method="post" action="/attachments/{{.ID}}/delete" class="inline-form"
-                hx-post="/attachments/{{.ID}}/delete" hx-confirm="{{t "attachments.delete_confirm"}}">
+          <form method="post" action="/days/{{$.Day.ID}}/attachments/{{.ID}}/remove" class="inline-form"
+                hx-post="/days/{{$.Day.ID}}/attachments/{{.ID}}/remove" hx-confirm="{{t "attachments.remove_confirm"}}">
             {{template "csrf-field" $}}
-            <button type="submit" class="link-button">{{t "attachments.delete"}}</button>
+            <button type="submit" class="link-button">{{t "attachments.remove"}}</button>
           </form>
         </div>
         {{end}}
@@ -95,7 +95,7 @@
       {{template "csrf-field" .}}
       {{template "media-picker-panel" .}}
       <progress class="upload-progress" max="100" hidden aria-label="{{t "attachments.uploading"}}" data-upload-progress></progress>
-      <button type="submit" class="btn">{{t "attachments.upload"}}</button>
+      <button type="submit" class="btn" data-media-submit>{{t "attachments.upload"}}</button>
     </form>
     {{end}}
       </div>
