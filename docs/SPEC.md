@@ -6,6 +6,9 @@ The main content fills the available viewport width with responsive page padding
 without a fixed desktop width cap. Login, setup, and password forms remain
 centered and width-limited for readability.
 
+All pages use the header's panda icon as an embedded SVG favicon, served through
+the same content-versioned static asset URLs as the styles and scripts.
+
 ---
 
 ## 1. Tech Stack

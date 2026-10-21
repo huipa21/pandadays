@@ -385,6 +385,12 @@ Status legend: `[ ]` todo, `[x]` done.
 - **Done when**: resize, orientation, alpha, quota, duplicate, and upload-route regressions pass; full Go tests and vet pass.
 - Verified: JPEG/PNG processing runs for day, day-create, and media-library uploads; stored bytes and quotas use the resized output, and all supported image files preserve their decoded orientation and transparency.
 
+### [x] T48 Panda favicon
+- Use the existing panda brand icon as an embedded SVG favicon in the shared layout, including login and setup.
+- Reuse content-versioned static URLs and keep the favicon publicly accessible.
+- **Done when**: favicon markup, SVG content, static serving regressions, full Go tests, and vet pass.
+- Verified: login, setup, and authenticated layouts include the versioned favicon; the embedded SVG contains the panda icon and is publicly served with the correct content type. Full Go tests and vet pass.
+
 ## Dependency Graph
 
 ```mermaid

@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"database/sql"
+	"encoding/xml"
 	"io"
 	"log/slog"
 	"net"
@@ -97,6 +98,7 @@ func TestStaticAssetsEmbedded(t *testing.T) {
 	for path, ct := range map[string]string{
 		"/static/app.css":     "text/css",
 		"/static/htmx.min.js": "javascript",
+		"/static/favicon.svg": "image/svg+xml",
 	} {
 		rr := do(t, h, http.MethodGet, path)
 		if rr.Code != http.StatusOK {
@@ -108,6 +110,34 @@ func TestStaticAssetsEmbedded(t *testing.T) {
 	}
 	if rr := do(t, h, http.MethodGet, "/static/"); rr.Code != http.StatusNotFound {
 		t.Errorf("directory listing: status = %d, want 404", rr.Code)
+	}
+}
+
+func TestFaviconUsesBrandIcon(t *testing.T) {
+	s := newTestServer(t)
+	h := s.Handler()
+	setup, _, _ := setupServer(t)
+	url := "/static/favicon.svg?v=" + s.assetVersion
+	link := `<link rel="icon" type="image/svg+xml" href="` + url + `">`
+	for path, handler := range map[string]http.Handler{"/login": h, "/setup": setup.Handler()} {
+		rr := do(t, handler, http.MethodGet, path)
+		if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), link) {
+			t.Errorf("%s: status = %d, missing versioned favicon link", path, rr.Code)
+		}
+	}
+	rr := do(t, h, http.MethodGet, url)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Header().Get("Content-Type"), "image/svg+xml") {
+		t.Fatalf("favicon: status = %d, content-type = %q", rr.Code, rr.Header().Get("Content-Type"))
+	}
+	var icon struct {
+		XMLName xml.Name `xml:"http://www.w3.org/2000/svg svg"`
+		Text    string   `xml:"text"`
+	}
+	if err := xml.Unmarshal(rr.Body.Bytes(), &icon); err != nil {
+		t.Fatal(err)
+	}
+	if icon.Text != "\U0001F43C" {
+		t.Errorf("favicon text = %q, want panda brand icon", icon.Text)
 	}
 }
 

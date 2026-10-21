@@ -61,6 +61,9 @@ func TestStaticVersionTracksContent(t *testing.T) {
 	if !strings.Contains(body, `href="/static/app.css?v=`+s.assetVersion+`"`) {
 		t.Fatalf("layout does not version app.css with %q", s.assetVersion)
 	}
+	if !strings.Contains(body, `<link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=`+s.assetVersion+`">`) {
+		t.Fatal("authenticated layout is missing its versioned favicon")
+	}
 	if rr := get(s.Handler(), "/static/app.css?v="+s.assetVersion, ""); rr.Code != 200 {
 		t.Fatalf("versioned asset: %d", rr.Code)
 	}
