@@ -8,13 +8,13 @@
     <div class="profile-layout">
       <div class="avatar-box">
         <div class="avatar-stage">
-          <label class="avatar-picker" title="{{t "profile.change_avatar"}}">
+          <label class="avatar-picker" for="profile-avatar" title="{{t "profile.change_avatar"}}">
             <span class="visually-hidden">{{t "profile.change_avatar"}}</span>
             <span class="avatar-circle" data-avatar-preview>{{template "user-avatar" .Fields}}</span>
-            <input class="visually-hidden" type="file" name="avatar" accept="image/png,image/jpeg" aria-describedby="avatar-hint" data-avatar-input>
           </label>
           {{if .Fields.HasAvatar}}<button type="submit" form="avatar-remove-form" class="avatar-remove" aria-label="{{t "profile.remove_avatar"}}" title="{{t "profile.remove_avatar"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>{{end}}
         </div>
+        <label>{{t "profile.avatar"}}<input id="profile-avatar" type="file" name="avatar" accept="image/png,image/jpeg" aria-describedby="avatar-hint" data-avatar-input></label>
       </div>
       <div class="profile-fields">
         <label>{{t "admin.username"}}<input type="text" value="{{.Fields.Username}}" readonly autocomplete="username" aria-describedby="username-fixed"><span class="hint" id="username-fixed">{{t "profile.username_fixed"}}</span></label>

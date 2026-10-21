@@ -3,17 +3,22 @@
 <section class="stack">
   {{if not .Item.ID}}<div class="page-heading">
     <h1>{{t "media.title"}}</h1>
-    <a class="btn media-add" href="#media-upload-form" aria-label="{{t "media.upload"}}" title="{{t "media.upload"}}">+</a>
     {{if .Items}}<p class="hint">{{t "media.summary" (len .Items) (bytes .Total)}}</p>{{end}}
   </div>
-  <details class="card" id="media-upload-form">
-    <summary>{{t "media.upload"}}</summary>
+  <section class="card media-upload-panel" id="media-upload-form" aria-labelledby="media-upload-title">
+    <div class="media-panel-head">
+      <h2 id="media-upload-title">{{t "media.tab.upload"}}</h2>
+      <button type="button" class="icon-button" data-close-dialog hidden aria-label="{{t "media.done"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    </div>
     <form method="post" action="/media" enctype="multipart/form-data" class="form">
       {{template "csrf-field" .}}
       {{template "upload-files" .}}
-      <button type="submit" class="btn">{{t "attachments.upload"}}</button>
+      <div class="dialog-actions media-upload-actions">
+        <button type="button" class="btn btn-secondary" data-close-dialog hidden>{{t "upload.cancel"}}</button>
+        <button type="submit" class="btn">{{t "attachments.upload"}}</button>
+      </div>
     </form>
-  </details>
+  </section>
   <form method="get" action="/media" class="form media-filters">
     <label>{{t "media.group"}}
       <select name="group">
@@ -31,6 +36,7 @@
       </select>
     </label>
     <button type="submit" class="btn">{{t "media.apply"}}</button>
+    <a class="btn media-add" href="#media-upload-form" aria-haspopup="dialog" aria-label="{{t "media.upload"}}" title="{{t "media.upload"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></a>
   </form>
   <p class="hint">{{t "media.timeline_hint"}}</p>
   {{end}}
@@ -84,5 +90,4 @@
   </div>
   {{else}}<p class="card empty-state hint">{{if .HasMedia}}{{t "media.empty_filter"}}{{else}}{{t "media.empty"}}{{end}}</p>{{end}}
 </section>
-<script src="{{asset "upload-preview.js"}}" defer></script>
 {{end}}

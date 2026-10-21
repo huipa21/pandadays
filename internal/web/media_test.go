@@ -73,6 +73,24 @@ func TestMediaLibraryEmpty(t *testing.T) {
 	if body := get(s.Handler(), "/days/new", token).Body.String(); !strings.Contains(body, "No media yet") {
 		t.Fatal("picker does not explain an empty library")
 	}
+	body := rr.Body.String()
+	filters := strings.Index(body, `class="form media-filters"`)
+	if filters < 0 {
+		t.Fatal("media filters are missing")
+	}
+	add := strings.Index(body, `class="btn media-add"`)
+	end := strings.Index(body[filters:], "</form>") + filters
+	if add < filters || add > end {
+		t.Fatal("plus button must be inside the filter row")
+	}
+	for _, want := range []string{`id="media-upload-title"`, `data-close-dialog`, `aria-haspopup="dialog"`, `id="upload-dropzone-template"`, `class="upload-document"`, `data-remove-label="Remove %s"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("upload dialog missing %q", want)
+		}
+	}
+	if strings.Contains(body, `<details class="card" id="media-upload-form">`) {
+		t.Fatal("library upload still uses the old disclosure")
+	}
 }
 
 func TestStandaloneMediaUploadAndReuse(t *testing.T) {
@@ -107,6 +125,11 @@ func TestStandaloneMediaUploadAndReuse(t *testing.T) {
 				for _, want := range []string{`class="btn media-add"`, `action="/media"`, `data-upload-list`, `upload-preview.js`} {
 					if !strings.Contains(body, want) {
 						t.Fatalf("missing library upload UI %q", want)
+					}
+				}
+				for _, want := range []string{`class="media-thumb-icon" data-filename=`, `data-mime=`} {
+					if !strings.Contains(body, want) {
+						t.Fatalf("missing file type thumbnail metadata %q", want)
 					}
 				}
 			}

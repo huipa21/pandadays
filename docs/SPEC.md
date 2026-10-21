@@ -108,13 +108,20 @@ are URL-backed and work without JavaScript. Each group retains compact preview
 tiles, filenames, types, and sizes; videos show inline previews. Empty filtered
 results are distinguished from an empty library.
 The library shows each owned content hash once, including existing day references.
+Non-image files use file-type document icons labeled by extension, with distinct
+format pictograms in upload selections, library tiles, and the day media picker.
 Selecting library files uses Select, not Upload, and reuses stored bytes; selecting
 an already attached file does not add another attachment. Day references retain
 independent metadata, removal, and existing per-day/account quota accounting.
-A plus button opens an upload form that works before any day exists. Standalone
+A plus button beside the media filters opens an upload dialog that works before any day exists. Standalone
 uploads count toward the account quota, remain owner-only until selected for a
 day, and can be renamed or deleted from media details. All file selectors list
-selected filenames and image thumbnails before submission. Full site backups
+selected filenames and image thumbnails before submission, with a remove button
+on each selected file. Multi-file selections append across repeated chooser visits
+and drag-and-drop, including files from different folders. File upload fields share
+an app-themed dashed drop area with document/upload and close SVG icons; avatar,
+import, and restore fields retain their single-file constraints. Without JavaScript,
+native file fields and an inline library upload form remain available. Full site backups
 include standalone library files; the day CSV/ZIP export includes day attachments.
 Cards and attachment managers show audio as a compact filename/size row with
 Play, rename, and remove controls (Play only for shared read-only cards).

@@ -492,11 +492,18 @@
   var avatarInput = document.querySelector("[data-avatar-input]");
   var avatarPreview = document.querySelector("[data-avatar-preview]");
   if (avatarInput && avatarPreview && window.FileReader) {
+    var originalAvatar = Array.from(avatarPreview.childNodes, function (node) { return node.cloneNode(true); });
+    function restoreAvatar() {
+      avatarPreview.replaceChildren.apply(avatarPreview, originalAvatar.map(function (node) { return node.cloneNode(true); }));
+    }
+    avatarInput.form.addEventListener("reset", restoreAvatar);
     avatarInput.addEventListener("change", function () {
       var file = avatarInput.files && avatarInput.files[0];
-      if (!file || !/^image\/(png|jpeg)$/.test(file.type)) return;
+      if (!file) { restoreAvatar(); return; }
+      if (!/^image\/(png|jpeg)$/.test(file.type)) return;
       var reader = new FileReader();
       reader.onload = function () {
+        if (avatarInput.files[0] !== file) return;
         var img = document.createElement("img");
         img.alt = "";
         img.src = reader.result;

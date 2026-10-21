@@ -364,6 +364,20 @@ Status legend: `[ ]` todo, `[x]` done.
 - **Done when**: focused/full Go tests, vet, JavaScript regressions, and 375px/1280px browser checks pass.
 - Verified: full Go tests/vet and all 61 JavaScript tests pass. Isolated browser checks confirm standalone uploads, filenames/image thumbnails, Select/Upload labeling, and recording start/pause/resume/finish in English/Chinese at 375px/1280px without overflow. Reusing a standalone file on two days leaves one library entry and one physical blob for that file. Regression tests cover missing files, owner/shared authorization, quota-safe repeated selection, and migration rollback/foreign-key enforcement.
 
+### [x] T45 Consistent file upload picker and library dialog
+- Place the media plus button beside the filters and open a keyboard-accessible upload dialog.
+- Use app-themed dashed drop areas and SVG document/upload/close icons throughout file upload flows.
+- Append multi-file selections across folders and chooser visits; show names, image previews, and individual removal.
+- Keep avatar/import/restore single-file constraints, native no-JavaScript fallback, authorization, and quotas.
+- **Done when**: queue/removal/drop/reset regressions, full Go tests/vet, JavaScript tests, and 375px/1280px browser checks pass.
+- Verified: full Go tests/vet and all 65 JavaScript tests pass. Chromium checks cover repeated native chooser visits across folders, removal from submitted/persisted files, day attachment queues, avatar preview removal, single-file import/restore/admin fields, dialog close/reopen, English/Chinese at 375px/1280px, dark colors, and the no-JavaScript fallback without horizontal overflow.
+
+### [x] T46 File-type icons for uploads and media
+- Use extension-labeled document icons with format-specific pictograms for non-image selected files, media-library tiles, and day attachment pickers.
+- Preserve image thumbnails and work without external icon packages or assets.
+- **Done when**: file-type mapping/thumbnail regressions, full Go tests/vet, and JavaScript tests pass.
+- Verified: file icons cover common document, spreadsheet, image, audio, video, archive, code, slide, design, and application formats, with MIME fallback for unknown extensions; all Go tests/vet and JavaScript tests pass.
+
 ## Dependency Graph
 
 ```mermaid

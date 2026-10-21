@@ -11,6 +11,7 @@
 <script src="{{asset "htmx.min.js"}}" defer></script>
 <script src="{{asset "app.js"}}" defer></script>
 <script src="{{asset "media-player.js"}}" defer></script>
+<script src="{{asset "upload-preview.js"}}" defer></script>
 {{if .CaptureTimezone}}<script src="{{asset "timezone.js"}}" defer></script>{{end}}
 </head>
 <body hx-headers='{"X-CSRF-Token":"{{.CSRFToken}}"}'>
@@ -47,6 +48,13 @@
 <p class="alert" id="flash" role="alert" hidden data-error-network="{{t "error.network"}}" data-error-generic="{{t "error.internal"}}"></p>
 {{block "content" .}}{{end}}
 </main>
+<template id="upload-dropzone-template" data-remove-label="{{t "upload.remove"}}" data-selected-label="{{t "media.selected_files"}}" data-single-hint="{{t "upload.single_hint"}}">
+  <span class="upload-dropzone" data-upload-dropzone>
+    <svg class="upload-document" viewBox="0 0 64 64" aria-hidden="true"><path class="upload-document-sheet" d="M15 5h23l12 12v36H15z"/><path class="upload-document-fold" d="M38 5v12h12"/><circle class="upload-document-badge" cx="47" cy="47" r="13"/><path class="upload-document-arrow" d="M47 53V40m-5 5 5-5 5 5m-13 7v4h16v-4"/></svg>
+    <span>{{t "upload.drop"}} <span class="upload-choose">{{t "attachments.choose_file"}}</span></span>
+    <span class="hint">{{t "upload.selection_hint"}}</span>
+  </span>
+</template>
 {{with .User}}{{if .IsAdmin}}<dialog class="card confirm-dialog" id="app-dialog" aria-labelledby="dialog-title"></dialog>{{end}}{{end}}
 </body>
 </html>
@@ -112,7 +120,7 @@
     <a class="btn btn-secondary" href="/admin/users/{{.ID}}" data-close-dialog>{{t "admin.cancel"}}</a>
     <button class="btn btn-danger" type="submit">{{t "admin.delete"}}</button>
   </form>{{end}}{{end}}
-{{define "media-thumb"}}{{if eq .Kind "image"}}<img src="/attachments/{{.ID}}" alt="" loading="lazy">{{else}}<span class="media-thumb-icon" aria-hidden="true">{{if eq .Kind "audio"}}🎵{{else if eq .Kind "video"}}🎬{{else}}📄{{end}}</span>{{end}}{{end}}
+{{define "media-thumb"}}{{if eq .Kind "image"}}<img src="/attachments/{{.ID}}" alt="" loading="lazy">{{else}}<span class="media-thumb-icon" data-filename="{{.Filename}}" data-mime="{{.MIME}}" aria-hidden="true">FILE</span>{{end}}{{end}}
 {{define "audio-player"}}<figure class="audio-player" data-audio-player
     data-error-playback="{{t "attachments.error.playback"}}" data-error-network="{{t "error.network"}}">
   <figcaption><a href="/attachments/{{.ID}}">{{.Filename}}</a></figcaption>
@@ -206,11 +214,10 @@
     </div>
   </div>
 </div>
-<script src="{{asset "upload-preview.js"}}" defer></script>
 {{end}}
 {{define "upload-files"}}
 <div data-upload-files>
-  <label>{{t "attachments.choose_file"}}<input type="file" name="file" multiple data-media-files></label>
+  <label><span class="visually-hidden">{{t "attachments.choose_file"}}</span><input type="file" name="file" multiple data-media-files></label>
   <ul class="upload-file-list" data-upload-list aria-live="polite" aria-label="{{t "media.selected_files"}}"></ul>
 </div>
 {{end}}
