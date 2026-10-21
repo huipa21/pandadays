@@ -19,7 +19,7 @@ centered and width-limited for readability.
 | Frontend | Server-rendered HTML + htmx (vendored, embedded) + hand-written mobile-first CSS; minimal vanilla JS (voice recording, timezone detection, toggles) |
 | Auth | bcrypt password hashes; server-side sessions in SQLite; cookie `HttpOnly`, `Secure` (configurable for local dev), `SameSite=Lax`; CSRF token on all state-changing requests |
 | i18n | `locales/en.json`, `locales/zh.json` embedded; template func `t "key"` |
-| Storage | `/data/pandadays.db`, `/data/media/{user_id}/{uuid}`, `/data/backups/`, `/data/tmp/` |
+| Storage | `/data/pandadays.db`, `/data/media/blobs/{sha256[0:2]}/{sha256}`, `/data/backups/`, `/data/tmp/` |
 | Deploy | Multi-stage Dockerfile (distroless/alpine runtime), `compose.yaml`, single volume mounted at `/data` |
 
 Dependencies are kept minimal: SQLite driver, `golang.org/x/crypto/bcrypt`. Everything else is stdlib.
@@ -86,23 +86,49 @@ Create and the card menu's attachment manager share Media library, Upload file,
 and Voice recording tabs. Recordings can be previewed before saving/uploading;
 unsupported browsers show an explicit microphone/recording availability message.
 While recording, a live microphone-level bar and elapsed minutes/seconds show
-input activity and recording duration. Stopping retains the duration and exposes
-an audio preview before upload (local blob URLs are allowed only for media in
-the content security policy). Uploaded audio attachments are playable directly
-beneath the day card's comment, including on authorized shared cards.
+input activity and recording duration. A play icon to the right starts or resumes
+recording; Stop pauses without finalizing and Finish produces an audio preview.
+Paused time is excluded from the duration, and unfinished recordings block saving.
+Local blob URLs are allowed for image thumbnails and media previews in the content
+security policy. Uploaded audio attachments are playable directly
+beneath the day card's comment, including on authorized shared cards. When any
+attachments exist, a separator and collapsed Attachments disclosure follow the
+comment. Expanding it lists every attachment type without individual item borders,
+with image/video previews and original-file links for other files.
 The edit form contains day fields and Save only; attachments and deletion remain
 in the card menu. An image background can be cleared without deleting its attachment.
 The media library uses a compact thumbnail/name grid. Opening an item shows its
 preview with details, source day, original-file link, and Delete in a side column
 (stacked below the preview on mobile), without repeating the Media page heading.
 The filename remains visible in the details.
-Audio players group the filename, native playback controls, and playback errors
-inside one panel on cards, attachment managers, media details, and recording
-previews. Missing stored files return an authorized, localized HTTP 410 explaining
+The media library is a newest-first timeline grouped by upload day (default) or
+month in the user's saved timezone (server timezone when unset). A media-type filter selects
+all media, images, videos, voice/audio, or generic files. Grouping and filtering
+are URL-backed and work without JavaScript. Each group retains compact preview
+tiles, filenames, types, and sizes; videos show inline previews. Empty filtered
+results are distinguished from an empty library.
+The library shows each owned content hash once, including existing day references.
+Selecting library files uses Select, not Upload, and reuses stored bytes; selecting
+an already attached file does not add another attachment. Day references retain
+independent metadata, removal, and existing per-day/account quota accounting.
+A plus button opens an upload form that works before any day exists. Standalone
+uploads count toward the account quota, remain owner-only until selected for a
+day, and can be renamed or deleted from media details. All file selectors list
+selected filenames and image thumbnails before submission. Full site backups
+include standalone library files; the day CSV/ZIP export includes day attachments.
+Cards and attachment managers show audio as a compact filename/size row with
+Play, rename, and remove controls (Play only for shared read-only cards).
+Play reveals and starts only the native player below that row, without a repeated
+filename or nested bordered panel; playback errors appear inline below the player.
+Only one expandable audio player stays open at a time. Switching recordings,
+clicking outside the player/Play button, closing its attachment disclosure or
+dialog, or pressing Escape pauses and collapses it.
+Media details and recording previews retain their named audio panels.
+Missing stored files return an authorized, localized HTTP 410 explaining
 backup restoration or replacement; storage permission errors identify the access
 problem without exposing server paths. Playback failures show these diagnostics
-inline instead of leaving only a disabled player. Valid media can be copied from
-the library repeatedly; missing source files cannot be recovered by copying their
+inline instead of leaving only a disabled player. Valid media can be selected from
+the library for multiple days; missing source files cannot be recovered by copying their
 database entries.
 
 The attachment manager shows only this day's used space, without quota progress
@@ -194,7 +220,7 @@ Badges are never removed by custom styles so states remain distinguishable witho
 ### 3.7 Sharing
 - Regular users have Home, Collections, Tags, and Media in the header. Archive and Sharing live in the avatar dropdown alongside Messages, Profile, Settings, and Sign out. Owned day detail pages do not repeat a Home link.
 - Sharing opens `/sharing` with **Shared to Others** and **Shared to Me** tabs. Shared to Others lists each day or collection the current user shares once, including pending/rejected invitations and archived owned days, linking to its share settings. Revoked shares and deleted targets are omitted. Shared to Me keeps `/shared` and the existing accepted-day list, including hidden days.
-- Regular users have a header search bar for active owned day titles and accepted, non-hidden shared day titles. Matching is case-insensitive and literal (including Chinese), across future and past. Archived owned days, hidden shared days, and unaccepted shares are excluded; clearing search restores normal Home date tabs.
+- Regular users have a borderless magnifier immediately left of the light/dark toggle. It expands inline in the same header row into a borderless search field with a magnifier submit button on its right, not a dropdown below the header. Search covers active owned day titles/comments and accepted, non-hidden shared day titles/comments (comments only when the owner permits viewing them). Matching is case-insensitive and literal (including Chinese), across future and past. Archived owned days, hidden shared days, and unaccepted shares are excluded; clearing search restores normal Home date tabs. Search opens without JavaScript; with JavaScript it focuses the field and closes on Escape or outside click.
 - Targets: a single **day** or a whole **collection**.
 - Recipients: one or more users, identified by **username or email** (case-insensitive). Unknown identifiers return a generic error (no user enumeration). Cannot share to self.
 - One share has many recipients (`share_recipients` table).
@@ -276,7 +302,7 @@ Other subcommands:
 - Language: `en` or `zh`, selectable during setup and later with the header toggle. Resolution order: user setting → site setting → `Accept-Language` → `en`. Setup defaults to browser language; there is no language environment variable.
 
 ### 4.6 Profile and account controls
-- The header has a light/dark icon toggle and a globe-icon Chinese/English toggle of the same size, placed to the left of the navigation links for every user. Theme defaults to the browser preference and persists in a browser cookie; switching language saves the signed-in user's preference and stays on the current page, preserving filters. Language is not a profile dropdown.
+- The header has borderless light/dark and globe-icon Chinese/English toggles of the same size, placed to the left of the navigation links for every user. Theme defaults to the browser preference and persists in a browser cookie; switching language saves the signed-in user's preference and stays on the current page, preserving filters. Language is not a profile dropdown.
 - Profile (`/profile`) contains only identity. A square container holds the circular avatar; clicking it opens the file picker (previewed before saving), and an X at the circle's top-right removes an existing avatar. Username (read-only), display name, and email are three rows beside the avatar on wide screens and below it on phones. Usernames are unique and fixed after creation. Changing one's own email requires the current password, sharing the password-change backoff. The password is a fixed mask with a reset button on the right that opens the authenticated password-change form. Actual passwords and hashes are never rendered.
 - Settings (`/settings`, in the avatar menu) holds timezone, storage usage, and backup & restore (personal export/import). Admins see timezone only.
 - Display names are at most 100 characters; optional administrative comments are at most 10,000. Avatars are optional validated PNG/JPEG uploads, at most 1 MiB and 2048 × 2048 pixels, stored in SQLite and included in full backups. They are separate from day-attachment quotas and accessible only to the account owner or an administrator.
@@ -290,12 +316,13 @@ Other subcommands:
 
 - Kinds: `image`, `audio`, `video`, `file`. Kind is derived from sniffed content type, not the client header: `http.DetectContentType` on the first 512 bytes, refined from container metadata in the first 64 KiB (audio-only WebM/MP4/Ogg MediaRecorder voice notes → audio; QuickTime `.mov` → `video/quicktime`).
 - Voice: in-browser recording via `MediaRecorder`, uploaded as audio.
-- Stored at `/data/media/{user_id}/{uuid}` (no original filename on disk). Original filename kept in DB for download.
+- Stored content-addressed at `/data/media/blobs/{sha256[0:2]}/{sha256}` (no original filename on disk). Each attachment row keeps its own owner, day, filename, type, and timestamps, and points to the blob by `sha256`; identical bytes uploaded by different users are stored once on disk but remain independent attachments, each charged to its owner's quota and visible only through that owner's access rules. A blob is deleted only when no attachment row references it (deletions queue the hash in `blob_gc`; the server collects after deleting and at startup). Files from the legacy `/data/media/{user_id}/{uuid}` layout are hashed and moved into the blob store at startup; rows whose legacy file is missing keep a null hash and report the missing file.
+- Duplicate uploads: a user cannot upload content that is already in their own media library (including items removed from a day). Uploads and new-day attachments are checked before anything is saved, including the same file selected twice; the request fails with HTTP 409 and a localized message pointing to the **Media library** tab. Picking the existing library item is the supported way to attach it to another day. Imports are not rejected; their content is shared with existing blobs.
 - Served only via `/attachments/{id}` with authorization (owner or valid share recipient). Headers: `X-Content-Type-Options: nosniff`; images/audio/video inline with sniffed type; everything else (and any HTML/SVG/XML) as `Content-Disposition: attachment` with `application/octet-stream`. Support HTTP range requests (`http.ServeContent`) for media playback.
 - Limits: per-card total ≤ `max_card_bytes`; per-user total ≤ `quota_bytes`. `users.used_bytes` maintained transactionally.
 - Removing an attachment from a Day keeps its file in the media library for reuse and keeps it counted toward account storage, but removes it from per-card usage, the card background, and shared access. The original source-day link is retained. Permanent deletion from the media library, or deletion of the source day, deletes files and decrements `used_bytes`; backgrounds fall back to default.
 - Media library: a header **Media** link (users only; admins get 404) opens `/media`, listing every attachment the user owns across all days, newest first, as thumbnails and filenames. Opening `/media/{id}` shows a larger preview with size, upload time, type, source day, original-file link, and delete (returning to the library). Shared-with-me attachments are not included.
-- Attachment picker: **Add attachments** opens a modal dialog on creation; the card attachment manager uses the same **Media library**, **Upload file**, and **Voice recording** tabs inline within its dialog. Without JavaScript all sections render inline, with recording explicitly unavailable. Picked library items (`library` form values) are copied into independent attachments of the target day, so deleting either copy leaves the other intact. Copies, uploads, and recordings are checked together against the per-card and account quotas before saving attachments (and before creating a new day). Library IDs not owned by the user return 404 and create nothing. New-day library picks are retained after validation or quota errors; files must be selected again.
+- Attachment picker: **Add attachments** opens a modal dialog on creation; the card attachment manager uses the same **Media library**, **Upload file**, and **Voice recording** tabs inline within its dialog. Without JavaScript all sections render inline, with recording explicitly unavailable. Picked library items (`library` form values) become independent attachments of the target day sharing the same stored blob, so deleting either one leaves the other intact. Copies, uploads, and recordings are checked together against the per-card and account quotas before saving attachments (and before creating a new day). Library IDs not owned by the user return 404 and create nothing. New-day library picks are retained after validation or quota errors; files must be selected again.
 - With JavaScript, the existing-day Upload button is disabled until at least one library item, local file, or completed recording is selected. Creating a Day still allows no attachments. Day exports include only current attachments, not removed library-only media; site backups retain all media.
 
 ---
@@ -451,8 +478,10 @@ days(id PK, owner_id FK CASCADE, collection_id FK RESTRICT,
 
 day_tags(day_id FK CASCADE, tag_id FK CASCADE, PK(day_id, tag_id))
 
-attachments(id PK, day_id FK CASCADE, owner_id FK CASCADE, uuid TEXT UNIQUE,
-  kind TEXT, filename TEXT, mime TEXT, size INTEGER, created_at)
+attachments(id PK, day_id NULL FK CASCADE, owner_id FK CASCADE, uuid TEXT UNIQUE,
+  kind TEXT, filename TEXT, mime TEXT, size INTEGER, created_at, detached INTEGER,
+  sha256 TEXT NULL)  -- indexed by (owner_id, sha256) and (sha256)
+blob_gc(sha256 PK)  -- filled by an AFTER DELETE trigger on attachments
 
 shares(id PK, owner_id FK CASCADE, target_type TEXT CHECK(IN('day','collection')),
   target_id INTEGER, show_comment INTEGER DEFAULT 0, created_at)
@@ -474,7 +503,7 @@ Deleting a day/collection also deletes shares targeting it (application-level, s
 | `GET/POST /setup` | Initial admin creation with token |
 | `GET/POST /login`, `POST /logout` | Auth |
 | `GET/POST /password` | Change password (forced when flagged) |
-| `GET /` | Home: list of active own + accepted shared days, toggle **Future / Past** (htmx partial `?when=future|past`); `?q=...` searches visible day titles across both |
+| `GET /` | Home: list of active own + accepted shared days, toggle **Future / Past** (htmx partial `?when=future|past`); `?q=...` searches visible day titles and authorized comments across both |
 | `GET /days/new`, `POST /days` | Create |
 | `GET /days/{id}` | Calendar card view (countdown, comment, attachments, style) |
 | `GET/POST /days/{id}/edit`, `POST /days/{id}/delete` | Edit / delete |

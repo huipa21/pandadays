@@ -3,6 +3,8 @@
   if (!controls || !navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return;
 
   const button = controls.querySelector("[data-record-button]");
+  const pause = controls.querySelector("[data-record-pause]");
+  const finish = controls.querySelector("[data-record-finish]");
   const status = controls.querySelector("[data-record-status]");
   const form = controls.closest("form");
   const fileInput = controls.querySelector("[data-record-file]");
@@ -12,7 +14,7 @@
   const timer = controls.querySelector("[data-record-timer]");
   const level = controls.querySelector("[data-record-level]");
   const AudioContext = window.AudioContext || window.webkitAudioContext;
-  if (!button || !status || !form || !fileInput || !preview || !player || !name || !timer || !level) return;
+  if (!button || !pause || !finish || !status || !form || !fileInput || !preview || !player || !name || !timer || !level) return;
   if (!AudioContext) return;
 
   controls.hidden = false;
@@ -26,6 +28,8 @@
   let source;
   let monitor;
   let updateFeedback;
+  let elapsed = 0;
+  let startedAt = 0;
   function stopMonitor() {
     updateFeedback?.();
     updateFeedback = undefined;
@@ -49,7 +53,7 @@
     if (!event.persisted && previewURL) URL.revokeObjectURL(previewURL);
   });
   form.addEventListener("submit", (event) => {
-    if (pending || recorder?.state === "recording") {
+    if (pending || recorder?.state === "recording" || recorder?.state === "paused") {
       event.preventDefault();
       status.textContent = controls.dataset.recording;
     }
@@ -69,8 +73,47 @@
 
   function resetButton() {
     button.disabled = false;
-    button.textContent = controls.dataset.recordStart;
+    button.hidden = false;
+    button.setAttribute("aria-label", controls.dataset.recordStart);
+    button.title = controls.dataset.recordStart;
+    pause.hidden = true;
+    finish.hidden = true;
   }
+
+  pause.addEventListener("click", () => {
+    if (pending || recorder?.state !== "recording") return;
+    try {
+      recorder.pause();
+      elapsed += performance.now() - startedAt;
+      clearInterval(monitor);
+      monitor = undefined;
+      stream.getTracks().forEach((track) => { track.enabled = false; });
+      level.value = 0;
+      button.hidden = false;
+      button.setAttribute("aria-label", controls.dataset.recordResume);
+      button.title = controls.dataset.recordResume;
+      pause.hidden = true;
+      status.textContent = controls.dataset.recordPaused;
+    } catch {
+      status.textContent = controls.dataset.recordError;
+    }
+  });
+
+  finish.addEventListener("click", () => {
+    if (pending || !["recording", "paused"].includes(recorder?.state)) return;
+    pending = true;
+    try {
+      if (recorder.state === "recording") elapsed += performance.now() - startedAt;
+      recorder.stop();
+      stopMonitor();
+      button.disabled = true;
+      pause.hidden = true;
+      finish.hidden = true;
+    } catch {
+      pending = false;
+      status.textContent = controls.dataset.recordError;
+    }
+  });
 
   name.addEventListener("input", () => {
     const filename = name.value.trim();
@@ -87,11 +130,19 @@
   });
 
   button.addEventListener("click", async () => {
-    if (recorder?.state === "recording") {
-      pending = true;
-      recorder.stop();
-      stopMonitor();
-      button.disabled = true;
+    if (pending || recorder?.state === "recording") return;
+    if (recorder?.state === "paused") {
+      try {
+        recorder.resume();
+        stream.getTracks().forEach((track) => { track.enabled = true; });
+        startedAt = performance.now();
+        monitor = setInterval(updateFeedback, 100);
+        button.hidden = true;
+        pause.hidden = false;
+        status.textContent = controls.dataset.recording;
+      } catch {
+        status.textContent = controls.dataset.recordError;
+      }
       return;
     }
     button.disabled = true;
@@ -147,11 +198,17 @@
         resetButton();
       }, { once: true });
       recorder.start();
-      const startedAt = performance.now();
+      const empty = new DataTransfer();
+      fileInput.files = empty.files;
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+      player.hidden = true;
+      name.disabled = true;
+      elapsed = 0;
+      startedAt = performance.now();
       timer.textContent = "00:00";
       updateFeedback = () => {
-        const elapsed = Math.floor((performance.now() - startedAt) / 1000);
-        timer.textContent = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
+        const seconds = Math.floor((elapsed + (recorder.state === "recording" ? performance.now() - startedAt : 0)) / 1000);
+        timer.textContent = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
         analyser.getFloatTimeDomainData(samples);
         const rms = Math.sqrt(samples.reduce((sum, sample) => sum + sample * sample, 0) / samples.length);
         // Map -60 dB to 0 dB onto the meter so quiet speech remains visible.
@@ -160,8 +217,10 @@
       monitor = setInterval(updateFeedback, 100);
       pending = false;
       status.textContent = controls.dataset.recording;
-      button.textContent = controls.dataset.recordStop;
       button.disabled = false;
+      button.hidden = true;
+      pause.hidden = false;
+      finish.hidden = false;
     } catch {
       release();
       pending = false;

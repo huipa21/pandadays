@@ -3,8 +3,37 @@
 <section class="stack">
   {{if not .Item.ID}}<div class="page-heading">
     <h1>{{t "media.title"}}</h1>
+    <a class="btn media-add" href="#media-upload-form" aria-label="{{t "media.upload"}}" title="{{t "media.upload"}}">+</a>
     {{if .Items}}<p class="hint">{{t "media.summary" (len .Items) (bytes .Total)}}</p>{{end}}
-  </div>{{end}}
+  </div>
+  <details class="card" id="media-upload-form">
+    <summary>{{t "media.upload"}}</summary>
+    <form method="post" action="/media" enctype="multipart/form-data" class="form">
+      {{template "csrf-field" .}}
+      {{template "upload-files" .}}
+      <button type="submit" class="btn">{{t "attachments.upload"}}</button>
+    </form>
+  </details>
+  <form method="get" action="/media" class="form media-filters">
+    <label>{{t "media.group"}}
+      <select name="group">
+        <option value="day" {{if eq .GroupBy "day"}}selected{{end}}>{{t "media.group.day"}}</option>
+        <option value="month" {{if eq .GroupBy "month"}}selected{{end}}>{{t "media.group.month"}}</option>
+      </select>
+    </label>
+    <label>{{t "media.filter"}}
+      <select name="kind">
+        <option value="" {{if eq .Kind ""}}selected{{end}}>{{t "media.kind.all"}}</option>
+        <option value="image" {{if eq .Kind "image"}}selected{{end}}>{{t "media.kind.image"}}</option>
+        <option value="video" {{if eq .Kind "video"}}selected{{end}}>{{t "media.kind.video"}}</option>
+        <option value="audio" {{if eq .Kind "audio"}}selected{{end}}>{{t "media.kind.audio"}}</option>
+        <option value="file" {{if eq .Kind "file"}}selected{{end}}>{{t "media.kind.file"}}</option>
+      </select>
+    </label>
+    <button type="submit" class="btn">{{t "media.apply"}}</button>
+  </form>
+  <p class="hint">{{t "media.timeline_hint"}}</p>
+  {{end}}
   {{if .Item.ID}}
   <p><a href="/media">← {{t "media.title"}}</a></p>
   <article class="card media-detail">
@@ -19,7 +48,7 @@
       <a href="/attachments/{{.Item.ID}}">{{t "media.open"}}</a>
       <span class="hint">{{bytes .Item.Size}} · {{localtime .Item.CreatedAt}}</span>
       <span class="hint">{{.Item.MIME}}</span>
-      <span>{{t "media.from"}} <a href="/days/{{.Item.DayID}}">{{.Item.DayTitle}}</a></span>
+      {{if .Item.DayID}}<span>{{t "media.from"}} <a href="/days/{{.Item.DayID}}">{{.Item.DayTitle}}</a></span>{{end}}
       <details>
         <summary class="link-button">{{t "attachments.edit"}}</summary>
         <form method="post" action="/attachments/{{.Item.ID}}/rename" class="form">
@@ -36,14 +65,24 @@
     </aside>
   </article>
   {{else if .Items}}
+  <div class="media-timeline">
+  {{range .Groups}}
+  <section class="media-timeline-group" aria-labelledby="media-date-{{.Date}}">
+  <h2 id="media-date-{{.Date}}"><time datetime="{{.Date}}">{{.Date}}</time></h2>
   <ul class="media-grid">
     {{range .Items}}<li class="card media-card">
       <a class="media-card-preview" href="/media/{{.ID}}" aria-label="{{.Filename}}">
-        {{template "media-thumb" .}}
+        {{if eq .Kind "video"}}<video muted playsinline preload="metadata" src="/attachments/{{.ID}}#t=0.1" aria-label="{{.Filename}}"></video>
+        {{else}}{{template "media-thumb" .}}{{end}}
       </a>
-      <a class="media-card-name" href="/media/{{.ID}}">{{.Filename}}</a>
+      <a class="media-card-name" href="/media/{{.ID}}" title="{{.Filename}}">{{.Filename}}</a>
+      <span class="hint">{{if eq .Kind "image"}}{{t "media.kind.image"}}{{else if eq .Kind "video"}}{{t "media.kind.video"}}{{else if eq .Kind "audio"}}{{t "media.kind.audio"}}{{else}}{{t "media.kind.file"}}{{end}} · {{bytes .Size}}</span>
     </li>{{end}}
   </ul>
-  {{else}}<p class="card empty-state hint">{{t "media.empty"}}</p>{{end}}
+  </section>
+  {{end}}
+  </div>
+  {{else}}<p class="card empty-state hint">{{if .HasMedia}}{{t "media.empty_filter"}}{{else}}{{t "media.empty"}}{{end}}</p>{{end}}
 </section>
+<script src="{{asset "upload-preview.js"}}" defer></script>
 {{end}}

@@ -9,7 +9,7 @@ const script = readFileSync(join(__dirname, "..", "web", "static", "media-picker
 function fixture({ creation = false, selected = false } = {}) {
   const picker = new EventTarget();
   const panel = new EventTarget();
-  const submit = { disabled: false };
+  const submit = { disabled: false, dataset: { selectLabel: "Select", uploadLabel: "Upload" } };
   const library = { checked: selected };
   const upload = { files: [] };
   const recording = { files: [] };
@@ -58,6 +58,17 @@ test("clearing one source keeps Upload enabled while another is selected", () =>
   f.library.checked = false;
   f.change();
   assert.equal(f.submit.disabled, false);
+});
+
+test("library selections say Select instead of Upload", () => {
+  const f = fixture({ selected: true });
+  assert.equal(f.submit.textContent, "Select");
+  f.upload.files = [{ name: "new.png" }];
+  f.change();
+  assert.equal(f.submit.textContent, "Upload");
+  f.upload.files = [];
+  f.change();
+  assert.equal(f.submit.textContent, "Select");
 });
 
 test("new-day creation still allows saving without attachments", () => {

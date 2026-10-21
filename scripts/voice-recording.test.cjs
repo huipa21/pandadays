@@ -10,6 +10,9 @@ const script = readFileSync(join(__dirname, "..", "web", "static", "attachments.
 function fixture({ supported = true, denied = false, meterSupported = true, contextFailure = false } = {}) {
   const form = new EventTarget();
   const button = new EventTarget();
+  button.setAttribute = (key, value) => { button[key] = value; };
+  const pause = new EventTarget();
+  const finish = new EventTarget();
   const input = new EventTarget();
   const status = {};
   const preview = { hidden: true, pause() {}, setAttribute(key, value) { this[key] = value; } };
@@ -22,11 +25,12 @@ function fixture({ supported = true, denied = false, meterSupported = true, cont
   const unavailable = { hidden: false };
   const controls = {
     hidden: true,
-    dataset: { recordStart: "Start", recordStop: "Stop", recording: "Recording", recordError: "Error", recordReady: "Ready" },
+    dataset: { recordStart: "Start", recordStop: "Stop", recordPaused: "Paused", recordResume: "Resume", recording: "Recording", recordError: "Error", recordReady: "Ready" },
     closest: () => form,
     parentElement: { querySelector: () => unavailable },
     querySelector: selector => ({
       "[data-record-button]": button, "[data-record-status]": status,
+      "[data-record-pause]": pause, "[data-record-finish]": finish,
       "[data-record-file]": input, "[data-record-preview]": preview,
       "[data-record-player]": player, "[data-record-name]": name,
       "[data-record-timer]": timer, "[data-record-level]": level,
@@ -55,6 +59,8 @@ function fixture({ supported = true, denied = false, meterSupported = true, cont
     static isTypeSupported(type) { return type === "audio/webm"; }
     constructor() { super(); recorder = this; this.mimeType = "audio/webm"; }
     start() { this.state = "recording"; }
+    pause() { this.state = "paused"; }
+    resume() { this.state = "recording"; }
     stop() { this.state = "inactive"; }
     finish() {
       const data = new Event("dataavailable");
@@ -84,11 +90,17 @@ function fixture({ supported = true, denied = false, meterSupported = true, cont
     },
     URL: { createObjectURL: () => `blob:recording-${++nextURL}`, revokeObjectURL: url => revoked.push(url) },
   });
-  return { form, button, input, status, preview, player, name, timer, level, controls, unavailable, window, revoked,
+  return { form, button, pause, finish, input, status, preview, player, name, timer, level, controls, unavailable, window, revoked,
     get recorder() { return recorder; }, get stopped() { return stopped; },
     get closed() { return closed; }, get disconnected() { return disconnected; },
     advance(ms, sample = amplitude) { now += ms; amplitude = sample; tick?.(); },
-    async click() { button.dispatchEvent(new Event("click")); await new Promise(resolve => setImmediate(resolve)); },
+    async click() {
+      (recorder?.state === "recording" ? finish : button).dispatchEvent(new Event("click"));
+      await new Promise(resolve => setImmediate(resolve));
+    },
+    async play() { button.dispatchEvent(new Event("click")); await new Promise(resolve => setImmediate(resolve)); },
+    async stop() { pause.dispatchEvent(new Event("click")); await new Promise(resolve => setImmediate(resolve)); },
+    async complete() { finish.dispatchEvent(new Event("click")); await new Promise(resolve => setImmediate(resolve)); },
   };
 }
 
@@ -120,6 +132,43 @@ test("recordings are queued and previewed, not immediately uploaded", async () =
   const ready = new Event("submit", { cancelable: true });
   f.form.dispatchEvent(ready);
   assert.equal(ready.defaultPrevented, false);
+});
+
+test("stop pauses without finishing; play resumes and finish queues one complete recording", async () => {
+  const f = fixture();
+  await f.play();
+  assert.equal(f.button.hidden, true);
+  assert.equal(f.pause.hidden, false);
+  assert.equal(f.finish.hidden, false);
+  f.advance(2500, 0.1);
+  await f.stop();
+  assert.equal(f.recorder.state, "paused");
+  assert.equal(f.status.textContent, "Paused");
+  assert.equal(f.input.files.length, 0);
+  assert.equal(f.player.hidden, true);
+  assert.equal(f.stopped, false);
+  assert.equal(f.button.hidden, false);
+  assert.equal(f.pause.hidden, true);
+  assert.equal(f.finish.hidden, false);
+  const send = new Event("submit", { cancelable: true });
+  f.form.dispatchEvent(send);
+  assert.equal(send.defaultPrevented, true);
+  f.advance(60000);
+  assert.equal(f.timer.textContent, "00:02");
+  await f.play();
+  assert.equal(f.recorder.state, "recording");
+  f.advance(1500, 0.2);
+  assert.equal(f.timer.textContent, "00:04");
+  await f.stop();
+  await f.complete();
+  f.recorder.finish();
+  assert.equal(f.input.files.length, 1);
+  assert.equal(f.status.textContent, "Ready");
+  assert.equal(f.stopped, true);
+  assert.equal(f.timer.textContent, "00:04");
+  assert.equal(f.button.hidden, false);
+  assert.equal(f.pause.hidden, true);
+  assert.equal(f.finish.hidden, true);
 });
 
 test("stopped recordings can be renamed without changing their content or type", async () => {
@@ -180,7 +229,7 @@ test("recorder errors do not queue a success-shaped recording", async () => {
   f.recorder.dispatchEvent(new Event("error"));
   f.recorder.finish();
   assert.equal(f.status.textContent, "Error");
-  assert.equal(f.input.files, undefined);
+  assert.equal(f.input.files.length, 0);
   assert.equal(f.preview.hidden, true);
   assert.equal(f.stopped, true);
 });

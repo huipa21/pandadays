@@ -96,11 +96,6 @@ img, video, audio { max-width: 100%; }
 .notification-badge { position: absolute; top: -0.5rem; right: -0.625rem; min-width: 1.25rem; padding: 0 0.25rem; border-radius: 1rem 1rem 1rem 0; background: #b42318; color: #fff; text-align: center; font-size: 0.75rem; font-weight: 700; }
 .message-list { list-style: none; padding: 0; margin: 0; }
 .message-list .hint { overflow-wrap: anywhere; }
-.header-search { order: 3; flex: 1 1 100%; display: flex; align-items: center; gap: 0.5rem; min-width: 0; margin: 0; }
-.header-search .search-field { flex: 1; min-width: 0; }
-@media (min-width: 768px) {
-  .header-search { order: 0; flex: 1 1 16rem; max-width: 24rem; }
-}
 
 .container {
   width: 100%;
@@ -170,6 +165,20 @@ img, video, audio { max-width: 100%; }
 .search-field input { width: 100%; min-width: 0; min-height: 44px; border: 0; padding: 0.5rem 0; background: transparent; color: var(--fg); font: inherit; }
 .search-field input:focus-visible { outline: none; }
 .search-field input::placeholder { color: var(--muted); opacity: 1; }
+.header-toggles .icon-button { border: 0; background: transparent; }
+.header-search-menu[open] > summary { display: none; }
+.header-search-menu > .header-search {
+  display: flex;
+  align-items: center;
+  width: min(18rem, calc(100vw - 8.5rem));
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 8px;
+  background: var(--surface);
+}
+.header-search .search-field { flex: 1; min-width: 0; border: 0; }
+.header-search .search-field:focus-within { outline: none; }
 .search-controls input { flex: 1; min-width: 0; }
 .admin-list { list-style: none; padding: 0; display: grid; gap: 0.75rem; }
 .admin-row { position: relative; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem; }
@@ -409,7 +418,7 @@ a.btn { text-decoration: none; }
 .day-background { display: block; width: 100%; max-height: 16rem; object-fit: cover; border-radius: 8px; margin-bottom: 1rem; }
 .day-attachments progress { display: block; width: 100%; height: 0.75rem; margin: -0.5rem 0 0.75rem; accent-color: var(--accent); }
 .attachment-list { list-style: none; display: grid; gap: 0.75rem; margin: 1rem 0; padding: 0; }
-.attachment-item { min-width: 0; display: grid; gap: 0.5rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; }
+.attachment-item { min-width: 0; display: grid; gap: 0.5rem; }
 .attachment-row { display: flex; align-items: center; gap: 0.375rem; min-width: 0; flex-wrap: wrap; }
 .attachment-name { min-width: 0; flex: 1 1 0; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attachment-row > .hint { margin-left: auto; white-space: nowrap; font-size: 0.75rem; }
@@ -425,12 +434,25 @@ a.btn { text-decoration: none; }
 .attachment-preview { min-width: 0; display: grid; gap: 0.5rem; overflow-wrap: anywhere; }
 .attachment-preview img { display: block; max-height: 18rem; object-fit: contain; border-radius: 6px; }
 .attachment-preview audio, .attachment-preview video { width: 100%; }
+.attachment-player { display: grid; gap: 0.5rem; min-width: 0; }
+.attachment-player[hidden] { display: none; }
+.attachment-player audio { display: block; width: 100%; min-width: 0; }
+.attachment-player .alert { margin: 0; }
 .voice-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
 .voice-controls[hidden] { display: none; }
-.voice-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; width: 100%; }
+.voice-feedback { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.5rem 0.75rem; width: 100%; }
+.voice-feedback > span, .voice-feedback > .voice-level { grid-column: 1; min-width: 0; }
 .voice-timer { font-variant-numeric: tabular-nums; }
 .voice-level { display: flex; align-items: center; gap: 0.5rem; }
 .voice-level meter { width: 8rem; height: 1.25rem; }
+.record-actions { display: flex; gap: 0.5rem; grid-column: 2; grid-row: 1 / 3; }
+.record-icon { width: 44px; min-height: 44px; padding: 0.5rem; }
+.record-icon[hidden] { display: none; }
+.upload-file-list { list-style: none; display: grid; gap: 0.5rem; margin: 0.75rem 0 0; padding: 0; }
+.upload-file-list:empty { display: none; }
+.upload-file-list li { display: flex; align-items: center; gap: 0.75rem; min-width: 0; overflow-wrap: anywhere; }
+.upload-file-list img { flex: none; width: 56px; height: 56px; object-fit: cover; border-radius: 6px; }
+.media-add { font-size: 1.5rem; line-height: 1; }
 .audio-player { display: grid; gap: 0.5rem; width: 100%; min-width: 0; margin: 0; padding: 0.625rem; border: 1px solid var(--border); border-radius: 0.75rem; }
 .audio-player[hidden] { display: none; }
 .audio-player figcaption { overflow-wrap: anywhere; font-size: 0.875rem; }
@@ -536,7 +558,8 @@ a.btn { text-decoration: none; }
 .breakdown-small li { font-size: 0.875rem; }
 .day-ordinal { text-align: center; font-weight: 600; }
 .day-since { display: grid; gap: 0.375rem; justify-items: center; text-align: center; }
-.day-attachments { border-top: 1px solid var(--border); padding-top: 0.5rem; min-width: 0; }
+.day-attachments, .day-card-attachments { border-top: 1px solid var(--border); padding-top: 0.5rem; min-width: 0; }
+.day-card-attachments .attachment-list { margin: 0.5rem 0 0; }
 .day-section-toggle { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; min-height: 44px; cursor: pointer; list-style: none; font-weight: 600; }
 .day-section-toggle::-webkit-details-marker { display: none; }
 .expand-icon { transition: transform 0.15s; }
@@ -677,6 +700,12 @@ details[open] > .day-section-toggle .expand-icon { transform: rotate(180deg); }
 }
 
 /* Media library and new-day media picker */
+.media-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 0.75rem; }
+.media-filters label { display: grid; gap: 0.25rem; flex: 1 1 9rem; min-width: 0; }
+.media-filters select { width: 100%; min-width: 0; }
+.media-timeline { display: grid; gap: 1.5rem; }
+.media-timeline-group { min-width: 0; padding-left: 1rem; border-left: 2px solid var(--border); }
+.media-timeline-group h2 { margin: 0 0 0.75rem; font-size: 1.125rem; }
 .media-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr)); }
 .media-card { display: grid; grid-template-rows: auto 1fr; gap: 0.5rem; padding: 0.5rem; min-width: 0; }
 .media-card-preview { display: grid; place-items: center; gap: 0.5rem; min-height: 8rem; border-radius: 8px; background: var(--bg); overflow: hidden; }

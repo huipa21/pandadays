@@ -226,13 +226,13 @@ func (f *fixture) snapshot(t *testing.T, owner int64) ([]string, int64) {
 		tr.Close()
 		sort.Strings(tagNames)
 		var files []string
-		ar, err := f.db.Query(`SELECT uuid, kind, filename, mime, size FROM attachments WHERE day_id = ? AND owner_id = ?`, d.id, owner)
+		ar, err := f.db.Query(`SELECT uuid, COALESCE(sha256, ''), kind, filename, mime, size FROM attachments WHERE day_id = ? AND owner_id = ?`, d.id, owner)
 		if err != nil {
 			t.Fatal(err)
 		}
 		for ar.Next() {
 			var a media.Attachment
-			ar.Scan(&a.UUID, &a.Kind, &a.Filename, &a.MIME, &a.Size)
+			ar.Scan(&a.UUID, &a.SHA256, &a.Kind, &a.Filename, &a.MIME, &a.Size)
 			content, err := os.ReadFile(f.media.Path(owner, a))
 			if err != nil {
 				t.Fatal(err)
@@ -281,8 +281,12 @@ func TestExportImportRoundTrip(t *testing.T) {
 	if wantUsed != gotUsed || wantUsed == 0 {
 		t.Fatalf("used_bytes: alice %d bob %d", wantUsed, gotUsed)
 	}
-	if entries, _ := os.ReadDir(filepath.Join(f.root, "media", fmt.Sprint(b))); len(entries) != 3 {
-		t.Fatalf("bob media files = %d, want 3 (no leftover temp files)", len(entries))
+	// Bob's imported attachments share Alice's identical content on disk.
+	if n := blobFiles(t, f.root); n != 3 {
+		t.Fatalf("media blob files = %d, want 3 shared by both users (no leftover temp files)", n)
+	}
+	if _, err := os.Stat(filepath.Join(f.root, "media", fmt.Sprint(b))); !os.IsNotExist(err) {
+		t.Fatalf("imported media written to a per-user directory: %v", err)
 	}
 	if entries, _ := os.ReadDir(filepath.Join(f.root, "tmp")); len(entries) != 0 {
 		t.Fatalf("staged upload not removed: %d files", len(entries))
@@ -291,6 +295,22 @@ func TestExportImportRoundTrip(t *testing.T) {
 	if normalizeCSV(t, f.export(t, b), "Bob only") != normalizeCSV(t, data, "") {
 		t.Fatal("re-export of imported data differs")
 	}
+}
+
+// blobFiles counts every regular file under media/blobs, including temporary ones.
+func blobFiles(t *testing.T, root string) int {
+	t.Helper()
+	n := 0
+	err := filepath.WalkDir(filepath.Join(root, "media", "blobs"), func(_ string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			n++
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n
 }
 
 func without(lines []string, title string) []string {

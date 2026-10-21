@@ -8,20 +8,20 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"pandadays/internal/media"
 )
 
 // Service exports and imports one user's data. Every query is scoped by owner.
 type Service struct {
-	db        *sql.DB
-	mediaRoot string
-	tmpDir    string
-	Limits    Limits
+	db     *sql.DB
+	media  *media.Store
+	tmpDir string
+	Limits Limits
 }
 
 // Limits bound what an import may contain; the per-user and per-card storage
@@ -34,10 +34,10 @@ type Limits struct {
 
 var DefaultLimits = Limits{MaxEntries: 10000, MaxCSVBytes: 32 << 20, MaxMediaBytes: 16 << 30}
 
-// New returns a service storing media under mediaRoot/{user_id} and staged
-// uploads under tmpDir.
+// New returns a service storing media in the content store under mediaRoot
+// and staged uploads under tmpDir.
 func New(db *sql.DB, mediaRoot, tmpDir string) *Service {
-	return &Service{db: db, mediaRoot: mediaRoot, tmpDir: tmpDir, Limits: DefaultLimits}
+	return &Service{db: db, media: media.New(db, mediaRoot), tmpDir: tmpDir, Limits: DefaultLimits}
 }
 
 // UploadLimit is the largest import upload accepted for the owner: the
@@ -226,19 +226,18 @@ func exportTags(ctx context.Context, tx *sql.Tx, ownerID int64, byID map[int64]*
 }
 
 func (s *Service) exportAttachments(ctx context.Context, tx *sql.Tx, ownerID int64, byID map[int64]*exportDay) ([]exportFile, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT a.id, a.day_id, a.uuid, a.filename, a.size, a.created_at
+	rows, err := tx.QueryContext(ctx, `SELECT a.id, a.day_id, a.uuid, COALESCE(a.sha256, ''), a.filename, a.size, a.created_at
 		FROM attachments a JOIN days d ON d.id = a.day_id
 		WHERE a.owner_id = ? AND d.owner_id = ? AND a.detached = 0 ORDER BY a.created_at, a.id`, ownerID, ownerID)
 	if err != nil {
 		return nil, fmt.Errorf("export attachments: %w", err)
 	}
 	defer rows.Close()
-	dir := filepath.Join(s.mediaRoot, strconv.FormatInt(ownerID, 10))
 	var files []exportFile
 	for rows.Next() {
 		var id, dayID, size, created int64
-		var uuid, filename string
-		if err := rows.Scan(&id, &dayID, &uuid, &filename, &size, &created); err != nil {
+		var uuid, sum, filename string
+		if err := rows.Scan(&id, &dayID, &uuid, &sum, &filename, &size, &created); err != nil {
 			return nil, fmt.Errorf("export attachments: %w", err)
 		}
 		d := byID[dayID]
@@ -250,7 +249,7 @@ func (s *Service) exportAttachments(ctx context.Context, tx *sql.Tx, ownerID int
 		if d.bgID == id {
 			d.record[10] = p
 		}
-		files = append(files, exportFile{path: p, src: filepath.Join(dir, uuid), size: size,
+		files = append(files, exportFile{path: p, src: s.media.Path(ownerID, media.Attachment{UUID: uuid, SHA256: sum}), size: size,
 			created: time.Unix(created, 0).UTC()})
 	}
 	if err := rows.Err(); err != nil {

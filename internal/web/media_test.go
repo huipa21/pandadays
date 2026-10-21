@@ -67,8 +67,214 @@ func TestMediaLibraryEmpty(t *testing.T) {
 	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "No media yet") {
 		t.Fatalf("empty library: %d %s", rr.Code, rr.Body.String())
 	}
+	if !strings.Contains(rr.Body.String(), `upload-preview.js`) {
+		t.Fatal("empty library must load upload previews and the plus-button handler")
+	}
 	if body := get(s.Handler(), "/days/new", token).Body.String(); !strings.Contains(body, "No media yet") {
 		t.Fatal("picker does not explain an empty library")
+	}
+}
+
+func TestStandaloneMediaUploadAndReuse(t *testing.T) {
+	for _, headerCSRF := range []bool{false, true} {
+		t.Run(strconv.FormatBool(headerCSRF), func(t *testing.T) {
+			s, db, owner, token := authenticatedServer(t)
+			_, otherToken := secondUser(t, s)
+			csrf := sessionCSRF(t, s, token)
+			rr := postMediaFiles(t, s, "/media", token, csrf, headerCSRF, nil, "first image", "second image")
+			if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/media" {
+				t.Fatalf("library upload: %d %s", rr.Code, rr.Body.String())
+			}
+			var count int
+			if err := db.QueryRow(`SELECT count(*) FROM days WHERE owner_id = ?`, owner.ID).Scan(&count); err != nil || count != 0 {
+				t.Fatalf("upload requires a day: %d %v", count, err)
+			}
+			items, err := s.media.ListOwner(context.Background(), owner.ID)
+			if err != nil || len(items) != 2 {
+				t.Fatalf("standalone library: %+v %v", items, err)
+			}
+			id := strconv.FormatInt(items[0].ID, 10)
+			for _, path := range []string{"/media/" + id, "/attachments/" + id} {
+				if rr := get(s.Handler(), path, token); rr.Code != http.StatusOK {
+					t.Fatalf("owner %s: %d", path, rr.Code)
+				}
+				if rr := get(s.Handler(), path, otherToken); rr.Code != http.StatusNotFound {
+					t.Fatalf("foreign %s: %d", path, rr.Code)
+				}
+			}
+			for _, lang := range []string{"en", "zh"} {
+				body := get(s.Handler(), "/media?lang="+lang, token).Body.String()
+				for _, want := range []string{`class="btn media-add"`, `action="/media"`, `data-upload-list`, `upload-preview.js`} {
+					if !strings.Contains(body, want) {
+						t.Fatalf("missing library upload UI %q", want)
+					}
+				}
+			}
+			if rr := postMediaFiles(t, s, "/media", token, csrf, headerCSRF, nil, "first image"); rr.Code != http.StatusConflict {
+				t.Fatalf("duplicate library upload: %d", rr.Code)
+			}
+			if rr := postMediaFiles(t, s, "/media", token, "invalid", headerCSRF, nil, "not saved"); rr.Code != http.StatusForbidden {
+				t.Fatalf("library CSRF: %d", rr.Code)
+			}
+			if rr := postMediaFiles(t, s, "/media", token, csrf, headerCSRF, nil); rr.Code != http.StatusBadRequest {
+				t.Fatalf("empty upload: %d", rr.Code)
+			}
+			form := url.Values{"title": {"Uses library"}, "date": {"2026-10-20"}, "repeat": {"none"}, "library": {id}}
+			if rr := postMediaFiles(t, s, "/days", token, csrf, headerCSRF, form); rr.Code != http.StatusSeeOther {
+				t.Fatalf("new day with library upload: %d %s", rr.Code, rr.Body.String())
+			}
+			items, err = s.media.ListOwner(context.Background(), owner.ID)
+			if err != nil || len(items) != 2 {
+				t.Fatalf("reuse duplicated library: %+v %v", items, err)
+			}
+		})
+	}
+}
+
+func TestRepeatedLibrarySelectionAtFullQuotaDoesNotAddAnAttachment(t *testing.T) {
+	s, db, owner, token := authenticatedServer(t)
+	d, a := seedMedia(t, s, owner.ID, "At quota", "existing.txt", "full")
+	if _, err := db.Exec(`UPDATE users SET max_card_bytes = ?, quota_bytes = ? WHERE id = ?`, a.Size, a.Size, owner.ID); err != nil {
+		t.Fatal(err)
+	}
+	id := strconv.FormatInt(a.ID, 10)
+	rr := postMediaFiles(t, s, dayPath(d.ID)+"/attachments", token, sessionCSRF(t, s, token), false, url.Values{"library": {id}})
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("existing selection rejected at full quota: %d %s", rr.Code, rr.Body.String())
+	}
+	files, err := s.media.ListDay(context.Background(), owner.ID, d.ID)
+	if err != nil || len(files) != 1 || files[0].ID != a.ID {
+		t.Fatalf("existing selection changed attachment: %+v %v", files, err)
+	}
+}
+
+func TestGroupMediaUploadTimeline(t *testing.T) {
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var items []media.LibraryItem
+	for i, date := range []string{"2026-12-31T16:30:00Z", "2026-10-31T16:30:00Z", "2026-10-31T15:30:00Z", "2026-10-31T14:30:00Z"} {
+		at, err := time.Parse(time.RFC3339, date)
+		if err != nil {
+			t.Fatal(err)
+		}
+		items = append(items, media.LibraryItem{Attachment: media.Attachment{ID: int64(i + 1), CreatedAt: at}})
+	}
+	for _, tc := range []struct {
+		name, group string
+		loc         *time.Location
+		dates       []string
+		counts      []int
+	}{
+		{"local days", "day", loc, []string{"2027-01-01", "2026-11-01", "2026-10-31"}, []int{1, 1, 2}},
+		{"local months", "month", loc, []string{"2027-01", "2026-11", "2026-10"}, []int{1, 1, 2}},
+		{"UTC days", "day", time.UTC, []string{"2026-12-31", "2026-10-31"}, []int{1, 3}},
+		{"UTC months", "month", time.UTC, []string{"2026-12", "2026-10"}, []int{1, 3}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			groups := groupMedia(items, tc.group, tc.loc)
+			if len(groups) != len(tc.dates) {
+				t.Fatalf("groups: %+v", groups)
+			}
+			var ids []int64
+			for i, group := range groups {
+				if group.Date != tc.dates[i] || len(group.Items) != tc.counts[i] {
+					t.Errorf("group %d: %+v", i, group)
+				}
+				for _, item := range group.Items {
+					ids = append(ids, item.ID)
+				}
+			}
+			for i, id := range ids {
+				if id != items[i].ID {
+					t.Fatal("grouping changed newest-first item order")
+				}
+			}
+		})
+	}
+	if groups := groupMedia(nil, "day", loc); len(groups) != 0 {
+		t.Fatalf("empty timeline: %+v", groups)
+	}
+}
+
+func TestMediaTimelineFilters(t *testing.T) {
+	s, db, owner, token := authenticatedServer(t)
+	other, _ := secondUser(t, s)
+	if _, err := db.Exec(`UPDATE users SET timezone = 'Asia/Shanghai' WHERE id = ?`, owner.ID); err != nil {
+		t.Fatal(err)
+	}
+	_, foreign := seedMedia(t, s, other.ID, "Private source", "private.txt", "private")
+	var names []string
+	var total int64
+	// Kind detection itself is covered by media package tests.
+	for i, kind := range []string{"image", "video", "audio", "file"} {
+		name := kind + "-timeline.txt"
+		_, a := seedMedia(t, s, owner.ID, "Source day", name, "tst"+strconv.Itoa(i))
+		at := time.Date(2026, 10, 31, 16, 30, 0, 0, time.UTC)
+		if _, err := db.Exec(`UPDATE attachments SET kind = ?, created_at = ? WHERE owner_id = ? AND id = ?`,
+			kind, at.Unix()-int64(i), owner.ID, a.ID); err != nil {
+			t.Fatal(err)
+		}
+		names = append(names, name)
+		total += a.Size
+	}
+	for _, lang := range []string{"en", "zh"} {
+		for _, group := range []string{"day", "month"} {
+			for _, kind := range []string{"", "image", "video", "audio", "file"} {
+				path := "/media?" + url.Values{"group": {group}, "kind": {kind}, "lang": {lang}}.Encode()
+				rr := get(s.Handler(), path, token)
+				body := rr.Body.String()
+				if rr.Code != http.StatusOK {
+					t.Fatalf("%s: %d %s", path, rr.Code, body)
+				}
+				date := "2026-11-01"
+				if group == "month" {
+					date = "2026-11"
+				}
+				for _, want := range []string{`id="media-date-` + date + `"`,
+					`value="` + group + `" selected`, `value="` + kind + `" selected`} {
+					if !strings.Contains(body, want) {
+						t.Errorf("%s missing %s", path, want)
+					}
+				}
+				for i, name := range names {
+					want := kind == "" || strings.HasPrefix(name, kind+"-")
+					if strings.Contains(body, name) != want {
+						t.Errorf("%s: filename %s visibility != %v", path, name, want)
+					}
+					if kind == "" && i > 0 && strings.Index(body, names[i-1]) >= strings.Index(body, name) {
+						t.Errorf("%s: uploads not newest-first", path)
+					}
+				}
+				if strings.Contains(body, foreign.Filename) || strings.Contains(body, "Private source") {
+					t.Errorf("%s leaked another owner's media", path)
+				}
+				if kind == "" && !strings.Contains(body, formatBytes(total)) {
+					t.Errorf("%s missing total size", path)
+				}
+				if (kind == "" || kind == "video") && !strings.Contains(body, `<video muted playsinline preload="metadata"`) {
+					t.Errorf("%s missing video preview", path)
+				}
+			}
+		}
+	}
+	for _, query := range []string{"group=year", "kind=document", "group=day&kind=%3Cscript%3E"} {
+		if rr := get(s.Handler(), "/media?"+query, token); rr.Code != http.StatusBadRequest {
+			t.Errorf("invalid query %s: %d", query, rr.Code)
+		}
+	}
+}
+
+func TestMediaTimelineEmptyFilter(t *testing.T) {
+	s, _, owner, token := authenticatedServer(t)
+	seedMedia(t, s, owner.ID, "Source", "file.txt", "contents")
+	rr := get(s.Handler(), "/media?group=month&kind=audio", token)
+	body := rr.Body.String()
+	if rr.Code != http.StatusOK || !strings.Contains(body, "No media matches this filter") ||
+		strings.Contains(body, "No media yet") || strings.Contains(body, "file.txt") ||
+		!strings.Contains(body, `value="month" selected`) || !strings.Contains(body, `value="audio" selected`) {
+		t.Fatalf("empty filter: %d %s", rr.Code, body)
 	}
 }
 
@@ -162,9 +368,10 @@ func TestRemoveDayAttachmentKeepsReusableLibraryMedia(t *testing.T) {
 	if rr := sessionPost(t, s, download+"/delete", token, url.Values{"return_to": {"/media"}}); rr.Code != http.StatusSeeOther {
 		t.Fatalf("permanent library deletion: %d", rr.Code)
 	}
-	if _, err := os.Stat(s.media.Path(owner.ID, a)); !os.IsNotExist(err) {
-		t.Fatalf("permanent deletion left original file: %v", err)
+	if _, err := s.media.Get(ctx, owner.ID, a.ID); err != media.ErrNotFound {
+		t.Fatalf("permanent deletion left original attachment: %v", err)
 	}
+	// Reused copies share the content blob, which stays until the last one goes.
 	for _, file := range files {
 		if _, err := os.Stat(s.media.Path(owner.ID, file)); err != nil {
 			t.Fatalf("permanent deletion removed reused copy: %v", err)
@@ -218,7 +425,7 @@ func TestExistingDayTabbedMediaSelection(t *testing.T) {
 				t.Fatalf("attach selections: %d %s", rr.Code, rr.Body.String())
 			}
 			files, err := s.media.ListDay(context.Background(), owner.ID, d.ID)
-			if err != nil || len(files) != 4 {
+			if err != nil || len(files) != 3 {
 				t.Fatalf("attachments: %+v %v", files, err)
 			}
 			for _, invalid := range []string{strconv.FormatInt(foreign.ID, 10), "invalid"} {
@@ -227,7 +434,7 @@ func TestExistingDayTabbedMediaSelection(t *testing.T) {
 					t.Fatalf("foreign library: %d", rr.Code)
 				}
 			}
-			if _, err := db.Exec(`UPDATE users SET max_card_bytes = 20 WHERE id = ?`, owner.ID); err != nil {
+			if _, err := db.Exec(`UPDATE users SET max_card_bytes = 19 WHERE id = ?`, owner.ID); err != nil {
 				t.Fatal(err)
 			}
 			rr = postMediaFiles(t, s, path, token, csrf, headerCSRF, pick, "123", "456")
@@ -235,7 +442,7 @@ func TestExistingDayTabbedMediaSelection(t *testing.T) {
 				t.Fatalf("combined quota: %d", rr.Code)
 			}
 			files, err = s.media.ListDay(context.Background(), owner.ID, d.ID)
-			if err != nil || len(files) != 4 {
+			if err != nil || len(files) != 3 {
 				t.Fatalf("rejected selections changed attachments: %+v %v", files, err)
 			}
 			for _, page := range []string{"/days/new", dayPath(d.ID)} {

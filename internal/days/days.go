@@ -474,7 +474,7 @@ func (s *Days) DeleteWithAttachments(ctx context.Context, ownerID, id int64) ([]
 		return nil, fmt.Errorf("delete day: %w", err)
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, `SELECT uuid FROM attachments WHERE day_id = ? AND owner_id = ?`,
+	rows, err := tx.QueryContext(ctx, `SELECT uuid FROM attachments WHERE day_id = ? AND owner_id = ? AND sha256 IS NULL`,
 		id, ownerID)
 	if err != nil {
 		return nil, fmt.Errorf("list day attachments for deletion: %w", err)

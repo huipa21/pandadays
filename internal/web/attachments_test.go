@@ -38,16 +38,29 @@ func TestAudioPlaybackBelowCardComment(t *testing.T) {
 		t.Fatalf("audio attachment: %v %v", files, err)
 	}
 	src := "/attachments/" + strconv.FormatInt(files[0].ID, 10)
-	assertCard := func(token string, comment bool) {
+	assertCard := func(viewerToken string, comment bool) {
 		t.Helper()
-		rr := get(s.Handler(), dayPath(day.ID), token)
+		rr := get(s.Handler(), dayPath(day.ID), viewerToken)
 		card, _, ok := strings.Cut(rr.Body.String(), "</article>")
 		player := `<audio controls preload="metadata" src="` + src + `" aria-label="voice.wav"></audio>`
 		if rr.Code != http.StatusOK || !ok || !strings.Contains(card, player) {
 			t.Fatalf("audio player missing from card: %d %s", rr.Code, card)
 		}
-		if !strings.Contains(card, `<figcaption><a href="`+src+`">voice.wav</a></figcaption>`) {
-			t.Fatal("filename missing inside player")
+		if strings.Count(card, `<a class="attachment-name" href="`+src+`" title="voice.wav">voice.wav</a>`) != 1 ||
+			!strings.Contains(card, `<span class="hint">`+formatBytes(files[0].Size)+`</span>`) {
+			t.Fatal("card must show the filename and size once in the attachment row")
+		}
+		playerID := "card-player-" + strconv.FormatInt(files[0].ID, 10)
+		if !strings.Contains(card, `aria-controls="`+playerID+`"`) ||
+			!strings.Contains(card, `id="`+playerID+`" data-attachment-player data-audio-player hidden`) ||
+			!strings.Contains(card, "data-audio-error") || strings.Contains(card, "<figcaption>") ||
+			strings.Contains(card, `class="audio-player"`) {
+			t.Fatal("card must reveal only controls and diagnostics below its row")
+		}
+		for _, control := range []string{`class="attachment-edit"`, `hx-confirm=`} {
+			if strings.Contains(card, control) != (viewerToken == token) {
+				t.Fatalf("incorrect owner controls: %s", control)
+			}
 		}
 		pos := strings.Index(card, `<p class="day-comment">Voice comment</p>`)
 		if comment && (pos < 0 || pos > strings.Index(card, player)) {
@@ -56,7 +69,7 @@ func TestAudioPlaybackBelowCardComment(t *testing.T) {
 		if !comment && pos >= 0 {
 			t.Fatal("hidden shared comment was exposed")
 		}
-		if served := get(s.Handler(), src, token); served.Code != http.StatusOK || !bytes.Equal(served.Body.Bytes(), audio) {
+		if served := get(s.Handler(), src, viewerToken); served.Code != http.StatusOK || !bytes.Equal(served.Body.Bytes(), audio) {
 			t.Fatalf("audio not playable through authenticated endpoint: %d", served.Code)
 		}
 	}
@@ -146,6 +159,80 @@ func TestMissingAttachmentFileErrorsAndLibraryCopies(t *testing.T) {
 	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "data-audio-error") ||
 		!strings.Contains(rr.Body.String(), `<figcaption><a href="`+path+`">voice.wav</a></figcaption>`) {
 		t.Fatalf("media library player lacks filename/error surface: %d %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestCardAttachmentListAllTypes(t *testing.T) {
+	s, owner, token, day := attachmentServer(t)
+	ctx := context.Background()
+	page := get(s.Handler(), dayPath(day.ID), token).Body.String()
+	if strings.Contains(page, `class="day-card-attachments"`) {
+		t.Fatal("empty card must not show an attachment disclosure or separator")
+	}
+	for _, file := range []struct {
+		name    string
+		content []byte
+	}{
+		{"document.txt", []byte("file content")},
+		{"recording.wav", []byte("RIFF\x24\x00\x00\x00WAVEfmt ")},
+		{"photo.png", []byte("\x89PNG\r\n\x1a\n")},
+		{"movie.webm", []byte("\x1a\x45\xdf\xa3\x86\x85V_VP8")},
+	} {
+		if rr := uploadAttachment(t, s, token, day.ID, file.name, file.content); rr.Code != http.StatusSeeOther {
+			t.Fatalf("upload %s: %d", file.name, rr.Code)
+		}
+	}
+	files, err := s.media.ListDay(ctx, owner, day.ID)
+	if err != nil || len(files) != 4 {
+		t.Fatalf("attachments: %v %v", files, err)
+	}
+	bob, bobToken := secondUser(t, s)
+	if _, err := s.shares.Create(ctx, owner, share.TargetDay, day.ID, []string{bob.Username}, false, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	acceptAllInvitations(t, s, bobToken, bob.ID)
+	for _, viewer := range []struct {
+		token string
+		owner bool
+	}{
+		{token, true},
+		{bobToken, false},
+	} {
+		for _, lang := range []string{"en", "zh"} {
+			rr := get(s.Handler(), dayPath(day.ID)+"?lang="+lang, viewer.token)
+			card, after, ok := strings.Cut(rr.Body.String(), "</article>")
+			disclosureID := "attachments"
+			if viewer.owner {
+				disclosureID = "card-attachments"
+			}
+			if rr.Code != http.StatusOK || !ok ||
+				!strings.Contains(card, `<details class="day-card-attachments" id="`+disclosureID+`">`) ||
+				!strings.Contains(card, s.i18n.T(lang, "days.attachments")) ||
+				strings.Count(card, `data-attachment-entry`) != 4 {
+				t.Fatalf("missing collapsed attachment list for %s: %s", lang, card)
+			}
+			for _, a := range files {
+				path := "/attachments/" + strconv.FormatInt(a.ID, 10)
+				if strings.Count(card, `<a class="attachment-name" href="`+path+`" title="`+a.Filename+`">`+a.Filename+`</a>`) != 1 ||
+					!strings.Contains(card, `<span class="hint">`+formatBytes(a.Size)+`</span>`) {
+					t.Fatalf("attachment %s missing from card", a.Filename)
+				}
+				if rr := get(s.Handler(), path, viewer.token); rr.Code != http.StatusOK {
+					t.Fatalf("attachment not accessible: %d", rr.Code)
+				}
+				if a.Kind == "image" && !strings.Contains(card, `<img src="`+path+`" alt="photo.png" loading="lazy">`) {
+					t.Fatal("image preview missing")
+				}
+				if a.Kind == "video" && !strings.Contains(card, `<video controls playsinline preload="metadata" src="`+path+`"></video>`) {
+					t.Fatal("video preview missing")
+				}
+			}
+			if strings.Contains(card, `class="attachment-edit"`) != viewer.owner ||
+				strings.Contains(card, `hx-confirm=`) != viewer.owner ||
+				(!viewer.owner && strings.Contains(after, `data-attachment-entry`)) {
+				t.Fatal("incorrect shared attachment controls or duplicated shared list")
+			}
+		}
 	}
 }
 
@@ -254,8 +341,14 @@ func TestAttachmentRenameAndCompactManager(t *testing.T) {
 		if strings.Count(manager, `class="attachment-name"`) != 4 ||
 			strings.Count(manager, `class="attachment-edit"`) != 4 ||
 			strings.Count(manager, `data-audio-play `) != 1 ||
-			!strings.Contains(manager, `data-attachment-player hidden`) {
+			!strings.Contains(manager, `data-attachment-player data-audio-player hidden`) {
 			t.Fatalf("compact attachment rows missing: %s", manager)
+		}
+		if strings.Contains(manager, `<figure class="audio-player" data-audio-player`) ||
+			strings.Contains(manager, "<figcaption><a ") ||
+			strings.Count(page, `id="attachment-player-`) != 1 ||
+			strings.Count(page, `id="card-player-`) != 1 {
+			t.Fatal("audio rows must have bare players with distinct card/manager IDs")
 		}
 	}
 }
@@ -837,5 +930,72 @@ func TestAttachmentReadBoundError(t *testing.T) {
 	s.Handler().ServeHTTP(rr, r)
 	if rr.Code != http.StatusBadRequest && rr.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("malformed oversized request: %d", rr.Code)
+	}
+}
+
+func TestUploadRejectsContentAlreadyInLibrary(t *testing.T) {
+	s, owner, token, day := attachmentServer(t)
+	ctx := context.Background()
+	csrf := sessionCSRF(t, s, token)
+	path := dayPath(day.ID) + "/attachments"
+	if rr := postMediaFiles(t, s, path, token, csrf, false, nil, "same bytes"); rr.Code != http.StatusSeeOther {
+		t.Fatalf("first upload: %d %s", rr.Code, rr.Body.String())
+	}
+	count := func(query string) int {
+		t.Helper()
+		var n int
+		if err := s.db.QueryRow(query, owner).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	for name, files := range map[string][]string{
+		"already in library":  {"same bytes"},
+		"twice in one upload": {"new bytes", "new bytes"},
+		"mixed with new file": {"fresh bytes", "same bytes"},
+	} {
+		rr := postMediaFiles(t, s, path, token, csrf, false, nil, files...)
+		if rr.Code != http.StatusConflict || !strings.Contains(rr.Body.String(), "already in your media library") {
+			t.Fatalf("%s: %d %s", name, rr.Code, rr.Body.String())
+		}
+	}
+	if n := count(`SELECT COUNT(*) FROM attachments WHERE owner_id = ?`); n != 1 {
+		t.Fatalf("attachments after rejected duplicates = %d", n)
+	}
+
+	daysBefore := count(`SELECT COUNT(*) FROM days WHERE owner_id = ?`)
+	rr := createDayWithFiles(t, s, token, csrf, false, dayValues(), "same bytes")
+	if rr.Code != http.StatusConflict || !strings.Contains(rr.Body.String(), "already in your media library") {
+		t.Fatalf("new day with duplicate: %d %s", rr.Code, rr.Body.String())
+	}
+	if n := count(`SELECT COUNT(*) FROM days WHERE owner_id = ?`); n != daysBefore {
+		t.Fatalf("day created despite duplicate upload: %d -> %d", daysBefore, n)
+	}
+
+	// Reusing the library item is the supported way to attach the same file again.
+	var id int64
+	if err := s.db.QueryRow(`SELECT id FROM attachments WHERE owner_id = ?`, owner).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	if rr := postMediaFiles(t, s, path, token, csrf, false, url.Values{"library": {strconv.FormatInt(id, 10)}}); rr.Code != http.StatusSeeOther {
+		t.Fatalf("library reuse: %d %s", rr.Code, rr.Body.String())
+	}
+
+	// Another user's identical file is independent: accepted, with its own metadata.
+	other, _ := secondUser(t, s)
+	otherDay, err := s.days.Create(ctx, other.ID, days.DayInput{Title: "Other", Date: "2026-10-20"}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	theirs, err := s.media.Upload(ctx, other.ID, otherDay.ID, "theirs.txt", strings.NewReader("same bytes"))
+	if err != nil {
+		t.Fatalf("other user's identical upload: %v", err)
+	}
+	mine, err := s.media.Get(ctx, owner, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if theirs.OwnerID == mine.OwnerID || theirs.Filename == mine.Filename || theirs.SHA256 != mine.SHA256 {
+		t.Fatalf("mine=%+v theirs=%+v", mine, theirs)
 	}
 }

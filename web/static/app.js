@@ -18,6 +18,13 @@
     });
   }
 
+  var searchMenu = document.querySelector(".header-search-menu");
+  if (searchMenu) {
+    searchMenu.addEventListener("toggle", function () {
+      if (searchMenu.open) searchMenu.querySelector('input[type="search"]').focus();
+    });
+  }
+
   function flash() {
     return document.getElementById("flash");
   }

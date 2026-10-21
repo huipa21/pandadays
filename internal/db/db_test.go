@@ -17,6 +17,32 @@ import (
 
 var epoch = time.Unix(1_700_000_000, 0).UTC()
 
+func TestFailedTableRebuildRollsBackAndRestoresForeignKeys(t *testing.T) {
+	conn, _ := openRaw(t)
+	ctx := context.Background()
+	fsys := fstest.MapFS{
+		"0001_initial.sql": {Data: []byte(`CREATE TABLE parent(id INTEGER PRIMARY KEY);
+			CREATE TABLE child(id INTEGER PRIMARY KEY, parent_id INTEGER REFERENCES parent(id));
+			INSERT INTO parent VALUES (1); INSERT INTO child VALUES (1, 1);`)},
+		"0002_rebuild.sql": {Data: []byte("-- rebuild-tables\nDROP TABLE parent; SELECT nonexistent_column;")},
+	}
+	if err := db.MigrateFS(ctx, conn, fsys, epoch); err == nil {
+		t.Fatal("invalid table rebuild succeeded")
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM parent WHERE id = 1`); n != 1 {
+		t.Fatal("failed rebuild lost original data")
+	}
+	if n := count(t, conn, `PRAGMA foreign_keys`); n != 1 {
+		t.Fatal("failed rebuild left foreign key enforcement disabled")
+	}
+	if _, err := conn.Exec(`INSERT INTO child VALUES (2, 999)`); err == nil {
+		t.Fatal("failed rebuild allowed an invalid foreign key")
+	}
+	if version, err := db.SchemaVersion(ctx, conn); err != nil || version != 1 {
+		t.Fatalf("failed rebuild advanced schema: %d %v", version, err)
+	}
+}
+
 func TestDetachedAttachmentMigrationPreservesExistingMedia(t *testing.T) {
 	conn, _ := openRaw(t)
 	ctx := context.Background()

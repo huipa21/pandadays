@@ -337,6 +337,11 @@ func (s *Server) adminUserAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		err = s.auth.AdminDeleteUser(r.Context(), actor, id, filepath.Join(s.cfg.DataDir, "media"))
+		if err == nil {
+			if collectErr := s.media.Collect(r.Context()); collectErr != nil {
+				s.log.Error("remove unreferenced media for deleted user", "user_id", id, "err", collectErr)
+			}
+		}
 	default:
 		http.NotFound(w, r)
 		return

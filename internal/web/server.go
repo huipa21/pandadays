@@ -107,7 +107,25 @@ func (s *Server) bindDatabase(database *sql.DB) error {
 	s.media = media.New(database, filepath.Join(s.cfg.DataDir, "media"))
 	s.shares = share.New(database)
 	s.portability = portability.New(database, filepath.Join(s.cfg.DataDir, "media"), filepath.Join(s.cfg.DataDir, "tmp"))
+	s.prepareMediaStore()
 	return nil
+}
+
+// prepareMediaStore moves legacy per-owner files into the shared content store
+// and removes blobs left unreferenced by an interrupted deletion. Failures are
+// logged; legacy files stay readable and unreferenced blobs stay queued.
+func (s *Server) prepareMediaStore() {
+	ctx := context.Background()
+	moved, err := s.media.MigrateLegacy(ctx)
+	if err != nil && s.log != nil {
+		s.log.Error("move legacy attachments into content store", "err", err)
+	}
+	if moved > 0 && s.log != nil {
+		s.log.Info("moved legacy attachments into content store", "count", moved)
+	}
+	if err := s.media.Collect(ctx); err != nil && s.log != nil {
+		s.log.Error("remove unreferenced media", "err", err)
+	}
 }
 
 // Close releases the current database handle after serving has stopped.

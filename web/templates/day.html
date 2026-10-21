@@ -48,48 +48,26 @@
       </details>{{end}}
     </div>
     {{if or (not .Shared) .ShowComment}}{{with .Day.Comment}}<p class="day-comment">{{.}}</p>{{end}}{{end}}
-    {{range .Attachments}}{{if eq .Kind "audio"}}
-    {{template "audio-player" .}}
-    {{end}}{{end}}
-  </article>
-    {{if .Shared}}<details class="day-attachments card" id="attachments">
+    {{if .Attachments}}<details class="day-card-attachments" id="{{if .Shared}}attachments{{else}}card-attachments{{end}}">
       <summary class="day-section-toggle">{{t "days.attachments"}}<svg class="icon expand-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
-    {{else}}<section class="card day-menu-section day-attachments" id="attachments" tabindex="-1" aria-labelledby="attachments-heading">
+      <ul class="attachment-list">
+        {{range .Attachments}}<li class="attachment-item" data-attachment-entry>
+          {{template "attachment-row" ($.AttachmentRow . "card")}}
+          {{template "attachment-preview" .}}
+        </li>{{end}}
+      </ul>
+    </details>{{end}}
+  </article>
+    {{if not .Shared}}<section class="card day-menu-section day-attachments" id="attachments" tabindex="-1" aria-labelledby="attachments-heading">
       <a class="day-dialog-close link-button" href="#" data-close-dialog>{{t "days.dialog.close"}}</a>
       <h2 class="day-section-heading" id="attachments-heading">{{t "days.attachments"}}</h2>
-    {{end}}
       <div class="day-attachments-body">
-    {{if not .Shared}}
     <p class="hint">{{t "attachments.day_used" (bytes .Usage.CardUsed)}}</p>
-    {{end}}
     {{if .Attachments}}
     <ul class="attachment-list">
       {{range .Attachments}}<li class="attachment-item" data-attachment-entry>
-        <div class="attachment-row">
-          <a class="attachment-name" href="/attachments/{{.ID}}" title="{{.Filename}}">{{.Filename}}</a>
-          <span class="hint">{{bytes .Size}}</span>
-          {{if eq .Kind "audio"}}<button type="button" class="attachment-action link-button" data-audio-play aria-expanded="false" aria-controls="attachment-player-{{.ID}}" aria-label="{{t "attachments.play"}}: {{.Filename}}" title="{{t "attachments.play"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg></button>{{end}}
-        {{if not $.Shared}}
-          <details class="attachment-edit">
-            <summary class="attachment-action link-button" aria-label="{{t "attachments.edit"}}: {{.Filename}}" title="{{t "attachments.edit"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m16 3 5 5-12 12-6 1 1-6zM14 5l5 5"/></svg></summary>
-            <form method="post" action="/attachments/{{.ID}}/rename" class="form attachment-rename">
-              {{template "csrf-field" $}}
-              <label>{{t "attachments.filename"}}<input type="text" name="filename" value="{{.Filename}}" required maxlength="255"></label>
-              <button type="submit" class="btn">{{t "days.save"}}</button>
-            </form>
-          </details>
-          <form method="post" action="/days/{{$.Day.ID}}/attachments/{{.ID}}/remove" class="inline-form"
-                hx-post="/days/{{$.Day.ID}}/attachments/{{.ID}}/remove" hx-confirm="{{t "attachments.remove_confirm"}}">
-            {{template "csrf-field" $}}
-            <button type="submit" class="attachment-action link-button danger-text" aria-label="{{t "attachments.remove"}}: {{.Filename}}" title="{{t "attachments.remove"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button>
-          </form>
-        {{end}}
-        </div>
-        {{if eq .Kind "audio"}}<div id="attachment-player-{{.ID}}" data-attachment-player hidden>{{template "audio-player" .}}</div>
-        {{else if or (eq .Kind "image") (eq .Kind "video")}}<div class="attachment-preview">
-          {{if eq .Kind "image"}}<a href="/attachments/{{.ID}}"><img src="/attachments/{{.ID}}" alt="{{.Filename}}" loading="lazy"></a>
-          {{else}}<video controls playsinline preload="metadata" src="/attachments/{{.ID}}"></video>{{end}}
-        </div>{{end}}
+        {{template "attachment-row" ($.AttachmentRow . "attachment")}}
+        {{template "attachment-preview" .}}
         {{if not $.Shared}}
           {{if eq .Kind "image"}}<form method="post" action="/days/{{$.Day.ID}}/attachments/{{.ID}}/background" class="inline-form"
                 hx-post="/days/{{$.Day.ID}}/attachments/{{.ID}}/background">
@@ -108,12 +86,11 @@
       {{template "csrf-field" .}}
       {{template "media-picker-panel" .}}
       <progress class="upload-progress" max="100" hidden aria-label="{{t "attachments.uploading"}}" data-upload-progress></progress>
-      <button type="submit" class="btn" data-media-submit>{{t "attachments.upload"}}</button>
+      <button type="submit" class="btn" data-media-submit data-select-label="{{t "media.select"}}" data-upload-label="{{t "attachments.upload"}}">{{t "media.select"}}</button>
     </form></details>
     {{end}}
       </div>
-    {{if .Shared}}</details>{{else}}</section>{{end}}
-  {{if not .Shared}}
+    </section>
   <section class="card day-menu-section day-sharing" id="day-sharing" tabindex="-1" aria-labelledby="sharing-heading">
     <a class="day-dialog-close link-button" href="#" data-close-dialog>{{t "days.dialog.close"}}</a>
     <h2 class="day-section-heading" id="sharing-heading">{{t "sharing.manage"}}</h2>

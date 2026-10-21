@@ -9,7 +9,12 @@
       Array.from(panel.querySelectorAll('input[type="file"]')).some((input) => input.files?.length);
   }
   if (submit) {
-    const updateSubmit = () => { submit.disabled = !hasSelection(); };
+    const updateSubmit = () => {
+      submit.disabled = !hasSelection();
+      const uploads = Array.from(panel.querySelectorAll('input[type="file"]')).some((input) => input.files?.length);
+      const label = uploads ? submit.dataset?.uploadLabel : submit.dataset?.selectLabel;
+      if (label) submit.textContent = label;
+    };
     panel.addEventListener("change", updateSubmit);
     picker.addEventListener("submit", (event) => {
       if (!hasSelection()) event.preventDefault();

@@ -71,6 +71,22 @@ type dayPage struct {
 	Picked      map[int64]bool
 }
 
+type attachmentRow struct {
+	media.Attachment
+	CSRFToken string
+	Shared    bool
+	PlayerID  string
+}
+
+func (p dayPage) AttachmentRow(a media.Attachment, scope string) attachmentRow {
+	return attachmentRow{
+		Attachment: a,
+		CSRFToken:  p.CSRFToken,
+		Shared:     p.Shared,
+		PlayerID:   scope + "-player-" + strconv.FormatInt(a.ID, 10),
+	}
+}
+
 var repeatOptions = []days.Repeat{days.RepeatNone, days.RepeatWeekly, days.RepeatMonthly, days.RepeatYearly}
 
 func (s *Server) registerDayRoutes(mux *http.ServeMux) {
@@ -343,6 +359,13 @@ func (s *Server) handleDayCreate(w http.ResponseWriter, r *http.Request) {
 			}
 			remaining -= size
 		}
+		if err := s.checkUploadDuplicates(r.Context(), owner, uploads); errors.Is(err, media.ErrDuplicate) {
+			s.renderDayForm(w, r, http.StatusConflict, days.Day{}, form, "attachments.error.duplicate")
+			return
+		} else if err != nil {
+			s.attachmentError(w, r, "check new day attachments", err)
+			return
+		}
 	}
 	d, err := s.days.Create(r.Context(), owner, form.input(), s.now())
 	if key, ok := dayErrorKey(err); ok {
@@ -543,6 +566,9 @@ func (s *Server) handleDayDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.media.RemoveFiles(owner, files); err != nil {
 		s.log.Error("remove attachment files for deleted day", "user_id", owner, "day_id", id, "err", err)
+	}
+	if err := s.media.Collect(r.Context()); err != nil {
+		s.log.Error("remove unreferenced media for deleted day", "user_id", owner, "day_id", id, "err", err)
 	}
 	s.log.Info("deleted day", "user_id", owner, "id", id)
 	authRedirect(w, r, "/")

@@ -4,13 +4,14 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/csv"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -434,23 +435,24 @@ func (s *Service) Preview(ctx context.Context, ownerID int64, token string, now 
 	return p.preview, nil
 }
 
-// extracted is an attachment copied out of the archive into the owner's media
-// directory under a temporary name.
+// extracted is an attachment copied out of the archive into a temporary file
+// on the media volume.
 type extracted struct {
-	temp, final string
-	kind, mime  string
-	size        int64
+	temp, sum  string
+	kind, mime string
+	size       int64
+	used       bool
 }
 
 // extractor hands out one extracted copy per attachment occurrence.
 type extractor struct {
-	dir  string
-	pool map[*zip.File][]*extracted
-	all  []*extracted
+	media *media.Store
+	pool  map[*zip.File][]*extracted
+	all   []*extracted
 }
 
 func (x *extractor) extract(f *zip.File) (*extracted, error) {
-	temp, err := os.CreateTemp(x.dir, ".import-*")
+	temp, err := x.media.CreateTemp(".import-*")
 	if err != nil {
 		return nil, fmt.Errorf("create import file: %w", err)
 	}
@@ -463,7 +465,8 @@ func (x *extractor) extract(f *zip.File) (*extracted, error) {
 	}
 	defer rc.Close()
 	var prefix bytes.Buffer
-	n, err := io.Copy(temp, io.TeeReader(io.LimitReader(rc, e.size+1), &limitedBuffer{&prefix, media.SniffLen}))
+	h := sha256.New()
+	n, err := io.Copy(io.MultiWriter(temp, h), io.TeeReader(io.LimitReader(rc, e.size+1), &limitedBuffer{&prefix, media.SniffLen}))
 	if closeErr := temp.Close(); err == nil && closeErr != nil {
 		return nil, fmt.Errorf("write import file: %w", closeErr)
 	}
@@ -471,6 +474,7 @@ func (x *extractor) extract(f *zip.File) (*extracted, error) {
 		return nil, ErrInvalidArchive
 	}
 	e.mime, e.kind = media.Sniff(prefix.Bytes())
+	e.sum = hex.EncodeToString(h.Sum(nil))
 	return e, nil
 }
 
@@ -493,13 +497,10 @@ func (x *extractor) take(f *zip.File) (*extracted, error) {
 	return x.extract(f)
 }
 
-// cleanup removes temporary files and, unless committed, the final files.
-func (x *extractor) cleanup(committed bool) {
+// cleanup removes temporary files; placed ones were already moved into blobs.
+func (x *extractor) cleanup() {
 	for _, e := range x.all {
 		os.Remove(e.temp)
-		if !committed && e.final != "" {
-			os.Remove(e.final)
-		}
 	}
 }
 
@@ -517,7 +518,8 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 
 // Import applies a staged upload in merge mode and removes it. Media is
 // extracted to temporary files first; the database changes run in one
-// transaction and files are moved into place only if it commits.
+// transaction and new content blobs are removed again if it does not commit.
+// Content already stored (by this or another user) is shared, not duplicated.
 func (s *Service) Import(ctx context.Context, ownerID int64, token string, now time.Time) (Result, error) {
 	src, rows, rowErrs, err := s.load(ownerID, token, now)
 	if err != nil {
@@ -525,10 +527,8 @@ func (s *Service) Import(ctx context.Context, ownerID int64, token string, now t
 	}
 	defer src.Close()
 
-	dir := filepath.Join(s.mediaRoot, strconv.FormatInt(ownerID, 10))
-	x := &extractor{dir: dir, pool: map[*zip.File][]*extracted{}}
-	committed := false
-	defer func() { x.cleanup(committed) }()
+	x := &extractor{media: s.media, pool: map[*zip.File][]*extracted{}}
+	defer x.cleanup()
 
 	// Extract outside the write transaction so other writers are not blocked;
 	// the plan is recomputed inside it.
@@ -545,9 +545,6 @@ func (s *Service) Import(ctx context.Context, ownerID int64, token string, now t
 		return Result{Skipped: first.preview.Skipped, Errors: len(first.preview.Errors)}, nil
 	}
 	if first.preview.Attachments > 0 {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			return Result{}, fmt.Errorf("create user media directory: %w", err)
-		}
 		for _, d := range first.days {
 			if err := x.prepare(d.attachments); err != nil {
 				return Result{}, err
@@ -555,6 +552,7 @@ func (s *Service) Import(ctx context.Context, ownerID int64, token string, now t
 		}
 	}
 
+	defer s.media.LockBlobs()()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Result{}, fmt.Errorf("begin import: %w", err)
@@ -590,18 +588,28 @@ func (s *Service) Import(ctx context.Context, ownerID int64, token string, now t
 			return Result{}, fmt.Errorf("update storage usage: %w", err)
 		}
 	}
+	var created []string
+	discard := func(err error) error {
+		for _, sum := range created {
+			err = errors.Join(err, s.media.DiscardBlob(sum))
+		}
+		return err
+	}
 	for _, e := range x.all {
-		if e.final == "" {
+		if !e.used {
 			continue
 		}
-		if err := os.Rename(e.temp, e.final); err != nil {
-			return Result{}, fmt.Errorf("store imported attachment: %w", err)
+		placed, err := s.media.PlaceBlob(e.temp, e.sum)
+		if err != nil {
+			return Result{}, discard(fmt.Errorf("store imported attachment: %w", err))
+		}
+		if placed {
+			created = append(created, e.sum)
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		return Result{}, fmt.Errorf("commit import: %w", err)
+		return Result{}, discard(fmt.Errorf("commit import: %w", err))
 	}
-	committed = true
 	// Windows cannot remove a file that is still open.
 	src.Close()
 	s.Discard(ownerID, token)
@@ -679,13 +687,13 @@ func (s *Service) insertDay(ctx context.Context, tx *sql.Tx, x *extractor, owner
 		if err != nil {
 			return 0, err
 		}
-		res, err := tx.ExecContext(ctx, `INSERT INTO attachments (day_id, owner_id, uuid, kind, filename, mime, size, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, dayID, ownerID, uuid, e.kind, attachmentFilename(d.row.attachments[i]),
-			e.mime, e.size, now.Unix())
+		res, err := tx.ExecContext(ctx, `INSERT INTO attachments (day_id, owner_id, uuid, kind, filename, mime, size, created_at, sha256)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, dayID, ownerID, uuid, e.kind, attachmentFilename(d.row.attachments[i]),
+			e.mime, e.size, now.Unix(), e.sum)
 		if err != nil {
 			return 0, fmt.Errorf("import attachment: %w", err)
 		}
-		e.final = filepath.Join(x.dir, uuid)
+		e.used = true
 		total += e.size
 		if d.row.attachments[i] == d.row.styleBg && e.kind == "image" {
 			attachmentID, err := res.LastInsertId()

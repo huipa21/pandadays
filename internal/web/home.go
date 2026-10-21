@@ -100,7 +100,12 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		query := strings.ToLower(pageData.SearchQuery)
 		matches := make([]days.Day, 0, len(list))
 		for _, day := range list {
-			if strings.Contains(strings.ToLower(day.Title), query) {
+			comment := day.Comment
+			if sharedDay, ok := sharedByID[day.ID]; ok {
+				comment = sharedDay.Comment
+			}
+			if strings.Contains(strings.ToLower(day.Title), query) ||
+				strings.Contains(strings.ToLower(comment), query) {
 				matches = append(matches, day)
 			}
 		}

@@ -4,6 +4,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -11,6 +12,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -147,8 +149,27 @@ func MigrateFS(ctx context.Context, db *sql.DB, fsys fs.FS, now time.Time) error
 	return nil
 }
 
-func applyMigration(ctx context.Context, db *sql.DB, m Migration, now time.Time) error {
-	tx, err := db.BeginTx(ctx, nil)
+func applyMigration(ctx context.Context, db *sql.DB, m Migration, now time.Time) (result error) {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("migration %s: connection: %w", m.Name, err)
+	}
+	defer conn.Close()
+	// SQLite table rebuilds need foreign keys disabled before BEGIN; validate
+	// the rebuilt schema before committing and restore enforcement afterwards.
+	if strings.HasPrefix(m.SQL, "-- rebuild-tables\n") || strings.HasPrefix(m.SQL, "-- rebuild-tables\r\n") {
+		if _, err := conn.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
+			return fmt.Errorf("migration %s: disable foreign keys: %w", m.Name, err)
+		}
+		defer func() {
+			if _, err := conn.ExecContext(context.Background(), "PRAGMA foreign_keys = ON"); err != nil {
+				result = errors.Join(result, fmt.Errorf("migration %s: restore foreign keys: %w", m.Name, err))
+				// A connection without enforcement must never reenter the pool.
+				conn.Raw(func(any) error { return driver.ErrBadConn })
+			}
+		}()
+	}
+	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("migration %s: begin: %w", m.Name, err)
 	}

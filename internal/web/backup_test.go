@@ -201,7 +201,7 @@ func TestRestoreHTTPDrainsAndReopens(t *testing.T) {
 	if _, err := s.db.Exec(`UPDATE users SET password_hash=? WHERE id=?`, hash, user.ID); err != nil {
 		t.Fatal(err)
 	}
-	mediaPath := filepath.Join(s.cfg.DataDir, "media", "1", attachment.UUID)
+	mediaPath := s.media.Path(user.ID, attachment)
 	if err := os.WriteFile(mediaPath, []byte("changed media"), 0o600); err != nil {
 		t.Fatal(err)
 	}

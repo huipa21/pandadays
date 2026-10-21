@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -31,6 +33,7 @@ type Attachment struct {
 	DayID     int64
 	OwnerID   int64
 	UUID      string
+	SHA256    string // empty for legacy rows still stored per owner
 	Kind      string
 	Filename  string
 	MIME      string
@@ -116,6 +119,30 @@ func (s *Store) NewDayRemaining(ctx context.Context, ownerID int64) (int64, erro
 	return u.remaining(), nil
 }
 
+func (s *Store) LibraryRemaining(ctx context.Context, ownerID int64) (int64, error) {
+	u, err := s.usage(ctx, s.db, ownerID, 0)
+	if err != nil {
+		return 0, err
+	}
+	return max(0, u.UserLimit-u.UserUsed), nil
+}
+
+func (s *Store) UploadLibrary(ctx context.Context, ownerID int64, filename string, src io.Reader) (Attachment, error) {
+	remaining, err := s.LibraryRemaining(ctx, ownerID)
+	if err != nil {
+		return Attachment{}, err
+	}
+	if remaining == 0 {
+		return Attachment{}, ErrQuota
+	}
+	st, err := s.stage(src, remaining)
+	if err != nil {
+		return Attachment{}, err
+	}
+	defer os.Remove(st.temp)
+	return s.insert(ctx, ownerID, 0, safeFilename(filename), st, true)
+}
+
 func (u Usage) remaining() int64 {
 	card, user := u.CardLimit-u.CardUsed, u.UserLimit-u.UserUsed
 	if card < 0 {
@@ -130,16 +157,14 @@ func (u Usage) remaining() int64 {
 	return card
 }
 
+// Upload stores new content for the owner's day. Content the owner already has
+// in their media library is rejected with a *DuplicateError; content another
+// user already stored is shared on disk but stays a separate attachment.
 func (s *Store) Upload(ctx context.Context, ownerID, dayID int64, filename string, src io.Reader) (Attachment, error) {
 	if dayID <= 0 {
 		return Attachment{}, ErrNotFound
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return Attachment{}, fmt.Errorf("begin attachment upload: %w", err)
-	}
-	defer tx.Rollback()
-	u, err := s.usage(ctx, tx, ownerID, dayID)
+	u, err := s.usage(ctx, s.db, ownerID, dayID)
 	if err != nil {
 		return Attachment{}, err
 	}
@@ -147,58 +172,115 @@ func (s *Store) Upload(ctx context.Context, ownerID, dayID int64, filename strin
 	if remaining <= 0 {
 		return Attachment{}, ErrQuota
 	}
-
-	dir := filepath.Join(s.root, strconv.FormatInt(ownerID, 10))
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return Attachment{}, fmt.Errorf("create user media directory: %w", err)
-	}
-	temp, err := os.CreateTemp(dir, ".upload-*")
+	st, err := s.stage(src, remaining)
 	if err != nil {
-		return Attachment{}, fmt.Errorf("create temporary attachment: %w", err)
+		return Attachment{}, err
 	}
-	tempName := temp.Name()
-	defer os.Remove(tempName)
+	defer os.Remove(st.temp)
+	return s.insert(ctx, ownerID, dayID, safeFilename(filename), st, true)
+}
 
+type staged struct {
+	temp, sum, kind, mime string
+	size                  int64
+}
+
+// stage streams src into a temporary blob file, hashing and sniffing it.
+func (s *Store) stage(src io.Reader, limit int64) (staged, error) {
+	temp, err := s.CreateTemp(".upload-*")
+	if err != nil {
+		return staged{}, fmt.Errorf("create temporary attachment: %w", err)
+	}
+	st := staged{temp: temp.Name()}
+	fail := func(err error) (staged, error) {
+		temp.Close()
+		os.Remove(st.temp)
+		return staged{}, err
+	}
 	prefix := make([]byte, SniffLen)
 	n, readErr := io.ReadFull(src, prefix)
 	if readErr != nil && !errors.Is(readErr, io.EOF) && !errors.Is(readErr, io.ErrUnexpectedEOF) {
-		temp.Close()
-		return Attachment{}, fmt.Errorf("%w: read attachment content: %w", ErrUploadStream, readErr)
+		return fail(fmt.Errorf("%w: read attachment content: %w", ErrUploadStream, readErr))
 	}
 	prefix = prefix[:n]
 	content := io.MultiReader(bytes.NewReader(prefix), src)
-	size, err := io.Copy(temp, io.LimitReader(content, remaining))
+	h := sha256.New()
+	st.size, err = io.Copy(io.MultiWriter(temp, h), io.LimitReader(content, limit))
 	if err != nil {
-		temp.Close()
-		return Attachment{}, fmt.Errorf("%w: stream attachment: %w", ErrUploadStream, err)
+		return fail(fmt.Errorf("%w: stream attachment: %w", ErrUploadStream, err))
 	}
-	if size == remaining {
+	if st.size == limit {
 		var extra [1]byte
 		n, err := io.ReadFull(content, extra[:])
 		if n > 0 {
-			temp.Close()
-			return Attachment{}, ErrTooLarge
+			return fail(ErrTooLarge)
 		}
 		if err != nil && !errors.Is(err, io.EOF) {
-			temp.Close()
-			return Attachment{}, fmt.Errorf("%w: probe attachment size: %w", ErrUploadStream, err)
+			return fail(fmt.Errorf("%w: probe attachment size: %w", ErrUploadStream, err))
 		}
 	}
 	if err := temp.Close(); err != nil {
-		return Attachment{}, fmt.Errorf("close temporary attachment: %w", err)
+		os.Remove(st.temp)
+		return staged{}, fmt.Errorf("close temporary attachment: %w", err)
 	}
+	st.sum = hex.EncodeToString(h.Sum(nil))
+	st.mime, st.kind = Sniff(prefix)
+	return st, nil
+}
 
-	contentType, kind := Sniff(prefix)
+// insert records an attachment row for staged content. A non-empty st.temp is
+// moved into the blob store; otherwise the blob must already exist.
+func (s *Store) insert(ctx context.Context, ownerID, dayID int64, filename string, st staged, rejectDuplicate bool) (Attachment, error) {
+	defer s.LockBlobs()()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Attachment{}, fmt.Errorf("begin attachment upload: %w", err)
+	}
+	defer tx.Rollback()
+	if !rejectDuplicate && dayID > 0 {
+		existing, err := scanAttachment(tx.QueryRowContext(ctx, `SELECT id, COALESCE(day_id, 0), owner_id, uuid,
+			COALESCE(sha256, ''), kind, filename, mime, size, created_at FROM attachments
+			WHERE owner_id = ? AND day_id = ? AND detached = 0 AND sha256 = ? ORDER BY id LIMIT 1`,
+			ownerID, dayID, st.sum))
+		if err == nil {
+			return existing, nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return Attachment{}, fmt.Errorf("check existing day reference: %w", err)
+		}
+	}
+	u, err := s.usage(ctx, tx, ownerID, dayID)
+	if err != nil {
+		return Attachment{}, err
+	}
+	remaining := min(u.CardLimit-u.CardUsed, u.UserLimit-u.UserUsed)
+	if dayID == 0 {
+		remaining = u.UserLimit - u.UserUsed
+	}
+	if remaining <= 0 {
+		return Attachment{}, ErrQuota
+	}
+	if st.size > remaining {
+		return Attachment{}, ErrTooLarge
+	}
+	if rejectDuplicate {
+		existing, err := findBySum(ctx, tx, ownerID, st.sum)
+		if err != nil {
+			return Attachment{}, err
+		}
+		if existing != 0 {
+			return Attachment{}, &DuplicateError{ExistingID: existing}
+		}
+	}
 	uuid, err := newUUID()
 	if err != nil {
 		return Attachment{}, err
 	}
-	finalName := filepath.Join(dir, uuid)
 	now := time.Now().UTC()
 	res, err := tx.ExecContext(ctx, `INSERT INTO attachments
-		(day_id, owner_id, uuid, kind, filename, mime, size, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		dayID, ownerID, uuid, kind, safeFilename(filename), contentType, size, now.Unix())
+		(day_id, owner_id, uuid, kind, filename, mime, size, created_at, sha256)
+		VALUES (NULLIF(?, 0), ?, ?, ?, ?, ?, ?, ?, ?)`,
+		dayID, ownerID, uuid, st.kind, filename, st.mime, st.size, now.Unix(), st.sum)
 	if err != nil {
 		return Attachment{}, fmt.Errorf("insert attachment metadata: %w", err)
 	}
@@ -206,7 +288,7 @@ func (s *Store) Upload(ctx context.Context, ownerID, dayID int64, filename strin
 	if err != nil {
 		return Attachment{}, fmt.Errorf("read attachment ID: %w", err)
 	}
-	res, err = tx.ExecContext(ctx, `UPDATE users SET used_bytes = used_bytes + ? WHERE id = ?`, size, ownerID)
+	res, err = tx.ExecContext(ctx, `UPDATE users SET used_bytes = used_bytes + ? WHERE id = ?`, st.size, ownerID)
 	if err != nil {
 		return Attachment{}, fmt.Errorf("update attachment usage: %w", err)
 	}
@@ -216,18 +298,26 @@ func (s *Store) Upload(ctx context.Context, ownerID, dayID int64, filename strin
 		}
 		return Attachment{}, errors.New("attachment owner disappeared during upload")
 	}
-	if err := os.Rename(tempName, finalName); err != nil {
-		return Attachment{}, fmt.Errorf("store attachment: %w", err)
+	created := false
+	if st.temp != "" {
+		if created, err = s.PlaceBlob(st.temp, st.sum); err != nil {
+			return Attachment{}, err
+		}
+	} else if _, err := os.Stat(s.blobPath(st.sum)); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return Attachment{}, fmt.Errorf("%w: %w", ErrFileMissing, err)
+		}
+		return Attachment{}, fmt.Errorf("inspect media blob: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
-		if removeErr := os.Remove(finalName); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
-			return Attachment{}, errors.Join(fmt.Errorf("commit attachment upload: %w", err),
-				fmt.Errorf("remove uncommitted attachment: %w", removeErr))
+		err = fmt.Errorf("commit attachment upload: %w", err)
+		if created {
+			err = errors.Join(err, s.DiscardBlob(st.sum))
 		}
-		return Attachment{}, fmt.Errorf("commit attachment upload: %w", err)
+		return Attachment{}, err
 	}
-	return Attachment{ID: attachmentID, DayID: dayID, UUID: uuid, Kind: kind,
-		OwnerID: ownerID, Filename: safeFilename(filename), MIME: contentType, Size: size, CreatedAt: now}, nil
+	return Attachment{ID: attachmentID, DayID: dayID, UUID: uuid, Kind: st.kind, SHA256: st.sum,
+		OwnerID: ownerID, Filename: filename, MIME: st.mime, Size: st.size, CreatedAt: now}, nil
 }
 
 // SafeFilename strips directories and control characters from a display filename.
@@ -280,7 +370,7 @@ func newUUID() (string, error) {
 }
 
 func (s *Store) ListDay(ctx context.Context, ownerID, dayID int64) ([]Attachment, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT a.id, a.day_id, a.owner_id, a.uuid, a.kind, a.filename, a.mime, a.size, a.created_at
+	rows, err := s.db.QueryContext(ctx, `SELECT a.id, a.day_id, a.owner_id, a.uuid, COALESCE(a.sha256, ''), a.kind, a.filename, a.mime, a.size, a.created_at
 		FROM attachments a JOIN days d ON d.id = a.day_id
 		WHERE a.owner_id = ? AND d.owner_id = ? AND d.id = ? AND a.detached = 0 ORDER BY a.created_at, a.id`,
 		ownerID, ownerID, dayID)
@@ -292,7 +382,7 @@ func (s *Store) ListDay(ctx context.Context, ownerID, dayID int64) ([]Attachment
 	for rows.Next() {
 		var a Attachment
 		var created int64
-		if err := rows.Scan(&a.ID, &a.DayID, &a.OwnerID, &a.UUID, &a.Kind, &a.Filename, &a.MIME, &a.Size, &created); err != nil {
+		if err := rows.Scan(&a.ID, &a.DayID, &a.OwnerID, &a.UUID, &a.SHA256, &a.Kind, &a.Filename, &a.MIME, &a.Size, &created); err != nil {
 			return nil, fmt.Errorf("scan attachment: %w", err)
 		}
 		a.CreatedAt = time.Unix(created, 0).UTC()
@@ -310,11 +400,14 @@ type LibraryItem struct {
 	DayTitle string
 }
 
-// ListOwner returns every attachment the owner uploaded, newest first.
+// ListOwner returns each stored file once, using its first owned attachment.
 func (s *Store) ListOwner(ctx context.Context, ownerID int64) ([]LibraryItem, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT a.id, a.day_id, a.owner_id, a.uuid, a.kind, a.filename, a.mime, a.size, a.created_at, d.title
-		FROM attachments a JOIN days d ON d.id = a.day_id
-		WHERE a.owner_id = ? AND d.owner_id = ? ORDER BY a.created_at DESC, a.id DESC`, ownerID, ownerID)
+	rows, err := s.db.QueryContext(ctx, `SELECT a.id, COALESCE(a.day_id, 0), a.owner_id, a.uuid, COALESCE(a.sha256, ''), a.kind, a.filename, a.mime, a.size, a.created_at, COALESCE(d.title, '')
+		FROM attachments a LEFT JOIN days d ON d.id = a.day_id AND d.owner_id = a.owner_id
+		WHERE a.owner_id = ? AND (a.sha256 IS NULL OR NOT EXISTS (
+			SELECT 1 FROM attachments original WHERE original.owner_id = a.owner_id
+			AND original.sha256 = a.sha256 AND original.id < a.id
+		)) ORDER BY a.created_at DESC, a.id DESC`, ownerID)
 	if err != nil {
 		return nil, fmt.Errorf("list media library: %w", err)
 	}
@@ -323,7 +416,7 @@ func (s *Store) ListOwner(ctx context.Context, ownerID int64) ([]LibraryItem, er
 	for rows.Next() {
 		var item LibraryItem
 		var created int64
-		if err := rows.Scan(&item.ID, &item.DayID, &item.OwnerID, &item.UUID, &item.Kind, &item.Filename,
+		if err := rows.Scan(&item.ID, &item.DayID, &item.OwnerID, &item.UUID, &item.SHA256, &item.Kind, &item.Filename,
 			&item.MIME, &item.Size, &created, &item.DayTitle); err != nil {
 			return nil, fmt.Errorf("scan media library item: %w", err)
 		}
@@ -336,20 +429,57 @@ func (s *Store) ListOwner(ctx context.Context, ownerID int64) ([]LibraryItem, er
 	return out, nil
 }
 
-// CopyToDay attaches a copy of an owned attachment to another owned day. The
-// copy is an independent file so deleting either one leaves the other intact;
-// it counts against the same per-day and account quotas as an upload.
+// CopyToDay attaches an owned library item to another owned day as an
+// independent attachment row sharing the stored content, so deleting either
+// one leaves the other intact; it counts against the same per-day and account
+// quotas as an upload.
 func (s *Store) CopyToDay(ctx context.Context, ownerID, attachmentID, dayID int64) (Attachment, error) {
 	src, err := s.Get(ctx, ownerID, attachmentID)
 	if err != nil {
 		return Attachment{}, err
+	}
+	file, err := s.Open(src)
+	if err != nil {
+		return Attachment{}, fmt.Errorf("open selected library file: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return Attachment{}, fmt.Errorf("close selected library file: %w", err)
+	}
+	if dayID <= 0 {
+		return Attachment{}, ErrNotFound
+	}
+	if _, err := s.usage(ctx, s.db, ownerID, dayID); err != nil {
+		return Attachment{}, err
+	}
+	// Re-selecting an active file does not add another day reference.
+	var existing int64
+	err = s.db.QueryRowContext(ctx, `SELECT id FROM attachments
+		WHERE owner_id = ? AND day_id = ? AND detached = 0 AND (id = ? OR (sha256 IS NOT NULL AND sha256 = ?))
+		ORDER BY id LIMIT 1`, ownerID, dayID, src.ID, src.SHA256).Scan(&existing)
+	if err == nil {
+		return s.Get(ctx, ownerID, existing)
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return Attachment{}, fmt.Errorf("find selected attachment: %w", err)
+	}
+	if src.SHA256 != "" {
+		return s.insert(ctx, ownerID, dayID, src.Filename,
+			staged{sum: src.SHA256, kind: src.Kind, mime: src.MIME, size: src.Size}, false)
 	}
 	f, err := s.Open(src)
 	if err != nil {
 		return Attachment{}, fmt.Errorf("open library attachment: %w", err)
 	}
 	defer f.Close()
-	return s.Upload(ctx, ownerID, dayID, src.Filename, f)
+	if _, err := s.usage(ctx, s.db, ownerID, dayID); err != nil {
+		return Attachment{}, err
+	}
+	st, err := s.stage(f, src.Size+1)
+	if err != nil {
+		return Attachment{}, err
+	}
+	defer os.Remove(st.temp)
+	return s.insert(ctx, ownerID, dayID, src.Filename, st, false)
 }
 
 // Open reads an attachment after its metadata has been authorized by the caller.
@@ -365,7 +495,7 @@ func (s *Store) Open(a Attachment) (*os.File, error) {
 }
 
 func (s *Store) ListAccessibleDay(ctx context.Context, viewerID, dayID int64) ([]Attachment, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT a.id, a.day_id, a.owner_id, a.uuid, a.kind, a.filename, a.mime, a.size, a.created_at
+	rows, err := s.db.QueryContext(ctx, `SELECT a.id, a.day_id, a.owner_id, a.uuid, COALESCE(a.sha256, ''), a.kind, a.filename, a.mime, a.size, a.created_at
 		FROM attachments a JOIN days d ON d.id = a.day_id
 		WHERE d.id = ? AND a.detached = 0 AND (
 			d.owner_id = ? OR EXISTS (
@@ -384,7 +514,7 @@ func (s *Store) ListAccessibleDay(ctx context.Context, viewerID, dayID int64) ([
 	for rows.Next() {
 		var a Attachment
 		var created int64
-		if err := rows.Scan(&a.ID, &a.DayID, &a.OwnerID, &a.UUID, &a.Kind, &a.Filename, &a.MIME, &a.Size, &created); err != nil {
+		if err := rows.Scan(&a.ID, &a.DayID, &a.OwnerID, &a.UUID, &a.SHA256, &a.Kind, &a.Filename, &a.MIME, &a.Size, &created); err != nil {
 			return nil, fmt.Errorf("scan accessible attachment: %w", err)
 		}
 		a.CreatedAt = time.Unix(created, 0).UTC()
@@ -399,9 +529,9 @@ func (s *Store) ListAccessibleDay(ctx context.Context, viewerID, dayID int64) ([
 func (s *Store) Get(ctx context.Context, ownerID, id int64) (Attachment, error) {
 	var a Attachment
 	var created int64
-	err := s.db.QueryRowContext(ctx, `SELECT id, day_id, owner_id, uuid, kind, filename, mime, size, created_at
+	err := s.db.QueryRowContext(ctx, `SELECT id, COALESCE(day_id, 0), owner_id, uuid, COALESCE(sha256, ''), kind, filename, mime, size, created_at
 		FROM attachments WHERE owner_id = ? AND id = ?`, ownerID, id).
-		Scan(&a.ID, &a.DayID, &a.OwnerID, &a.UUID, &a.Kind, &a.Filename, &a.MIME, &a.Size, &created)
+		Scan(&a.ID, &a.DayID, &a.OwnerID, &a.UUID, &a.SHA256, &a.Kind, &a.Filename, &a.MIME, &a.Size, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Attachment{}, ErrNotFound
 	}
@@ -440,9 +570,9 @@ func (s *Store) Rename(ctx context.Context, ownerID, id int64, filename string) 
 
 func (s *Store) GetAccessible(ctx context.Context, viewerID, id int64) (Attachment, error) {
 	a, err := scanAttachment(s.db.QueryRowContext(ctx, `
-		SELECT a.id, a.day_id, a.owner_id, a.uuid, a.kind, a.filename, a.mime, a.size, a.created_at
+		SELECT a.id, COALESCE(a.day_id, 0), a.owner_id, a.uuid, COALESCE(a.sha256, ''), a.kind, a.filename, a.mime, a.size, a.created_at
 		FROM attachments a
-		JOIN days d ON d.id = a.day_id
+		LEFT JOIN days d ON d.id = a.day_id
 		WHERE a.id = ? AND (
 			a.owner_id = ? OR (a.detached = 0 AND EXISTS (
 				SELECT 1
@@ -501,7 +631,7 @@ func (s *Store) Delete(ctx context.Context, ownerID, id int64) error {
 		return fmt.Errorf("begin attachment deletion: %w", err)
 	}
 	defer tx.Rollback()
-	a, err := scanAttachment(tx.QueryRowContext(ctx, `SELECT id, day_id, owner_id, uuid, kind, filename, mime, size, created_at
+	a, err := scanAttachment(tx.QueryRowContext(ctx, `SELECT id, COALESCE(day_id, 0), owner_id, uuid, COALESCE(sha256, ''), kind, filename, mime, size, created_at
 		FROM attachments WHERE owner_id = ? AND id = ?`, ownerID, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
@@ -514,6 +644,9 @@ func (s *Store) Delete(ctx context.Context, ownerID, id int64) error {
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit attachment deletion: %w", err)
+	}
+	if a.SHA256 != "" {
+		return s.Collect(ctx)
 	}
 	if err := os.Remove(s.Path(ownerID, a)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("remove attachment file: %w", err)
@@ -528,11 +661,12 @@ type rowScanner interface {
 func scanAttachment(row rowScanner) (Attachment, error) {
 	var a Attachment
 	var created int64
-	err := row.Scan(&a.ID, &a.DayID, &a.OwnerID, &a.UUID, &a.Kind, &a.Filename, &a.MIME, &a.Size, &created)
+	err := row.Scan(&a.ID, &a.DayID, &a.OwnerID, &a.UUID, &a.SHA256, &a.Kind, &a.Filename, &a.MIME, &a.Size, &created)
 	a.CreatedAt = time.Unix(created, 0).UTC()
 	return a, err
 }
 
+// RemoveFiles deletes legacy per-owner files; shared blobs are removed by Collect.
 func (s *Store) RemoveFiles(ownerID int64, uuids []string) error {
 	var errs []error
 	for _, uuid := range uuids {
@@ -563,7 +697,12 @@ func (s *Store) SetBackground(ctx context.Context, ownerID, dayID, attachmentID 
 	return nil
 }
 
+// Path returns the shared content blob, or the legacy per-owner file for rows
+// that have no content hash yet.
 func (s *Store) Path(ownerID int64, a Attachment) string {
+	if validSum(a.SHA256) {
+		return s.blobPath(a.SHA256)
+	}
 	return filepath.Join(s.root, strconv.FormatInt(ownerID, 10), a.UUID)
 }
 

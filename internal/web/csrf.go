@@ -101,14 +101,16 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 		if !safe {
 			provided := r.Header.Get("X-CSRF-Token")
 			if provided == "" {
-				multipartForm := isAttachmentUpload(r) || isImportUpload(r) || isDayCreateUpload(r)
+				multipartForm := isAttachmentUpload(r) || isImportUpload(r) || isDayCreateUpload(r) || isLibraryUpload(r)
 				if multipartForm {
 					if CurrentUser(r.Context()) == nil {
 						authRedirect(w, r, "/login")
 						return
 					}
 					var limited bool
-					if isDayCreateUpload(r) {
+					if isLibraryUpload(r) {
+						limited = s.limitLibraryForm(w, r)
+					} else if isDayCreateUpload(r) {
 						limited = s.limitDayCreateForm(w, r)
 					} else if isImportUpload(r) {
 						limited = s.limitImportForm(w, r)
@@ -168,6 +170,24 @@ func isDayCreateUpload(r *http.Request) bool {
 	}
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	return err == nil && strings.EqualFold(mediaType, "multipart/form-data")
+}
+
+func isLibraryUpload(r *http.Request) bool {
+	if r.Method != http.MethodPost || r.URL.Path != "/media" {
+		return false
+	}
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	return err == nil && strings.EqualFold(mediaType, "multipart/form-data")
+}
+
+func (s *Server) limitLibraryForm(w http.ResponseWriter, r *http.Request) bool {
+	remaining, err := s.media.LibraryRemaining(r.Context(), CurrentUser(r.Context()).ID)
+	if err != nil {
+		s.attachmentError(w, r, "check library upload allowance", err)
+		return false
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, multipartBodyLimit(remaining))
+	return true
 }
 
 func (s *Server) limitDayCreateForm(w http.ResponseWriter, r *http.Request) bool {

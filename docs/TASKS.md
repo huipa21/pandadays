@@ -229,9 +229,12 @@ Status legend: `[ ]` todo, `[x]` done.
 - Verified: full Go tests/vet; Chromium checks at 375px/1280px, 20-to-23-item Load more without duplicates, badge update, reject then accept, and shared detail access.
 
 ### [x] T27 Header day search
-- Top search bar for regular users, matching active owned and accepted, visible shared day titles case-insensitively across future/past.
+- Borderless magnifier immediately left of the theme toggle expands into an inline search field in the same header row, with a magnifier submit button on the right (no dropdown below); theme and language icons are borderless too.
+- Match active owned and accepted, visible shared day titles and authorized comments case-insensitively across future/past.
 - Preserve authorization, shared-day deduplication, and normal Home date tabs when not searching.
 - Localized search results, empty state, and clear-search link.
+- Header refinement verified: title/comment search and comment-visibility tests; Chromium at 375px/1280px checks borderless icons/field, collapsed search, input focus, Enter submission, Escape/outside dismissal, and English/dark plus Chinese/light layouts without overflow.
+- Inline expansion verified at 375px/1280px: the field and theme toggle share the same row, header height and theme-toggle position remain unchanged, and there is no horizontal overflow; focus and Escape/outside dismissal preserved.
 - **Done when**: targeted search/authorization tests, full Go tests/vet, and 375px/1280px browser checks pass.
 - Verified: full Go tests/vet and CGO-free build; Chromium checks in light/dark at 375px/1280px without horizontal overflow, mixed-case future/past search, Chinese search, empty state, and clear search. Messages localization and JavaScript-disabled pagination also checked.
 
@@ -323,6 +326,43 @@ Status legend: `[ ]` todo, `[x]` done.
 - Preserve removal-to-library semantics, stored content, quotas, and shared read-only access.
 - **Done when**: rename/authorization and recording/playback regressions, full Go tests/vet, JavaScript tests, and 375px/1280px browser checks pass.
 - Verified: full Go tests/vet and all 47 JavaScript tests pass. Isolated Chromium checks in English and Chinese at 375px/1280px confirm collapsed Add tabs, single-line attachment rows, full-width content without overflow, capped names, and on-demand playback. Renaming stopped recordings persists through upload; uploaded files and removed library items remain renameable without changing their contents or storage usage.
+
+### [x] T40 Consistent compact recording rows and bare expanded players
+- Show recording filename, size, and Play/rename/remove controls beneath the card comment, matching attachment-manager rows.
+- Reveal only the player below the row on Play, without repeating the filename or adding a nested bordered panel.
+- Preserve inline playback diagnostics, distinct player IDs, and read-only sharing.
+- **Done when**: card/manager markup and authorization regressions, Go tests/vet, JavaScript tests, and 375px/1280px browser checks pass.
+- Verified: full Go tests/vet and all 47 JavaScript tests pass. Isolated Chromium checks at 375px/1280px in English and Chinese confirm single-line filename/size/action rows, independently revealed playable controls, no repeated captions or nested player borders, distinct card/manager IDs, and no horizontal overflow.
+
+### [x] T41 Collapsible all-attachment cards and dismissible playback
+- Show a separator and collapsed attachment list below the comment only when attachments exist, including images, video, audio, and other files.
+- Remove individual attachment-item borders and preserve owner actions and shared read-only access.
+- Pause/collapse audio on switching attachments, outside clicks, closing its list/dialog, and Escape; keep native player interactions usable.
+- **Done when**: attachment-type/authorization and playback-dismissal regressions, full Go tests/vet, JavaScript tests, and 375px/1280px browser checks pass.
+- Verified: full Go tests/vet and all 55 JavaScript tests pass. Isolated Chromium checks at 375px/1280px cover collapsed lists, separators, borderless mixed attachment rows, loaded images, switching recordings, outside-click dismissal, native controls, and list/dialog closure without overflow. Owner and shared attachment-type/access regressions pass in English and Chinese.
+
+### [x] T42 Media upload timeline and type filters
+- Group the media library by upload day or month in the user's timezone, newest first.
+- Filter all media, images, videos, voice/audio, and generic files using URL-backed controls.
+- Keep compact previews and owner-only access; distinguish an empty filter from an empty library.
+- **Done when**: timezone/grouping/filter/authorization regressions, Go tests/vet, and 375px/1280px browser checks pass.
+- Verified: full Go tests/vet and all 55 JavaScript tests pass. Isolated Chromium checks cover 40 combinations of day/month grouping, all five type filters, English/Chinese, and 375px/1280px layouts without overflow. Image/video previews load, video details remain playable, and filter submissions also work without JavaScript.
+
+### [x] T43 Content-addressed media and duplicate upload rejection
+- Store attachment bytes once per SHA-256 under `media/blobs`, shared across users; every attachment row keeps its own owner, metadata, and quota charge.
+- Delete a blob only when its last referencing row is gone, including day/user cascades (`blob_gc` queue, collected after deletes and at startup); move legacy per-user files into blobs at startup.
+- Reject uploads (existing day and new day) whose content is already in the user's own media library or repeated in the same request, before saving anything; library picks reuse the blob.
+- **Done when**: duplicate/sharing/reference-counting/legacy-migration/authorization regressions, full Go tests, and vet pass.
+- Verified: media package tests cover own-library rejection, cross-user sharing with independent metadata, copy reuse, cascade collection, and legacy migration; HTTP tests cover 409 responses for existing/new-day uploads without partial saves; export/import round trip shares blobs.
+
+### [x] T44 Reusable library selections, standalone uploads, and recording controls
+- Show one library item per owned content hash and reuse stored files across days; repeated selection for the same day must not add a duplicate attachment.
+- Label library-only selection Select rather than Upload. Add a plus-button upload form that does not require a day.
+- Show selected filenames and image thumbnails in day and library upload forms.
+- Put play/start/resume at the right of recording feedback; Stop pauses and Finish finalizes, excluding paused time and retaining preview/rename support.
+- Preserve owner/share authorization, existing quota accounting, migrations, and deletion/reference safety.
+- **Done when**: focused/full Go tests, vet, JavaScript regressions, and 375px/1280px browser checks pass.
+- Verified: full Go tests/vet and all 61 JavaScript tests pass. Isolated browser checks confirm standalone uploads, filenames/image thumbnails, Select/Upload labeling, and recording start/pause/resume/finish in English/Chinese at 375px/1280px without overflow. Reusing a standalone file on two days leaves one library entry and one physical blob for that file. Regression tests cover missing files, owner/shared authorization, quota-safe repeated selection, and migration rollback/foreign-key enforcement.
 
 ## Dependency Graph
 

@@ -1,4 +1,26 @@
 (() => {
+  let active;
+  function collapse() {
+    if (!active) return;
+    active.audio.pause();
+    active.player.hidden = true;
+    active.play.setAttribute("aria-expanded", "false");
+    active = undefined;
+  }
+  document.addEventListener("click", (event) => {
+    if (active && !active.player.contains(event.target) && !active.play.contains(event.target)) collapse();
+  });
+  document.addEventListener("toggle", (event) => {
+    if (active && !event.target.open && event.target.contains(active.player)) collapse();
+  }, true);
+  document.addEventListener("close", (event) => {
+    if (active && event.target.contains(active.player)) collapse();
+  }, true);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") collapse();
+  });
+  window.addEventListener("pagehide", collapse);
+
   function init(root) {
     root.querySelectorAll("[data-audio-player]").forEach((player) => {
       if (player.dataset.ready) return;
@@ -29,12 +51,15 @@
       const entry = player.closest?.("[data-attachment-entry]");
       const play = entry?.querySelector("[data-audio-play]");
       play?.addEventListener("click", async () => {
-        entry.querySelector("[data-attachment-player]").hidden = false;
+        collapse();
+        const playback = { player, audio, play };
+        active = playback;
+        player.hidden = false;
         play.setAttribute("aria-expanded", "true");
         try {
           await audio.play();
         } catch {
-          await failed();
+          if (active === playback) await failed();
         }
       });
       if (audio.error) failed();
