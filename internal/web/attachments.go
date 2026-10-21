@@ -47,7 +47,7 @@ func (s *Server) handleAttachmentUpload(w http.ResponseWriter, r *http.Request) 
 		s.attachmentError(w, r, "check upload allowance", err)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, multipartBodyLimit(remaining))
+	r.Body = http.MaxBytesReader(w, r.Body, multipartUploadLimit(remaining))
 	if r.MultipartForm == nil {
 		if err := r.ParseMultipartForm(32 << 20); err != nil {
 			if r.MultipartForm != nil {
@@ -66,6 +66,16 @@ func (s *Server) handleAttachmentUpload(w http.ResponseWriter, r *http.Request) 
 			s.authError(w, r, "error.bad_request", http.StatusBadRequest)
 			return
 		}
+		prepared, err := s.prepareUploads(files)
+		if err != nil {
+			s.attachmentSaveError(w, r, "prepare selected attachments", err)
+			return
+		}
+		defer func() {
+			if err := closePreparedUploads(prepared); err != nil {
+				s.log.Error("clean up prepared attachments", "err", err)
+			}
+		}()
 		var library []media.Attachment
 		for _, id := range form.LibraryIDs {
 			a, err := s.media.Get(r.Context(), ownerID, id)
@@ -101,8 +111,8 @@ func (s *Server) handleAttachmentUpload(w http.ResponseWriter, r *http.Request) 
 				sizes = append(sizes, a.Size)
 			}
 		}
-		for _, file := range files {
-			sizes = append(sizes, file.Size)
+		for _, file := range prepared {
+			sizes = append(sizes, file.Size())
 		}
 		for _, size := range sizes {
 			if size > allowance {
@@ -111,7 +121,7 @@ func (s *Server) handleAttachmentUpload(w http.ResponseWriter, r *http.Request) 
 			}
 			allowance -= size
 		}
-		if err := s.checkUploadDuplicates(r.Context(), ownerID, files); err != nil {
+		if err := s.checkUploadDuplicates(r.Context(), ownerID, prepared); err != nil {
 			s.attachmentSaveError(w, r, "check selected attachments", err)
 			return
 		}
@@ -121,15 +131,8 @@ func (s *Server) handleAttachmentUpload(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 		}
-		for _, header := range files {
-			file, err := header.Open()
-			if err == nil {
-				_, err = s.media.Upload(r.Context(), ownerID, dayID, header.Filename, file)
-				closeErr := file.Close()
-				if err == nil {
-					err = closeErr
-				}
-			}
+		for i, header := range files {
+			_, err := s.media.UploadPrepared(r.Context(), ownerID, dayID, header.Filename, prepared[i])
 			if err != nil {
 				s.attachmentSaveError(w, r, "save selected attachment", err)
 				return
@@ -150,20 +153,85 @@ func multipartBodyLimit(remaining int64) int64 {
 	return remaining + multipartOverheadLimit
 }
 
+func multipartUploadLimit(remaining int64) int64 {
+	return multipartBodyLimit(max(remaining, media.MaxUploadBytes))
+}
+
+func (s *Server) prepareUploads(files []*multipart.FileHeader) ([]*media.PreparedUpload, error) {
+	prepared := make([]*media.PreparedUpload, 0, len(files))
+	for _, header := range files {
+		file, err := header.Open()
+		if err != nil {
+			openErr := fmt.Errorf("%w: open upload: %w", media.ErrUploadStream, err)
+			return nil, errors.Join(openErr, closePreparedUploads(prepared))
+		}
+		upload, prepareErr := s.media.PrepareUpload(file)
+		closeErr := file.Close()
+		if prepareErr == nil {
+			prepareErr = closeErr
+		}
+		if prepareErr != nil {
+			if upload != nil {
+				if cleanupErr := upload.Close(); cleanupErr != nil {
+					prepareErr = errors.Join(prepareErr, cleanupErr)
+				}
+			}
+			if cleanupErr := closePreparedUploads(prepared); cleanupErr != nil {
+				prepareErr = errors.Join(prepareErr, cleanupErr)
+			}
+			return nil, prepareErr
+		}
+		prepared = append(prepared, upload)
+	}
+	return prepared, nil
+}
+
+func closePreparedUploads(uploads []*media.PreparedUpload) error {
+	var errs []error
+	for _, upload := range uploads {
+		if err := upload.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
 // checkUploadDuplicates rejects files already in the owner's media library, or
 // the same file selected twice, before anything is saved. Upload repeats the
 // library check transactionally.
-func (s *Server) checkUploadDuplicates(ctx context.Context, ownerID int64, files []*multipart.FileHeader) error {
+func (s *Server) checkUploadDuplicates(ctx context.Context, ownerID int64, files []*media.PreparedUpload) error {
+	seen := map[string]bool{}
+	for _, file := range files {
+		sum := file.SHA256()
+		if seen[sum] {
+			return &media.DuplicateError{}
+		}
+		seen[sum] = true
+		existing, err := s.media.FindBySum(ctx, ownerID, sum)
+		if err != nil {
+			return err
+		}
+		if existing != 0 {
+			return &media.DuplicateError{ExistingID: existing}
+		}
+	}
+	return nil
+}
+
+func (s *Server) checkRawUploadDuplicates(ctx context.Context, ownerID int64, files []*multipart.FileHeader) error {
 	seen := map[string]bool{}
 	for _, header := range files {
-		f, err := header.Open()
+		file, err := header.Open()
 		if err != nil {
 			return fmt.Errorf("%w: open upload: %w", media.ErrUploadStream, err)
 		}
-		sum, err := media.Sum(f)
-		f.Close()
-		if err != nil {
-			return fmt.Errorf("%w: hash upload: %w", media.ErrUploadStream, err)
+		sum, sumErr := media.Sum(file)
+		closeErr := file.Close()
+		if sumErr != nil {
+			return fmt.Errorf("%w: hash upload: %w", media.ErrUploadStream, sumErr)
+		}
+		if closeErr != nil {
+			return fmt.Errorf("%w: close upload: %w", media.ErrUploadStream, closeErr)
 		}
 		if seen[sum] {
 			return &media.DuplicateError{}
@@ -185,7 +253,7 @@ func (s *Server) attachmentSaveError(w http.ResponseWriter, r *http.Request, op 
 		s.authError(w, r, "attachments.error.duplicate", http.StatusConflict)
 		return
 	}
-	if errors.Is(err, media.ErrQuota) || errors.Is(err, media.ErrTooLarge) {
+	if errors.Is(err, media.ErrQuota) || errors.Is(err, media.ErrTooLarge) || errors.Is(err, media.ErrImageTooLarge) {
 		s.authError(w, r, "attachments.error.limit", http.StatusRequestEntityTooLarge)
 		return
 	}

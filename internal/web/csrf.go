@@ -186,7 +186,7 @@ func (s *Server) limitLibraryForm(w http.ResponseWriter, r *http.Request) bool {
 		s.attachmentError(w, r, "check library upload allowance", err)
 		return false
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, multipartBodyLimit(remaining))
+	r.Body = http.MaxBytesReader(w, r.Body, multipartUploadLimit(remaining))
 	return true
 }
 
@@ -197,7 +197,7 @@ func (s *Server) limitDayCreateForm(w http.ResponseWriter, r *http.Request) bool
 		return false
 	}
 	// Allow the day fields in addition to multipart boundaries and file bytes.
-	r.Body = http.MaxBytesReader(w, r.Body, multipartBodyLimit(multipartBodyLimit(remaining)))
+	r.Body = http.MaxBytesReader(w, r.Body, multipartBodyLimit(multipartUploadLimit(remaining)))
 	return true
 }
 
@@ -249,6 +249,6 @@ func (s *Server) limitAttachmentForm(w http.ResponseWriter, r *http.Request) boo
 		s.authError(w, r, "error.internal", http.StatusInternalServerError)
 		return false
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, multipartBodyLimit(remaining))
+	r.Body = http.MaxBytesReader(w, r.Body, multipartUploadLimit(remaining))
 	return true
 }

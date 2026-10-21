@@ -105,7 +105,7 @@ Status legend: `[ ]` todo, `[x]` done.
 - Integration: `Days.SetArchived(ctx, owner, id, archived, now)` updates only archive state and `updated_at`; repeated archive requests preserve the original timestamp, and missing/foreign days return `ErrNotFound`. `ListArchived`, `ListCollection`, and `ListTag` return owner-scoped days with tags; group lists include archived by default and take `hideArchived` (missing/foreign groups return `ErrNotFound`). `POST /days/{id}/archive` and `/unarchive` are CSRF-protected owner actions on the card, redirecting back to it (including `HX-Redirect`). `/archive` is linked in the navigation. Collection/tag details toggle `?hide_archived=1` via the `group-days` htmx partial, with full-page history restoration and non-JS links. Archive/group lists keep both date halves: upcoming ascending, then past descending, reusing Home's date labels, chips, styles, and always-visible archive badges.
 
 ### [x] T13 Attachments
-- Upload endpoint (multipart streaming), kind detection by sniffing, storage under `/data/media/{user_id}/{uuid}`, `MaxBytesReader` sized to remaining per-card allowance.
+- Upload endpoint (multipart streaming), kind detection by sniffing, storage under `/data/media/{user_id}/{uuid}`, `MaxBytesReader` bounded for upload bytes and remaining per-card allowance.
 - Enforce `max_card_bytes` and `quota_bytes` (user override or site default); maintain `used_bytes` in the same transaction.
 - Serve `/attachments/{id}` with auth + safe headers + range support (SPEC §5).
 - Delete attachment; deleting day removes files; bg style fallback.
@@ -377,6 +377,13 @@ Status legend: `[ ]` todo, `[x]` done.
 - Preserve image thumbnails and work without external icon packages or assets.
 - **Done when**: file-type mapping/thumbnail regressions, full Go tests/vet, and JavaScript tests pass.
 - Verified: file icons cover common document, spreadsheet, image, audio, video, archive, code, slide, design, and application formats, with MIME fallback for unknown extensions; all Go tests/vet and JavaScript tests pass.
+
+### [x] T47 Resize uploaded JPEG and PNG images
+- Resize JPEG and PNG images to a 2048-pixel maximum edge; encode JPEG at quality 82 and preserve PNG transparency.
+- Apply JPEG EXIF orientation before removing metadata; retain other formats unchanged.
+- Calculate duplicate hashes, quotas, and stored usage from processed bytes; cap source uploads and reject excessive image dimensions.
+- **Done when**: resize, orientation, alpha, quota, duplicate, and upload-route regressions pass; full Go tests and vet pass.
+- Verified: JPEG/PNG processing runs for day, day-create, and media-library uploads; stored bytes and quotas use the resized output, and all supported image files preserve their decoded orientation and transparency.
 
 ## Dependency Graph
 

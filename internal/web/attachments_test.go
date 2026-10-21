@@ -4,6 +4,10 @@ import (
 	"bytes"
 	"context"
 	"html"
+	"image"
+	"image/color"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -22,6 +26,37 @@ import (
 	"pandadays/internal/media"
 	"pandadays/internal/share"
 )
+
+func testPNG(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	img.Set(0, 0, color.RGBA{R: 255, A: 255})
+	var data bytes.Buffer
+	if err := png.Encode(&data, img); err != nil {
+		t.Fatal(err)
+	}
+	return data.Bytes()
+}
+
+func testLargeJPEG(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 3000, 1500))
+	for y := 0; y < 1500; y++ {
+		for x := 0; x < 3000; x++ {
+			img.Set(x, y, color.RGBA{
+				R: uint8((x + y) % 256),
+				G: uint8((x*3 + y) % 256),
+				B: uint8((x + y*5) % 256),
+				A: 255,
+			})
+		}
+	}
+	var data bytes.Buffer
+	if err := jpeg.Encode(&data, img, &jpeg.Options{Quality: 100}); err != nil {
+		t.Fatal(err)
+	}
+	return data.Bytes()
+}
 
 func TestAudioPlaybackBelowCardComment(t *testing.T) {
 	s, owner, token, day := attachmentServer(t)
@@ -175,7 +210,7 @@ func TestCardAttachmentListAllTypes(t *testing.T) {
 	}{
 		{"document.txt", []byte("file content")},
 		{"recording.wav", []byte("RIFF\x24\x00\x00\x00WAVEfmt ")},
-		{"photo.png", []byte("\x89PNG\r\n\x1a\n")},
+		{"photo.png", testPNG(t)},
 		{"movie.webm", []byte("\x1a\x45\xdf\xa3\x86\x85V_VP8")},
 	} {
 		if rr := uploadAttachment(t, s, token, day.ID, file.name, file.content); rr.Code != http.StatusSeeOther {
@@ -236,6 +271,51 @@ func TestCardAttachmentListAllTypes(t *testing.T) {
 	}
 }
 
+func TestAttachmentUploadChecksResizedSizeAgainstQuota(t *testing.T) {
+	s, owner, token, day := attachmentServer(t)
+	original := testLargeJPEG(t)
+	quota := int64(len(original) - 1)
+	if _, err := s.db.Exec(`UPDATE users SET quota_bytes = ?, max_card_bytes = ? WHERE id = ?`, quota, quota, owner); err != nil {
+		t.Fatal(err)
+	}
+	response := uploadAttachment(t, s, token, day.ID, "camera.jpg", original)
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf("upload larger-than-quota source: %d %s", response.Code, response.Body.String())
+	}
+	files, err := s.media.ListDay(context.Background(), owner, day.ID)
+	if err != nil || len(files) != 1 {
+		t.Fatalf("uploaded attachments: %+v %v", files, err)
+	}
+	if files[0].Size >= int64(len(original)) || files[0].Size > quota {
+		t.Fatalf("stored image size %d; source %d, quota %d", files[0].Size, len(original), quota)
+	}
+	usage, err := s.media.Usage(context.Background(), owner, day.ID)
+	if err != nil || usage.CardUsed != files[0].Size || usage.UserUsed != files[0].Size {
+		t.Fatalf("usage does not reflect processed image: %+v %v", usage, err)
+	}
+}
+
+func TestDayCreateResizesImageBeforeQuotaCheck(t *testing.T) {
+	s, db, owner, token := authenticatedServer(t)
+	original := testLargeJPEG(t)
+	quota := int64(len(original) - 1)
+	if _, err := db.Exec(`UPDATE users SET quota_bytes = ?, max_card_bytes = ? WHERE id = ?`, quota, quota, owner.ID); err != nil {
+		t.Fatal(err)
+	}
+	response := createDayWithFiles(t, s, token, sessionCSRF(t, s, token), false, dayValues(), string(original))
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf("create with larger-than-quota source: %d %s", response.Code, response.Body.String())
+	}
+	day := onlyDay(t, s, owner.ID)
+	files, err := s.media.ListDay(context.Background(), owner.ID, day.ID)
+	if err != nil || len(files) != 1 {
+		t.Fatalf("day attachments: %+v %v", files, err)
+	}
+	if files[0].Size >= int64(len(original)) || files[0].Size > quota {
+		t.Fatalf("stored image size %d; source %d, quota %d", files[0].Size, len(original), quota)
+	}
+}
+
 func TestAttachmentPermissionErrorIsActionable(t *testing.T) {
 	s := newTestServer(t)
 	rr := httptest.NewRecorder()
@@ -257,7 +337,7 @@ func TestAttachmentRenameAndCompactManager(t *testing.T) {
 	}{
 		{"document.txt", "file", []byte("file content")},
 		{"recording.wav", "audio", []byte("RIFF\x24\x00\x00\x00WAVEfmt ")},
-		{"photo.png", "image", []byte("\x89PNG\r\n\x1a\n")},
+		{"photo.png", "image", testPNG(t)},
 		{"movie.webm", "video", []byte("\x1a\x45\xdf\xa3\x86\x85V_VP8")},
 	} {
 		filename, content := file.filename, file.content
@@ -720,8 +800,7 @@ func TestAttachmentAuthorizationSafeDownloadRangeAndDelete(t *testing.T) {
 func TestClearBackgroundPreservesImageAndOwnership(t *testing.T) {
 	s, owner, token, day := attachmentServer(t)
 	_, otherToken := secondUser(t, s)
-	png := []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a}
-	if rr := uploadAttachment(t, s, token, day.ID, "image.png", png); rr.Code != http.StatusSeeOther {
+	if rr := uploadAttachment(t, s, token, day.ID, "image.png", testPNG(t)); rr.Code != http.StatusSeeOther {
 		t.Fatalf("upload: %d", rr.Code)
 	}
 	files, err := s.media.ListDay(context.Background(), owner, day.ID)
@@ -806,8 +885,7 @@ func TestAttachmentSVGIsDownloadAndBackgroundCleanup(t *testing.T) {
 		t.Fatalf("unsafe SVG response: %d %v", download.Code, download.Header())
 	}
 
-	png := []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a}
-	if rr := uploadAttachment(t, s, token, day.ID, "image.png", png); rr.Code != http.StatusSeeOther {
+	if rr := uploadAttachment(t, s, token, day.ID, "image.png", testPNG(t)); rr.Code != http.StatusSeeOther {
 		t.Fatalf("upload image: %d %s", rr.Code, rr.Body.String())
 	}
 	var imageID int64

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/url"
@@ -151,6 +152,30 @@ func TestStandaloneMediaUploadAndReuse(t *testing.T) {
 				t.Fatalf("reuse duplicated library: %+v %v", items, err)
 			}
 		})
+	}
+}
+
+func TestMediaLibraryUploadChecksResizedSizeAgainstQuota(t *testing.T) {
+	s, db, owner, token := authenticatedServer(t)
+	original := testLargeJPEG(t)
+	quota := int64(len(original) - 1)
+	if _, err := db.Exec(`UPDATE users SET quota_bytes = ? WHERE id = ?`, quota, owner.ID); err != nil {
+		t.Fatal(err)
+	}
+	response := postMediaFiles(t, s, "/media", token, sessionCSRF(t, s, token), false, nil, string(original))
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf("upload larger-than-quota source: %d %s", response.Code, response.Body.String())
+	}
+	items, err := s.media.ListOwner(context.Background(), owner.ID)
+	if err != nil || len(items) != 1 {
+		t.Fatalf("library attachments: %+v %v", items, err)
+	}
+	if items[0].Kind != "image" || items[0].Size >= int64(len(original)) || items[0].Size > quota {
+		t.Fatalf("stored image metadata: %+v; source size %d, quota %d", items[0], len(original), quota)
+	}
+	var used int64
+	if err := db.QueryRow(`SELECT used_bytes FROM users WHERE id = ?`, owner.ID).Scan(&used); err != nil || used != items[0].Size {
+		t.Fatalf("used_bytes = %d, stored size %d, err %v", used, items[0].Size, err)
 	}
 }
 
@@ -305,7 +330,7 @@ func TestRemoveDayAttachmentKeepsReusableLibraryMedia(t *testing.T) {
 	s, _, owner, token := authenticatedServer(t)
 	other, otherToken := secondUser(t, s)
 	ctx := context.Background()
-	d, a := seedMedia(t, s, owner.ID, "Trip", "photo.png", "\x89PNG\r\n\x1a\n")
+	d, a := seedMedia(t, s, owner.ID, "Trip", "photo.png", string(testPNG(t)))
 	target, _ := seedMedia(t, s, owner.ID, "Party", "cake.txt", "sugar")
 	if err := s.media.SetBackground(ctx, owner.ID, d.ID, a.ID); err != nil {
 		t.Fatal(err)
@@ -324,8 +349,9 @@ func TestRemoveDayAttachmentKeepsReusableLibraryMedia(t *testing.T) {
 	id := strconv.FormatInt(a.ID, 10)
 	download := "/attachments/" + id
 	remove := dayPath(d.ID) + "/attachments/" + id + "/remove"
-	if rr := get(s.Handler(), download, otherToken); rr.Code != http.StatusOK {
-		t.Fatalf("shared attachment before removal: %d", rr.Code)
+	beforeDownload := get(s.Handler(), download, otherToken)
+	if beforeDownload.Code != http.StatusOK {
+		t.Fatalf("shared attachment before removal: %d", beforeDownload.Code)
 	}
 	for _, tc := range []struct {
 		path, token string
@@ -371,7 +397,7 @@ func TestRemoveDayAttachmentKeepsReusableLibraryMedia(t *testing.T) {
 	if rr := get(s.Handler(), download, otherToken); rr.Code != http.StatusNotFound {
 		t.Fatalf("removed media still downloadable by recipient: %d", rr.Code)
 	}
-	if rr := get(s.Handler(), download, token); rr.Code != http.StatusOK || rr.Body.String() != "\x89PNG\r\n\x1a\n" {
+	if rr := get(s.Handler(), download, token); rr.Code != http.StatusOK || !bytes.Equal(rr.Body.Bytes(), beforeDownload.Body.Bytes()) {
 		t.Fatalf("owner lost media contents: %d %q", rr.Code, rr.Body.String())
 	}
 	for _, path := range []string{"/media", "/media/" + id, "/days/new"} {

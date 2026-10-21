@@ -20,13 +20,16 @@ import (
 )
 
 var (
-	ErrNotFound     = errors.New("attachment not found")
-	ErrQuota        = errors.New("attachment quota exceeded")
-	ErrTooLarge     = errors.New("attachment exceeds upload limit")
-	ErrUploadStream = errors.New("invalid attachment stream")
-	ErrFileMissing  = errors.New("stored attachment file is missing")
-	ErrFilename     = errors.New("invalid attachment filename")
+	ErrNotFound      = errors.New("attachment not found")
+	ErrQuota         = errors.New("attachment quota exceeded")
+	ErrTooLarge      = errors.New("attachment exceeds upload limit")
+	ErrUploadStream  = errors.New("invalid attachment stream")
+	ErrImageTooLarge = errors.New("image dimensions exceed processing limit")
+	ErrFileMissing   = errors.New("stored attachment file is missing")
+	ErrFilename      = errors.New("invalid attachment filename")
 )
+
+const MaxUploadBytes int64 = 64 << 20
 
 type Attachment struct {
 	ID        int64
@@ -135,12 +138,11 @@ func (s *Store) UploadLibrary(ctx context.Context, ownerID int64, filename strin
 	if remaining == 0 {
 		return Attachment{}, ErrQuota
 	}
-	st, err := s.stage(src, remaining)
+	prepared, err := s.PrepareUpload(src)
 	if err != nil {
 		return Attachment{}, err
 	}
-	defer os.Remove(st.temp)
-	return s.insert(ctx, ownerID, 0, safeFilename(filename), st, true)
+	return s.UploadPrepared(ctx, ownerID, 0, filename, prepared)
 }
 
 func (u Usage) remaining() int64 {
@@ -172,17 +174,76 @@ func (s *Store) Upload(ctx context.Context, ownerID, dayID int64, filename strin
 	if remaining <= 0 {
 		return Attachment{}, ErrQuota
 	}
-	st, err := s.stage(src, remaining)
+	prepared, err := s.PrepareUpload(src)
 	if err != nil {
 		return Attachment{}, err
 	}
-	defer os.Remove(st.temp)
-	return s.insert(ctx, ownerID, dayID, safeFilename(filename), st, true)
+	return s.UploadPrepared(ctx, ownerID, dayID, filename, prepared)
 }
 
 type staged struct {
 	temp, sum, kind, mime string
 	size                  int64
+}
+
+type PreparedUpload struct {
+	staged   staged
+	consumed bool
+}
+
+func (p *PreparedUpload) Size() int64 {
+	if p == nil {
+		return 0
+	}
+	return p.staged.size
+}
+
+func (p *PreparedUpload) SHA256() string {
+	if p == nil {
+		return ""
+	}
+	return p.staged.sum
+}
+
+func (p *PreparedUpload) Close() error {
+	if p == nil || p.staged.temp == "" {
+		return nil
+	}
+	err := os.Remove(p.staged.temp)
+	if errors.Is(err, os.ErrNotExist) {
+		err = nil
+	}
+	p.staged.temp = ""
+	return err
+}
+
+// PrepareUpload stages an upload and resizes supported raster images.
+func (s *Store) PrepareUpload(src io.Reader) (*PreparedUpload, error) {
+	st, err := s.stage(src, MaxUploadBytes)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.resizeImage(&st); err != nil {
+		if removeErr := os.Remove(st.temp); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			err = errors.Join(err, removeErr)
+		}
+		return nil, err
+	}
+	return &PreparedUpload{staged: st}, nil
+}
+
+// UploadPrepared records a previously prepared file. The prepared file is
+// consumed whether insertion succeeds or fails.
+func (s *Store) UploadPrepared(ctx context.Context, ownerID, dayID int64, filename string, prepared *PreparedUpload) (Attachment, error) {
+	if prepared == nil || prepared.consumed || prepared.staged.temp == "" {
+		return Attachment{}, ErrUploadStream
+	}
+	prepared.consumed = true
+	attachment, err := s.insert(ctx, ownerID, dayID, safeFilename(filename), prepared.staged, true)
+	if closeErr := prepared.Close(); closeErr != nil {
+		err = errors.Join(err, fmt.Errorf("clean up prepared upload: %w", closeErr))
+	}
+	return attachment, err
 }
 
 // stage streams src into a temporary blob file, hashing and sniffing it.

@@ -104,26 +104,29 @@ func (s *Server) handleMediaUpload(w http.ResponseWriter, r *http.Request) {
 		s.attachmentError(w, r, "read library quota", err)
 		return
 	}
-	for _, file := range files {
-		if remaining <= 0 || file.Size > remaining {
+	prepared, err := s.prepareUploads(files)
+	if err != nil {
+		s.attachmentSaveError(w, r, "prepare library uploads", err)
+		return
+	}
+	defer func() {
+		if err := closePreparedUploads(prepared); err != nil {
+			s.log.Error("clean up prepared library uploads", "err", err)
+		}
+	}()
+	for _, file := range prepared {
+		if remaining <= 0 || file.Size() > remaining {
 			s.authError(w, r, "attachments.error.limit", http.StatusRequestEntityTooLarge)
 			return
 		}
-		remaining -= file.Size
+		remaining -= file.Size()
 	}
-	if err := s.checkUploadDuplicates(r.Context(), owner, files); err != nil {
+	if err := s.checkUploadDuplicates(r.Context(), owner, prepared); err != nil {
 		s.attachmentSaveError(w, r, "check library uploads", err)
 		return
 	}
-	for _, header := range files {
-		file, err := header.Open()
-		if err == nil {
-			_, err = s.media.UploadLibrary(r.Context(), owner, header.Filename, file)
-			closeErr := file.Close()
-			if err == nil {
-				err = closeErr
-			}
-		}
+	for i, header := range files {
+		_, err := s.media.UploadPrepared(r.Context(), owner, 0, header.Filename, prepared[i])
 		if err != nil {
 			s.attachmentSaveError(w, r, "upload library file", err)
 			return

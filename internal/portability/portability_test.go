@@ -9,6 +9,9 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"os"
 	"path/filepath"
@@ -25,8 +28,6 @@ import (
 
 // testNow is close to the wall clock because staged uploads expire by file mtime.
 var testNow = time.Now().UTC().Truncate(time.Second)
-
-var pngData = append([]byte("\x89PNG\r\n\x1a\n"), bytes.Repeat([]byte{7}, 100)...)
 
 type fixture struct {
 	db    *sql.DB
@@ -169,7 +170,7 @@ func (f *fixture) seed(t *testing.T, owner int64) {
 	if err := f.days.SetArchived(ctx, owner, created[3].ID, true, testNow.Add(-time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	img, err := f.media.Upload(ctx, owner, created[0].ID, "photo 1.png", bytes.NewReader(pngData))
+	img, err := f.media.Upload(ctx, owner, created[0].ID, "photo 1.png", bytes.NewReader(fixturePNG(t)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,6 +183,17 @@ func (f *fixture) seed(t *testing.T, owner int64) {
 	if err := f.media.SetBackground(ctx, owner, created[0].ID, img.ID); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func fixturePNG(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	img.Set(0, 0, color.RGBA{R: 255, A: 255})
+	var data bytes.Buffer
+	if err := png.Encode(&data, img); err != nil {
+		t.Fatal(err)
+	}
+	return data.Bytes()
 }
 
 // snapshot renders the owner's days, groups and media independent of IDs.

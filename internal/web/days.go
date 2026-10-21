@@ -339,15 +339,38 @@ func (s *Server) handleDayCreate(w http.ResponseWriter, r *http.Request) {
 	if r.MultipartForm != nil {
 		uploads = r.MultipartForm.File["file"]
 	}
+	var prepared []*media.PreparedUpload
+	var prepareErr error
 	if len(uploads) > 0 || len(library) > 0 {
 		remaining, err := s.media.NewDayRemaining(r.Context(), owner)
 		if err != nil {
 			s.attachmentError(w, r, "check new day attachments", err)
 			return
 		}
+		prepared, err = s.prepareUploads(uploads)
+		if err != nil {
+			if errors.Is(err, media.ErrDuplicate) || errors.Is(err, media.ErrQuota) ||
+				errors.Is(err, media.ErrTooLarge) || errors.Is(err, media.ErrImageTooLarge) ||
+				errors.Is(err, media.ErrUploadStream) {
+				s.attachmentSaveError(w, r, "prepare new day attachments", err)
+				return
+			}
+			prepareErr = err
+		}
+		defer func() {
+			if err := closePreparedUploads(prepared); err != nil {
+				s.log.Error("clean up prepared new day attachments", "err", err)
+			}
+		}()
 		sizes := make([]int64, 0, len(uploads)+len(library))
-		for _, file := range uploads {
-			sizes = append(sizes, file.Size)
+		if prepareErr == nil {
+			for _, file := range prepared {
+				sizes = append(sizes, file.Size())
+			}
+		} else {
+			for _, file := range uploads {
+				sizes = append(sizes, file.Size)
+			}
 		}
 		for _, a := range library {
 			sizes = append(sizes, a.Size)
@@ -359,7 +382,13 @@ func (s *Server) handleDayCreate(w http.ResponseWriter, r *http.Request) {
 			}
 			remaining -= size
 		}
-		if err := s.checkUploadDuplicates(r.Context(), owner, uploads); errors.Is(err, media.ErrDuplicate) {
+		duplicateErr := error(nil)
+		if prepareErr == nil {
+			duplicateErr = s.checkUploadDuplicates(r.Context(), owner, prepared)
+		} else {
+			duplicateErr = s.checkRawUploadDuplicates(r.Context(), owner, uploads)
+		}
+		if err := duplicateErr; errors.Is(err, media.ErrDuplicate) {
 			s.renderDayForm(w, r, http.StatusConflict, days.Day{}, form, "attachments.error.duplicate")
 			return
 		} else if err != nil {
@@ -386,15 +415,13 @@ func (s *Server) handleDayCreate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	for _, header := range uploads {
-		file, err := header.Open()
-		if err == nil {
-			_, err = s.media.Upload(r.Context(), owner, d.ID, header.Filename, file)
-			closeErr := file.Close()
-			if err == nil {
-				err = closeErr
-			}
-		}
+	if prepareErr != nil {
+		s.log.Error("prepare attachment for new day", "day_id", d.ID, "err", prepareErr)
+		s.renderDayForm(w, r, http.StatusInternalServerError, d, formFromDay(d), "attachments.create_error")
+		return
+	}
+	for i, header := range uploads {
+		_, err := s.media.UploadPrepared(r.Context(), owner, d.ID, header.Filename, prepared[i])
 		if err != nil {
 			s.log.Error("upload attachment for new day", "day_id", d.ID, "err", err)
 			// Keep the saved day and successful uploads; retries must not create duplicates.
