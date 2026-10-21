@@ -1,4 +1,26 @@
 days.example.com {
-	# No request_body max_size is set: Caddy does not impose a body-size limit by default.
-	reverse_proxy 127.0.0.1:8080
+   import logs pandadays
+   import hardening
+   import compress
+
+   request_body {
+      max_size 4GB
+   }
+
+   reverse_proxy pandadays:8080 {
+      import proxy_headers
+
+      # Stream backup downloads, media and restore responses without buffering them.
+      flush_interval -1
+
+      # Retry while the container restarts.
+      lb_try_duration 30s
+      lb_try_interval 500ms
+
+      transport http {
+         dial_timeout 5s
+         # A restore only responds after the upload is checked and the data is swapped in.
+         response_header_timeout 1h
+      }
+   }
 }

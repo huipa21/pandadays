@@ -188,6 +188,18 @@ test("remove updates submitted files, notifies dependents, focuses a control, an
   assert.equal(f.input.files.length, 1);
 });
 
+test("avatar removal clears the cached single-file selection and its preview", () => {
+  const f = fixture({ multiple: false });
+  f.change([file("avatar.png", "image/png")]);
+  f.input.dispatchEvent(new Event("upload:clear"));
+  f.input.dispatchEvent(new Event("change"));
+  assert.equal(f.input.files.length, 0);
+  assert.equal(f.list.children.length, 0);
+  assert.deepEqual(f.revoked, ["blob:preview-1"]);
+  f.change([file("replacement.jpg", "image/jpeg")]);
+  assert.equal(f.input.files[0].name, "replacement.jpg");
+});
+
 test("drop appends, prevents native navigation and notifies form observers once", () => {
   const f = fixture();
   f.change([file("one.txt")]);

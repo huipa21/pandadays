@@ -148,12 +148,12 @@ func TestProfileAndUserInterface(t *testing.T) {
 	}
 	body := get(s.Handler(), "/profile", regularToken).Body.String()
 	for _, want := range []string{`value="` + target.Username + `" readonly`, `value="My Name"`, `name="email"`, `name="current_password"`,
-		`name="avatar"`, `class="avatar-box"`, `class="avatar-remove"`, `action="/profile/avatar/delete"`, `class="password-row"`, `href="/password"`} {
+		`name="avatar"`, `class="avatar-box"`, `data-avatar-remove-button hidden`, `name="remove_avatar"`, `class="password-row"`, `href="/password"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("profile missing %s", want)
 		}
 	}
-	for _, unwanted := range []string{`name="username"`, `name="timezone"`, "<progress", `href="/settings/export"`, `action="/settings/import"`} {
+	for _, unwanted := range []string{`name="username"`, `name="timezone"`, "<progress", `href="/settings/export"`, `action="/settings/import"`, `class="avatar-remove"`} {
 		if strings.Contains(body, unwanted) {
 			t.Errorf("profile should not include %s", unwanted)
 		}

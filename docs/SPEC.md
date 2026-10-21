@@ -2,6 +2,14 @@
 
 PandaDays tracks meaningful days: a future target shows how much time is left; a past day shows how much time has passed. Mobile-first, works on laptop. Multi-user, self-hosted via Docker Compose.
 
+Each day detail card defaults to calendar years/months/days and has its own
+Calendar / Total days toggle (`?display=days`, also usable without JavaScript).
+Total days are counted between the actual dates in the viewer's timezone, not
+converted using fixed month/year lengths. Timed days retain remaining hours and
+minutes. The toggle also applies to repeating days' time since the original date,
+and is available on authorized shared and archived cards. It does not change
+other days or the compact list labels.
+
 The main content fills the available viewport width with responsive page padding,
 without a fixed desktop width cap. Login, setup, and password forms remain
 centered and width-limited for readability.
@@ -79,6 +87,10 @@ Create and edit forms warn through the browser's native exit confirmation when
 unsaved fields would be lost by navigation, reload, or closing the tab. Unchanged
 forms and valid save submissions do not prompt; validation errors remain unsaved.
 Draft contents are not stored in browser storage.
+With JavaScript, all file uploads show transferred-byte progress and remain busy
+while the server processes the uploaded files. Failures are shown explicitly and
+allow retry; validation pages and import/restore previews are preserved. Without
+JavaScript, forms retain native submissions.
 New-day forms include optional multiple-file attachments, uploaded on creation
 under the existing per-day and account quotas. Invalid fields or oversized files
 do not create a day; files must be selected again after validation errors. If a
@@ -313,7 +325,7 @@ Other subcommands:
 
 ### 4.6 Profile and account controls
 - The header has borderless light/dark and globe-icon Chinese/English toggles of the same size, placed to the left of the navigation links for every user. Theme defaults to the browser preference and persists in a browser cookie; switching language saves the signed-in user's preference and stays on the current page, preserving filters. Language is not a profile dropdown.
-- Profile (`/profile`) contains only identity. A square container holds the circular avatar; clicking it opens the file picker (previewed before saving), and an X at the circle's top-right removes an existing avatar. Username (read-only), display name, and email are three rows beside the avatar on wide screens and below it on phones. Usernames are unique and fixed after creation. Changing one's own email requires the current password, sharing the password-change backoff. The password is a fixed mask with a reset button on the right that opens the authenticated password-change form. Actual passwords and hashes are never rendered.
+- Profile (`/profile`) contains only identity. A square container holds the circular avatar, without an overlaid X. Clicking the avatar opens a dialog with upload/replacement and removal controls; the upload area and selected filename stay inside the dialog, never below the avatar. Selected photos preview in the circle; changes and removal apply on saving the form. Admin user creation and editing share this avatar editor. Without JavaScript, clicking the avatar expands the native file input and removal checkbox inline. Username (read-only), display name, and email are three rows beside the avatar on wide screens and below it on phones. Usernames are unique and fixed after creation. Changing one's own email requires the current password, sharing the password-change backoff. The password is a fixed mask with a reset button on the right that opens the authenticated password-change form. Actual passwords and hashes are never rendered.
 - Settings (`/settings`, in the avatar menu) holds timezone, storage usage, and backup & restore (personal export/import). Admins see timezone only.
 - Display names are at most 100 characters; optional administrative comments are at most 10,000. Avatars are optional validated PNG/JPEG uploads, at most 1 MiB and 2048 × 2048 pixels, stored in SQLite and included in full backups. They are separate from day-attachment quotas and accessible only to the account owner or an administrator.
 - Users has a reusable, fixed-style search field with an inset magnifier, Enter-to-search, and an adjacent plus-icon create link. Search matches username, display name, or email case-insensitively.

@@ -391,6 +391,26 @@ Status legend: `[ ]` todo, `[x]` done.
 - **Done when**: favicon markup, SVG content, static serving regressions, full Go tests, and vet pass.
 - Verified: login, setup, and authenticated layouts include the versioned favicon; the embedded SVG contains the panda icon and is publicly served with the correct content type. Full Go tests and vet pass.
 
+### [x] T49 Avatar-triggered upload controls
+- Keep profile and admin create/edit avatar controls hidden until the avatar is clicked.
+- Use a shared dialog for uploading/replacing and removing photos, preview selections in the avatar, and remove the overlaid X.
+- Preserve native no-JavaScript controls and save-time validation/authorization.
+- **Done when**: avatar editor and removal regressions, mobile/desktop browser checks, JavaScript tests, full Go tests, and vet pass.
+- Verified: profile and admin creation dialogs fit at 375px and 1280px; upload previews, replacement, removal, and persisted profile saves pass. Native disclosure fallback retained; full Go tests/vet and all 67 JavaScript tests pass.
+
+### [x] T50 Real upload progress
+- Show transferred-byte progress for multipart file submissions, including new days, attachments, media, avatars, import, and restore.
+- Keep a processing indicator until the server responds; preserve validation pages, redirects, CSRF, unsaved-change protection, and native no-JavaScript submissions.
+- **Done when**: progress, cancellation/failure/retry, server-response, and mobile/desktop regressions pass, along with full Go tests and vet.
+- Verified: real media uploads and reinitialized dialogs at 375px and 1280px; 73 JavaScript tests, full Go tests, and vet pass.
+
+### [x] T51 Per-day total-days display
+- Keep calendar years/months/days as the default; each day detail card has its own Calendar / Total days toggle.
+- Count actual local calendar days across month lengths, leap years, and DST; retain timed remainders and apply the mode to repeating days' next and original-date counters.
+- Preserve shared/archived access checks and support the toggle without JavaScript.
+- **Done when**: date-engine, rendering/access, and mobile/desktop regressions pass, along with full Go tests and vet.
+- Verified: each card switches between 2 months 1 day and 62 days, then back, at 375px and 1280px without overflow; new-day file uploads preserve the saved day/attachment. Leap-year, DST, timed, repeat, today, locale, owner/shared/archived access regressions, 74 JavaScript tests, full Go tests, and vet pass.
+
 ## Dependency Graph
 
 ```mermaid

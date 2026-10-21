@@ -51,8 +51,10 @@ type Calculation struct {
 	Classification    Classification
 	ListLabel         Message
 	Breakdown         Breakdown
+	DaysOnly          Breakdown
 	OccurrenceOrdinal int        // Original = 0; first repeat/anniversary = 1.
 	SinceOriginal     *Breakdown // Only repeating days whose original has arrived.
+	SinceOriginalDays *Breakdown
 }
 
 var ErrInvalidSchedule = errors.New("invalid day schedule")
@@ -137,11 +139,14 @@ func Calculate(s Schedule, now time.Time, loc *time.Location) (Calculation, erro
 		Original: original, Target: target, Classification: state,
 		OccurrenceOrdinal: ordinal,
 		Breakdown:         between(reference, target, allDay, loc),
+		DaysOnly:          betweenDays(reference, target, allDay, loc),
 		ListLabel:         listLabel(reference, target, allDay),
 	}
 	if s.Repeat != RepeatNone && !original.After(reference) {
 		elapsed := between(original, reference, allDay, loc)
 		result.SinceOriginal = &elapsed
+		elapsedDays := betweenDays(original, reference, allDay, loc)
+		result.SinceOriginalDays = &elapsedDays
 	}
 	return result, nil
 }
@@ -188,14 +193,25 @@ func between(start, end time.Time, allDay bool, loc *time.Location) Breakdown {
 		months--
 		cursor = shiftCalendar(base, 0, months, 0, loc)
 	}
-	days := civilDays(cursor, end)
-	base = cursor
-	cursor = shiftCalendar(base, 0, 0, days, loc)
+	result := betweenDays(cursor, end, allDay, loc)
+	result.Years, result.Months = years, months
+	return result
+}
+
+func betweenDays(start, end time.Time, allDay bool, loc *time.Location) Breakdown {
+	if allDay {
+		start, end, loc = civil(start), civil(end), time.UTC
+	}
+	if end.Before(start) {
+		start, end = end, start
+	}
+	days := civilDays(start, end)
+	cursor := shiftCalendar(start, 0, 0, days, loc)
 	if cursor.After(end) {
 		days--
-		cursor = shiftCalendar(base, 0, 0, days, loc)
+		cursor = shiftCalendar(start, 0, 0, days, loc)
 	}
-	result := Breakdown{Years: years, Months: months, Days: days}
+	result := Breakdown{Days: days}
 	if !allDay {
 		minutes := int(end.Sub(cursor) / time.Minute)
 		result.Hours, result.Minutes = minutes/60, minutes%60

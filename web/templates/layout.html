@@ -13,6 +13,7 @@
 <script src="{{asset "app.js"}}" defer></script>
 <script src="{{asset "media-player.js"}}" defer></script>
 <script src="{{asset "upload-preview.js"}}" defer></script>
+<script src="{{asset "upload-progress.js"}}" defer></script>
 {{if .CaptureTimezone}}<script src="{{asset "timezone.js"}}" defer></script>{{end}}
 </head>
 <body hx-headers='{"X-CSRF-Token":"{{.CSRFToken}}"}'>
@@ -49,6 +50,7 @@
 <p class="alert" id="flash" role="alert" hidden data-error-network="{{t "error.network"}}" data-error-generic="{{t "error.internal"}}"></p>
 {{block "content" .}}{{end}}
 </main>
+<template id="upload-messages" data-label="{{t "attachments.uploading"}}" data-uploading="{{t "attachments.uploading_status"}}" data-processing="{{t "upload.processing"}}" data-network="{{t "error.network"}}" data-generic="{{t "error.internal"}}"></template>
 <template id="upload-dropzone-template" data-remove-label="{{t "upload.remove"}}" data-selected-label="{{t "media.selected_files"}}" data-single-hint="{{t "upload.single_hint"}}">
   <span class="upload-dropzone" data-upload-dropzone>
     <svg class="upload-document" viewBox="0 0 64 64" aria-hidden="true"><path class="upload-document-sheet" d="M15 5h23l12 12v36H15z"/><path class="upload-document-fold" d="M38 5v12h12"/><circle class="upload-document-badge" cx="47" cy="47" r="13"/><path class="upload-document-arrow" d="M47 53V40m-5 5 5-5 5 5m-13 7v4h16v-4"/></svg>
@@ -90,7 +92,27 @@
     <dt>{{t "login.password"}}</dt><dd><span aria-label="{{t "profile.password_masked"}}">••••••••</span>{{if .MustChangePassword}} <span class="hint">{{t "profile.password_pending"}}</span>{{end}}</dd>
   </dl>{{end}}
 {{define "csrf-field"}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
-{{define "user-avatar"}}{{if .HasAvatar}}<img class="avatar" src="/users/{{.ID}}/avatar" alt="">{{else}}<svg class="avatar" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="currentColor" opacity=".15"/><circle cx="16" cy="12" r="5" fill="currentColor"/><path d="M6 27a10 10 0 0 1 20 0" fill="currentColor"/></svg>{{end}}{{end}}
+{{define "user-avatar"}}{{if .HasAvatar}}<img class="avatar" src="/users/{{.ID}}/avatar" alt="">{{else}}{{template "default-avatar"}}{{end}}{{end}}
+{{define "default-avatar"}}<svg class="avatar" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="currentColor" opacity=".15"/><circle cx="16" cy="12" r="5" fill="currentColor"/><path d="M6 27a10 10 0 0 1 20 0" fill="currentColor"/></svg>{{end}}
+{{define "avatar-editor"}}<details class="avatar-editor" data-avatar-editor data-has-avatar="{{.HasAvatar}}">
+  <summary class="avatar-box" title="{{t "profile.change_avatar"}}">
+    <span class="visually-hidden">{{t "profile.change_avatar"}}</span>
+    <span class="avatar-circle" data-avatar-preview>{{template "user-avatar" .}}</span>
+  </summary>
+  <div class="form" data-avatar-controls>
+    <h2 id="avatar-dialog-title">{{t "profile.change_avatar"}}</h2>
+    <div data-upload-files>
+      <label>{{t "profile.avatar"}}<input type="file" name="avatar" accept="image/png,image/jpeg" aria-describedby="avatar-hint" data-avatar-input></label>
+    </div>
+    <p class="hint" id="avatar-hint">{{t "profile.avatar_hint"}}</p>
+    <label class="check" data-avatar-remove-label{{if not .HasAvatar}} hidden{{end}}><input type="checkbox" name="remove_avatar" value="1" data-avatar-remove> {{t "profile.remove_avatar"}}</label>
+    <div class="page-actions dialog-actions">
+      <button type="button" class="btn btn-secondary" data-avatar-remove-button hidden>{{t "profile.remove_avatar"}}</button>
+      <button type="button" class="btn btn-secondary" data-close-dialog hidden>{{t "days.dialog.close"}}</button>
+    </div>
+  </div>
+  <template data-avatar-default>{{template "default-avatar"}}</template>
+</details>{{end}}
 {{define "back-users"}}<a class="icon-button" href="/admin/users" aria-label="{{t "admin.back"}}" title="{{t "admin.back"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 5-7 7 7 7M5 12h15"/></svg></a>{{end}}
 {{define "user-search"}}<label class="search-field"><span class="visually-hidden">{{t "admin.search"}}</span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input type="search" name="q" value="{{.Query}}" placeholder="{{t "admin.search_hint"}}"></label>{{end}}
 {{define "password-notice"}}{{if .Password}}<section class="card form" role="status">

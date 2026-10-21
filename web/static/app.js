@@ -353,15 +353,19 @@
     }
     var initialDayValues = dayFormValues();
     var daySubmission = null;
+    var uploadNavigation = false;
     window.addEventListener("beforeunload", function (event) {
       // A valid save may leave the page; canceled submissions must remain protected.
-      if (daySubmission && !daySubmission.defaultPrevented) return;
+      if (uploadNavigation || (daySubmission && !daySubmission.defaultPrevented)) return;
       if (dayForm.dataset.unsaved !== "true" && dayFormValues() === initialDayValues) return;
       event.preventDefault();
       event.returnValue = "";
     });
     dayForm.addEventListener("submit", function (event) {
       daySubmission = event;
+    });
+    dayForm.addEventListener("upload:navigate", function () {
+      uploadNavigation = true;
     });
     dayForm.addEventListener("input", function () {
       daySubmission = null;
@@ -371,6 +375,7 @@
     });
     window.addEventListener("pageshow", function () {
       daySubmission = null;
+      uploadNavigation = false;
     });
   }
 
@@ -487,20 +492,50 @@
     bar.removeAttribute("value");
   });
 
-  // Profile: preview a chosen avatar, and ask for the current password only
-  // once the email has been edited (the field stays visible without JS).
-  var avatarInput = document.querySelector("[data-avatar-input]");
-  var avatarPreview = document.querySelector("[data-avatar-preview]");
-  if (avatarInput && avatarPreview && window.FileReader) {
+  document.querySelectorAll("[data-avatar-editor]").forEach(function (editor) {
+    var avatarInput = editor.querySelector("[data-avatar-input]");
+    var avatarPreview = editor.querySelector("[data-avatar-preview]");
+    var remove = editor.querySelector("[data-avatar-remove]");
+    var removeButton = editor.querySelector("[data-avatar-remove-button]");
+    var dialog = document.createElement("dialog");
+    if (dialog.showModal) {
+      dialog.className = "card confirm-dialog";
+      dialog.setAttribute("aria-labelledby", "avatar-dialog-title");
+      editor.before(dialog);
+      dialog.append(editor.querySelector("[data-avatar-controls]"));
+      editor.querySelector("summary").addEventListener("click", function (event) {
+        event.preventDefault();
+        dialog.showModal();
+      });
+      dialog.querySelector("[data-close-dialog]").hidden = false;
+      dialog.querySelector("[data-avatar-remove-label]").hidden = true;
+    }
     var originalAvatar = Array.from(avatarPreview.childNodes, function (node) { return node.cloneNode(true); });
     function restoreAvatar() {
-      avatarPreview.replaceChildren.apply(avatarPreview, originalAvatar.map(function (node) { return node.cloneNode(true); }));
+      var nodes = remove.checked ? editor.querySelector("[data-avatar-default]").content.childNodes : originalAvatar;
+      avatarPreview.replaceChildren.apply(avatarPreview, Array.from(nodes, function (node) { return node.cloneNode(true); }));
+      removeButton.hidden = !dialog.showModal || (!avatarInput.files.length && (remove.checked || editor.dataset.hasAvatar !== "true"));
     }
-    avatarInput.form.addEventListener("reset", restoreAvatar);
+    avatarInput.form.addEventListener("reset", function () {
+      remove.checked = false;
+      avatarInput.value = "";
+      restoreAvatar();
+    });
+    remove.addEventListener("change", restoreAvatar);
+    removeButton.addEventListener("click", function () {
+      avatarInput.value = "";
+      remove.checked = true;
+      avatarInput.dispatchEvent(new Event("upload:clear"));
+      avatarInput.dispatchEvent(new Event("change", { bubbles: true }));
+      dialog.close();
+    });
     avatarInput.addEventListener("change", function () {
       var file = avatarInput.files && avatarInput.files[0];
       if (!file) { restoreAvatar(); return; }
-      if (!/^image\/(png|jpeg)$/.test(file.type)) return;
+      remove.checked = false;
+      removeButton.hidden = !dialog.showModal;
+      if (dialog.open) dialog.close();
+      if (!/^image\/(png|jpeg)$/.test(file.type) || !window.FileReader) return;
       var reader = new FileReader();
       reader.onload = function () {
         if (avatarInput.files[0] !== file) return;
@@ -511,7 +546,9 @@
       };
       reader.readAsDataURL(file);
     });
-  }
+    restoreAvatar();
+  });
+  // Ask for the current password only once the email has been edited.
   var emailInput = document.querySelector("[data-email-input]");
   var emailPassword = document.querySelector("[data-email-password]");
   if (emailInput && emailPassword) {

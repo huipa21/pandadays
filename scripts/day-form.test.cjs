@@ -106,6 +106,19 @@ test("canceled submissions do not bypass protection", () => {
   assert.equal(f.warns(), true);
 });
 
+test("successful upload responses can navigate but failed uploads remain protected", () => {
+  const f = fixture({ unsaved: true });
+  const event = new Event("submit", { cancelable: true });
+  f.form.dispatchEvent(event);
+  event.preventDefault();
+  f.form.dispatchEvent(new Event("upload:error"));
+  assert.equal(f.warns(), true);
+  f.form.dispatchEvent(new Event("upload:navigate"));
+  assert.equal(f.warns(), false);
+  f.window.dispatchEvent(new Event("pageshow"));
+  assert.equal(f.warns(), true);
+});
+
 test("editing after a submission or returning from page history restores protection", () => {
   for (const type of ["input", "change", "pageshow"]) {
     const f = fixture({ unsaved: true });

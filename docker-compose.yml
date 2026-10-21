@@ -1,6 +1,8 @@
 services:
   pandadays:
     image: localhost/pandadays:latest
+    container_name: pandadays
+    user: "1000:1000"
     pull_policy: never
     expose:
       - "8080"
@@ -17,3 +19,9 @@ services:
       retries: 3
     restart: unless-stopped
     stop_grace_period: 30s
+    networks:
+      - proxynet
+
+networks:
+  proxynet:
+    external: true 

@@ -200,9 +200,7 @@ dialog.confirm-dialog { margin: auto; }
 .confirm-dialog h2 { margin-top: 0; }
 .confirm-dialog > .hint, .confirm-dialog > .alert { margin-top: 1rem; }
 .dialog-actions { justify-content: flex-end; margin: 1rem 0 0; }
-.password-row, .avatar-field { display: flex; align-items: center; gap: 1rem; min-width: 0; }
-.avatar-field label { min-width: 0; }
-.avatar-field input[type="file"] { max-width: 100%; }
+.password-row { display: flex; align-items: center; gap: 1rem; min-width: 0; }
 .password-row { justify-content: space-between; }
 .password-mask { display: block; letter-spacing: 0.15em; }
 .settings-card h2 { margin-top: 0; font-size: 1.125rem; }
@@ -221,31 +219,14 @@ dialog.confirm-dialog { margin: auto; }
   border-radius: var(--radius);
   background: var(--surface);
 }
-.avatar-stage { position: relative; width: 7.5rem; height: 7.5rem; }
-.form .avatar-picker { display: block; width: 100%; height: 100%; border-radius: 50%; cursor: pointer; }
-.avatar-picker:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
-.avatar-circle { display: block; width: 100%; height: 100%; overflow: hidden; border-radius: 50%; }
+.avatar-editor { min-width: 0; }
+.avatar-editor > summary { display: grid; cursor: pointer; list-style: none; }
+.avatar-editor > summary::-webkit-details-marker { display: none; }
+.avatar-editor > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.avatar-editor > [data-avatar-controls] { margin-top: 1rem; }
+.avatar-circle { display: block; width: 7.5rem; height: 7.5rem; overflow: hidden; border-radius: 50%; }
 .avatar-circle .avatar, .avatar-circle img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
-.avatar-picker:hover .avatar-circle { opacity: 0.85; }
-.avatar-remove {
-  position: absolute;
-  top: 2%;
-  right: 2%;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  color: var(--fg);
-  background: var(--surface);
-  border: 1px solid var(--control-border);
-  border-radius: 50%;
-  cursor: pointer;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
-}
-.avatar-remove::before { content: ""; position: absolute; inset: -6px; }
-.avatar-remove .icon { width: 16px; height: 16px; }
-.avatar-remove:hover, .avatar-remove:focus-visible { color: #fff; background: #c53030; border-color: #c53030; }
+.avatar-editor > summary:hover .avatar-circle { opacity: 0.85; }
 @media (min-width: 600px) {
   .profile-layout { grid-template-columns: auto minmax(0, 1fr); align-items: start; justify-items: stretch; gap: 1.5rem; }
 }
@@ -496,6 +477,8 @@ a.btn { text-decoration: none; }
 .audio-player audio { width: 100%; min-width: 0; }
 .audio-player .alert { margin: 0; }
 .attachment-upload { margin-top: 1rem; }
+.upload-progress { display: block; width: 100%; min-width: 0; height: 1rem; accent-color: var(--accent); }
+.upload-status { margin: 0; overflow-wrap: anywhere; }
 .day-attachments .upload-progress { margin: 0; }
 
 /* Day visual states (SPEC §3.5). --state colors the default accent; a custom
@@ -580,6 +563,9 @@ a.btn { text-decoration: none; }
 .day-calendar-date { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 0.25rem 0.75rem; font-size: clamp(1.75rem, 7vw, 3.5rem); font-weight: 800; font-variant-numeric: tabular-nums; text-align: center; }
 .day-calendar-time { font-size: 1.125rem; color: var(--muted); font-weight: 500; }
 .day-countdown { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 0.5rem; color: var(--state-text); }
+.day-display-toggle { display: inline-flex; align-items: center; justify-content: center; align-self: center; min-width: 44px; min-height: 44px; margin: -0.5rem 0; color: var(--muted); }
+.day-display-toggle:hover, .day-display-toggle:focus-visible { color: var(--state-text); }
+.day-display-toggle .icon { width: 20px; height: 20px; }
 .countdown-caption { margin: 0; font-size: 1.125rem; font-weight: 600; }
 .day-clock { font-variant-numeric: tabular-nums; font-weight: 700; }
 .day-card > .day-meta { margin-top: auto; }

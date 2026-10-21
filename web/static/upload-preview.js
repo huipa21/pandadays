@@ -198,6 +198,10 @@
     input.addEventListener("change", () => {
       if (!notifying) append(Array.from(input.files || []));
     });
+    input.addEventListener("upload:clear", () => {
+      selected = [];
+      sync();
+    });
     zone.addEventListener("dragover", (event) => {
       event.preventDefault();
       zone.classList.add("is-dragging");

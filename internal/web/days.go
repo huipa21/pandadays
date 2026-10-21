@@ -56,6 +56,7 @@ type dayPage struct {
 	Direction   string
 	Clock       string
 	Breakdown   []breakdownPart
+	DaysOnly    bool
 	Ordinal     string // repeating days from the first repeat on
 	Since       []breakdownPart
 	SinceClock  string
@@ -463,7 +464,8 @@ func (s *Server) handleDayView(w http.ResponseWriter, r *http.Request) {
 		s.dayFail(w, r, "get", err)
 		return
 	}
-	page := dayPage{pageData: newPageData(r), Day: d, Shared: shared, ShareOwner: shareOwner, ShowComment: showComment}
+	page := dayPage{pageData: newPageData(r), Day: d, Shared: shared, ShareOwner: shareOwner, ShowComment: showComment,
+		DaysOnly: r.URL.Query().Get("display") == "days"}
 	calc, err := days.Calculate(d.Schedule(), s.now(), userLocation(u))
 	if err != nil {
 		s.dayFail(w, r, "calculate", err)
@@ -480,17 +482,28 @@ func (s *Server) handleDayView(w http.ResponseWriter, r *http.Request) {
 		}
 		page.Direction = s.i18n.T(lang, "days.card.time."+direction)
 	}
-	page.Breakdown = s.breakdownParts(lang, calc.Breakdown)
+	breakdown, since := calc.Breakdown, calc.SinceOriginal
+	if page.DaysOnly {
+		breakdown, since = calc.DaysOnly, calc.SinceOriginalDays
+	}
+	parts := func(b days.Breakdown) []breakdownPart {
+		result := s.breakdownParts(lang, b)
+		if page.DaysOnly && len(result) == 0 {
+			result = []breakdownPart{{Value: 0, Unit: s.i18n.T(lang, "days.unit.day.other")}}
+		}
+		return result
+	}
+	page.Breakdown = parts(breakdown)
 	if timed {
-		page.Clock = s.i18n.T(lang, "days.card.hm", calc.Breakdown.Hours, calc.Breakdown.Minutes)
+		page.Clock = s.i18n.T(lang, "days.card.hm", breakdown.Hours, breakdown.Minutes)
 	}
 	if d.Repeat != days.RepeatNone && calc.OccurrenceOrdinal > 0 {
 		page.Ordinal = s.i18n.T(lang, "days.card.ordinal."+string(d.Repeat), ordinalNumber(lang, calc.OccurrenceOrdinal))
 	}
-	if calc.SinceOriginal != nil {
-		page.Since = s.breakdownParts(lang, *calc.SinceOriginal)
+	if since != nil {
+		page.Since = parts(*since)
 		if timed {
-			page.SinceClock = s.i18n.T(lang, "days.card.hm", calc.SinceOriginal.Hours, calc.SinceOriginal.Minutes)
+			page.SinceClock = s.i18n.T(lang, "days.card.hm", since.Hours, since.Minutes)
 		}
 	}
 	if !shared {

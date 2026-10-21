@@ -15,6 +15,8 @@
     <div class="day-countdown">
       {{if or .Breakdown .Clock}}<ul class="breakdown">{{range .Breakdown}}<li><strong>{{.Value}}</strong> {{.Unit}}</li>{{end}}{{with .Clock}}<li class="day-clock">{{.}}</li>{{end}}</ul>{{end}}
       <p class="countdown-caption">{{.Direction}}</p>
+      {{$switchLabel := t "days.display.show_days"}}{{if .DaysOnly}}{{$switchLabel = t "days.display.show_calendar"}}{{end}}
+      <a class="day-display-toggle" href="/days/{{.Day.ID}}{{if not .DaysOnly}}?display=days{{end}}" aria-label="{{$switchLabel}}" title="{{$switchLabel}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4 3 8l4 4"/><path d="M3 8h14"/><path d="m17 20 4-4-4-4"/><path d="M21 16H7"/></svg></a>
     </div>
     {{if ne .Day.Repeat "none"}}<p class="day-next hint">{{t "days.next"}}: {{template "day-when" .}}</p>{{end}}
     {{with .Ordinal}}<p class="day-ordinal"><span aria-hidden="true">🎉</span> {{.}}</p>{{end}}
