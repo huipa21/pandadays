@@ -67,12 +67,18 @@ func TestDayNewFormDefaults(t *testing.T) {
 		`media-picker.js`,
 		`data-day-form data-unsaved="false"`,
 		`name="date" value="` + today + `"`,
+		`name="time" value="00:00"`,
+		`class="day-form-title-row"`,
+		`class="day-form-schedule-row"`,
+		`class="day-form-datetime-inputs"`,
+		`class="day-form-groups-row"`,
 		`<option value="none" selected>Does not repeat</option>`,
 		`<option value="` + strconv.FormatInt(defCol, 10) + `" selected>Default</option>`,
 		`name="tags" value="` + strconv.FormatInt(other.ID, 10) + `">`,
 		`name="no_color" value="1" checked>`,
 		`data-tag-picker data-remove-label="Remove tag"`,
-		`<textarea id="tag-query" name="tag_query" rows="2"`,
+		`<input type="text" id="tag-query" name="tag_query" value=""`,
+		`autocomplete="off" role="combobox"`,
 		`aria-controls="tag-suggestions"`,
 		`data-tag-fallback class="chips"`,
 		`data-icon-options role="group" aria-label="Choose an icon" hidden`,
@@ -119,6 +125,30 @@ func TestDayCreateAppliesDefaults(t *testing.T) {
 		strings.Contains(view.Body.String(), `href="/collections/`+strconv.FormatInt(defCol, 10)+`"`) ||
 		strings.Contains(view.Body.String(), `href="/tags/`+strconv.FormatInt(defTag, 10)+`"`) {
 		t.Fatalf("view: %d", view.Code)
+	}
+}
+
+func TestDayFormPreservesOptionalTime(t *testing.T) {
+	for _, value := range []string{"00:00", "", "09:30"} {
+		t.Run("time="+value, func(t *testing.T) {
+			s, _, u, token := authenticatedServer(t)
+			rr := sessionPost(t, s, "/days", token, dayValues("time", value))
+			if rr.Code != http.StatusSeeOther {
+				t.Fatalf("create: %d %s", rr.Code, rr.Body.String())
+			}
+			d := onlyDay(t, s, u.ID)
+			if d.Time != value {
+				t.Fatalf("saved time = %q, want %q", d.Time, value)
+			}
+			rr = get(s.Handler(), dayPath(d.ID)+"/edit", token)
+			if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `name="time" value="`+value+`"`) {
+				t.Fatal("edit form changed the saved time")
+			}
+			rr = sessionPost(t, s, "/days", token, dayValues("title", "", "time", value))
+			if rr.Code != http.StatusUnprocessableEntity || !strings.Contains(rr.Body.String(), `name="time" value="`+value+`"`) {
+				t.Fatal("validation form changed the submitted time")
+			}
+		})
 	}
 }
 

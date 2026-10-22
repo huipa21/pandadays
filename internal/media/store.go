@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"pandadays/internal/days"
 )
 
 var (
@@ -75,8 +77,8 @@ func (s *Store) usage(ctx context.Context, q interface {
 		JOIN settings mc ON mc.key = 'default_max_card_bytes'
 		JOIN settings qb ON qb.key = 'default_quota_bytes'
 		LEFT JOIN attachments a ON a.day_id = d.id AND a.owner_id = u.id AND a.detached = 0
-		WHERE u.id = ? AND (? = 0 OR d.id IS NOT NULL)
-		GROUP BY u.id`, dayID, ownerID, dayID).
+		WHERE u.id = ? AND (? = 0 OR (d.id IS NOT NULL AND d.is_private = ?))
+		GROUP BY u.id`, dayID, ownerID, dayID, days.IsPrivate(ctx)).
 		Scan(&cardLimit, &userLimit, &u.UserUsed, &u.CardUsed)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Usage{}, ErrNotFound
@@ -339,9 +341,9 @@ func (s *Store) insert(ctx context.Context, ownerID, dayID int64, filename strin
 	}
 	now := time.Now().UTC()
 	res, err := tx.ExecContext(ctx, `INSERT INTO attachments
-		(day_id, owner_id, uuid, kind, filename, mime, size, created_at, sha256)
-		VALUES (NULLIF(?, 0), ?, ?, ?, ?, ?, ?, ?, ?)`,
-		dayID, ownerID, uuid, st.kind, filename, st.mime, st.size, now.Unix(), st.sum)
+		(day_id, owner_id, uuid, kind, filename, mime, size, created_at, sha256, is_private)
+		VALUES (NULLIF(?, 0), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		dayID, ownerID, uuid, st.kind, filename, st.mime, st.size, now.Unix(), st.sum, dayID == 0 && days.IsPrivate(ctx))
 	if err != nil {
 		return Attachment{}, fmt.Errorf("insert attachment metadata: %w", err)
 	}
@@ -433,8 +435,8 @@ func newUUID() (string, error) {
 func (s *Store) ListDay(ctx context.Context, ownerID, dayID int64) ([]Attachment, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT a.id, a.day_id, a.owner_id, a.uuid, COALESCE(a.sha256, ''), a.kind, a.filename, a.mime, a.size, a.created_at
 		FROM attachments a JOIN days d ON d.id = a.day_id
-		WHERE a.owner_id = ? AND d.owner_id = ? AND d.id = ? AND a.detached = 0 ORDER BY a.created_at, a.id`,
-		ownerID, ownerID, dayID)
+		WHERE a.owner_id = ? AND d.owner_id = ? AND d.id = ? AND d.is_private = ? AND a.detached = 0 ORDER BY a.created_at, a.id`,
+		ownerID, ownerID, dayID, days.IsPrivate(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("list attachments: %w", err)
 	}
@@ -465,10 +467,11 @@ type LibraryItem struct {
 func (s *Store) ListOwner(ctx context.Context, ownerID int64) ([]LibraryItem, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT a.id, COALESCE(a.day_id, 0), a.owner_id, a.uuid, COALESCE(a.sha256, ''), a.kind, a.filename, a.mime, a.size, a.created_at, COALESCE(d.title, '')
 		FROM attachments a LEFT JOIN days d ON d.id = a.day_id AND d.owner_id = a.owner_id
-		WHERE a.owner_id = ? AND (a.sha256 IS NULL OR NOT EXISTS (
-			SELECT 1 FROM attachments original WHERE original.owner_id = a.owner_id
+		WHERE a.owner_id = ? AND COALESCE(d.is_private, a.is_private) = ? AND (a.sha256 IS NULL OR NOT EXISTS (
+			SELECT 1 FROM attachments original LEFT JOIN days od ON od.id = original.day_id
+			WHERE original.owner_id = a.owner_id AND COALESCE(od.is_private, original.is_private) = ?
 			AND original.sha256 = a.sha256 AND original.id < a.id
-		)) ORDER BY a.created_at DESC, a.id DESC`, ownerID)
+		)) ORDER BY a.created_at DESC, a.id DESC`, ownerID, days.IsPrivate(ctx), days.IsPrivate(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("list media library: %w", err)
 	}
@@ -559,14 +562,14 @@ func (s *Store) ListAccessibleDay(ctx context.Context, viewerID, dayID int64) ([
 	rows, err := s.db.QueryContext(ctx, `SELECT a.id, a.day_id, a.owner_id, a.uuid, COALESCE(a.sha256, ''), a.kind, a.filename, a.mime, a.size, a.created_at
 		FROM attachments a JOIN days d ON d.id = a.day_id
 		WHERE d.id = ? AND a.detached = 0 AND (
-			d.owner_id = ? OR EXISTS (
+			(d.owner_id = ? AND d.is_private = ?) OR (d.is_private = 0 AND EXISTS (
 				SELECT 1 FROM shares sh
 				JOIN share_recipients sr ON sr.share_id = sh.id
 				WHERE sh.owner_id = d.owner_id AND sr.recipient_id = ? AND sr.status = 'accepted'
 				AND ((sh.target_type = 'day' AND sh.target_id = d.id)
 					OR (sh.target_type = 'collection' AND sh.target_id = d.collection_id AND d.archived_at IS NULL))
-			)
-		) ORDER BY a.created_at, a.id`, dayID, viewerID, viewerID)
+			))
+		) ORDER BY a.created_at, a.id`, dayID, viewerID, days.IsPrivate(ctx), viewerID)
 	if err != nil {
 		return nil, fmt.Errorf("list accessible attachments: %w", err)
 	}
@@ -591,7 +594,8 @@ func (s *Store) Get(ctx context.Context, ownerID, id int64) (Attachment, error) 
 	var a Attachment
 	var created int64
 	err := s.db.QueryRowContext(ctx, `SELECT id, COALESCE(day_id, 0), owner_id, uuid, COALESCE(sha256, ''), kind, filename, mime, size, created_at
-		FROM attachments WHERE owner_id = ? AND id = ?`, ownerID, id).
+		FROM attachments WHERE owner_id = ? AND id = ?
+		AND (? OR COALESCE((SELECT is_private FROM days WHERE days.id = attachments.day_id), is_private) = 0)`, ownerID, id, days.IsPrivate(ctx)).
 		Scan(&a.ID, &a.DayID, &a.OwnerID, &a.UUID, &a.SHA256, &a.Kind, &a.Filename, &a.MIME, &a.Size, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Attachment{}, ErrNotFound
@@ -614,8 +618,9 @@ func (s *Store) Rename(ctx context.Context, ownerID, id int64, filename string) 
 		strings.ContainsAny(filename, "/\\") || safeFilename(filename) != filename {
 		return ErrFilename
 	}
-	res, err := s.db.ExecContext(ctx, `UPDATE attachments SET filename = ? WHERE owner_id = ? AND id = ?`,
-		filename, ownerID, id)
+	res, err := s.db.ExecContext(ctx, `UPDATE attachments SET filename = ? WHERE owner_id = ? AND id = ?
+		AND (? OR COALESCE((SELECT is_private FROM days WHERE days.id = attachments.day_id), is_private) = 0)`,
+		filename, ownerID, id, days.IsPrivate(ctx))
 	if err != nil {
 		return fmt.Errorf("rename attachment: %w", err)
 	}
@@ -635,7 +640,7 @@ func (s *Store) GetAccessible(ctx context.Context, viewerID, id int64) (Attachme
 		FROM attachments a
 		LEFT JOIN days d ON d.id = a.day_id
 		WHERE a.id = ? AND (
-			a.owner_id = ? OR (a.detached = 0 AND EXISTS (
+			(a.owner_id = ? AND (? OR COALESCE(d.is_private, a.is_private) = 0)) OR (a.detached = 0 AND d.is_private = 0 AND EXISTS (
 				SELECT 1
 				FROM shares sh
 				JOIN share_recipients sr ON sr.share_id = sh.id
@@ -645,7 +650,7 @@ func (s *Store) GetAccessible(ctx context.Context, viewerID, id int64) (Attachme
 					OR (sh.target_type = 'collection' AND sh.target_id = d.collection_id AND d.archived_at IS NULL)
 				)
 			))
-		)`, id, viewerID, viewerID))
+		)`, id, viewerID, days.IsPrivate(ctx), viewerID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return Attachment{}, ErrNotFound
 	}
@@ -664,8 +669,8 @@ func (s *Store) Detach(ctx context.Context, ownerID, dayID, id int64) error {
 	defer tx.Rollback()
 	res, err := tx.ExecContext(ctx, `UPDATE attachments SET detached = 1
 		WHERE owner_id = ? AND day_id = ? AND id = ? AND detached = 0
-		AND EXISTS (SELECT 1 FROM days WHERE id = ? AND owner_id = ?)`,
-		ownerID, dayID, id, dayID, ownerID)
+		AND EXISTS (SELECT 1 FROM days WHERE id = ? AND owner_id = ? AND is_private = ?)`,
+		ownerID, dayID, id, dayID, ownerID, days.IsPrivate(ctx))
 	if err != nil {
 		return fmt.Errorf("remove day attachment: %w", err)
 	}
@@ -693,7 +698,8 @@ func (s *Store) Delete(ctx context.Context, ownerID, id int64) error {
 	}
 	defer tx.Rollback()
 	a, err := scanAttachment(tx.QueryRowContext(ctx, `SELECT id, COALESCE(day_id, 0), owner_id, uuid, COALESCE(sha256, ''), kind, filename, mime, size, created_at
-		FROM attachments WHERE owner_id = ? AND id = ?`, ownerID, id))
+		FROM attachments WHERE owner_id = ? AND id = ?
+		AND (? OR COALESCE((SELECT is_private FROM days WHERE days.id = attachments.day_id), is_private) = 0)`, ownerID, id, days.IsPrivate(ctx)))
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -741,10 +747,10 @@ func (s *Store) RemoveFiles(ownerID int64, uuids []string) error {
 func (s *Store) SetBackground(ctx context.Context, ownerID, dayID, attachmentID int64) error {
 	res, err := s.db.ExecContext(ctx, `UPDATE days
 		SET style_bg_attachment_id = ?
-		WHERE id = ? AND owner_id = ? AND EXISTS (
+		WHERE id = ? AND owner_id = ? AND is_private = ? AND EXISTS (
 			SELECT 1 FROM attachments a WHERE a.id = ? AND a.day_id = days.id
 			AND a.owner_id = days.owner_id AND a.kind = 'image' AND a.detached = 0
-		)`, attachmentID, dayID, ownerID, attachmentID)
+		)`, attachmentID, dayID, ownerID, days.IsPrivate(ctx), attachmentID)
 	if err != nil {
 		return fmt.Errorf("set attachment background: %w", err)
 	}
@@ -769,10 +775,10 @@ func (s *Store) Path(ownerID int64, a Attachment) string {
 
 func (s *Store) ClearBackground(ctx context.Context, ownerID, dayID, attachmentID int64) error {
 	res, err := s.db.ExecContext(ctx, `UPDATE days SET style_bg_attachment_id = NULL
-		WHERE id = ? AND owner_id = ? AND EXISTS (
+		WHERE id = ? AND owner_id = ? AND is_private = ? AND EXISTS (
 			SELECT 1 FROM attachments a WHERE a.id = ? AND a.day_id = days.id
 			AND a.owner_id = days.owner_id AND a.kind = 'image'
-		)`, dayID, ownerID, attachmentID)
+		)`, dayID, ownerID, days.IsPrivate(ctx), attachmentID)
 	if err != nil {
 		return fmt.Errorf("clear attachment background: %w", err)
 	}

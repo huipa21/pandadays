@@ -101,7 +101,7 @@ func (s *Server) saveSettings(w http.ResponseWriter, r *http.Request) {
 		s.log.Error("update user preferences", "user_id", user.ID, "err", err)
 		s.authError(w, r, "error.internal", http.StatusInternalServerError)
 	default:
-		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		authRedirect(w, r, "/settings")
 	}
 }
 
@@ -131,5 +131,5 @@ func (s *Server) saveLanguage(w http.ResponseWriter, r *http.Request) {
 		u.RawQuery = q.Encode()
 		target = u.String()
 	}
-	http.Redirect(w, r, target, http.StatusSeeOther)
+	authRedirect(w, r, target)
 }

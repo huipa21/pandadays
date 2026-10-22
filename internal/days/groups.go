@@ -49,11 +49,19 @@ func (k GroupKind) table() string {
 
 // dayCountQuery counts days per group; for collections every day belongs to
 // exactly one collection, for tags it counts tagged days.
-func (k GroupKind) dayCountQuery() string {
-	if k == KindTag {
-		return `(SELECT COUNT(*) FROM day_tags dt WHERE dt.tag_id = g.id)`
+func (k GroupKind) dayCountQuery(ctx context.Context) string {
+	private := "0"
+	if IsPrivate(ctx) {
+		private = "1"
 	}
-	return `(SELECT COUNT(*) FROM days d WHERE d.collection_id = g.id)`
+	predicate := " AND d.is_private = " + private
+	if IncludesPrivate(ctx) {
+		predicate = ""
+	}
+	if k == KindTag {
+		return `(SELECT COUNT(*) FROM day_tags dt JOIN days d ON d.id = dt.day_id WHERE dt.tag_id = g.id AND d.owner_id = g.owner_id` + predicate + `)`
+	}
+	return `(SELECT COUNT(*) FROM days d WHERE d.collection_id = g.id AND d.owner_id = g.owner_id` + predicate + `)`
 }
 
 func (k GroupKind) commentColumn() string {
@@ -97,7 +105,7 @@ func (g *Groups) Kind() GroupKind { return g.kind }
 // List returns the owner's groups, reserved default first, then by name.
 func (g *Groups) List(ctx context.Context, ownerID int64) ([]Group, error) {
 	rows, err := g.db.QueryContext(ctx, `SELECT g.id, g.name, COALESCE(g.color, ''), g.is_reserved, g.created_at, `+
-		g.kind.dayCountQuery()+`, `+g.kind.commentColumn()+` FROM `+g.kind.table()+` g WHERE g.owner_id = ?
+		g.kind.dayCountQuery(ctx)+`, `+g.kind.commentColumn()+` FROM `+g.kind.table()+` g WHERE g.owner_id = ?
 		ORDER BY g.id`, ownerID)
 	if err != nil {
 		return nil, fmt.Errorf("list %s: %w", g.kind.table(), err)
@@ -138,7 +146,7 @@ type scanner interface{ Scan(dest ...any) error }
 
 func (g *Groups) get(ctx context.Context, q querier, ownerID, id int64) (Group, error) {
 	row := q.QueryRowContext(ctx, `SELECT g.id, g.name, COALESCE(g.color, ''), g.is_reserved, g.created_at, `+
-		g.kind.dayCountQuery()+`, `+g.kind.commentColumn()+` FROM `+g.kind.table()+` g WHERE g.owner_id = ? AND g.id = ?`, ownerID, id)
+		g.kind.dayCountQuery(ctx)+`, `+g.kind.commentColumn()+` FROM `+g.kind.table()+` g WHERE g.owner_id = ? AND g.id = ?`, ownerID, id)
 	grp, err := g.scan(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Group{}, ErrNotFound

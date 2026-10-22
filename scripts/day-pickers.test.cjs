@@ -95,7 +95,7 @@ function fixture(enableCreate = false) {
     label.textContent = name;
     return el("label", {}, [checkboxes[i], el("svg"), label]);
   }));
-  const input = el("textarea");
+  const input = el("input", { type: "text", name: "tag_query" });
   const chips = el("div", { "data-tag-chips": "" });
   const list = el("div", { role: "listbox" });
   const empty = el("p", { "data-tag-empty": "" });
@@ -189,6 +189,56 @@ test("tag search supports multiword, Chinese, literal markup, Escape and IME", (
   assert.equal(f.checkboxes[3].checked, false);
   f.key("Enter");
   assert.equal(f.checkboxes[3].checked, true);
+});
+
+test("Tab selects the first suggestion and arrow keys choose another without submitting", () => {
+  const f = fixture();
+  f.type("#");
+  assert.equal(f.key("Tab").defaultPrevented, true);
+  assert.equal(f.checkboxes[1].checked, true);
+  assert.equal(f.input.value, "");
+  assert.equal(f.list.hidden, true);
+  assert.equal(f.input.focused, true);
+  assert.equal(f.key("Tab").defaultPrevented, undefined);
+  f.type("#");
+  f.key("ArrowUp");
+  assert.equal(f.list.children.at(-1).getAttribute("aria-selected"), "true");
+  assert.equal(f.key("Tab").defaultPrevented, true);
+  assert.equal(f.checkboxes[4].checked, true);
+  f.type("#");
+  assert.equal(f.key("Tab", { shiftKey: true }).defaultPrevented, undefined);
+  assert.equal(f.checkboxes[2].checked, false);
+  assert.equal(f.key("Tab", { isComposing: true }).defaultPrevented, undefined);
+  assert.equal(f.checkboxes[2].checked, false);
+  f.key("Escape");
+  assert.equal(f.key("Enter").defaultPrevented, true);
+});
+
+test("hovering an option updates the keyboard selection and options stay out of the Tab order", () => {
+  const f = fixture();
+  f.type("#");
+  assert.equal(f.list.children.every(option => option.tabIndex === -1), true);
+  f.list.children[2].dispatchEvent(new DOMEvent("mouseenter"));
+  assert.equal(f.list.children[2].getAttribute("aria-selected"), "true");
+  assert.equal(f.input.getAttribute("aria-activedescendant"), f.list.children[2].id);
+  f.key("Enter");
+  assert.equal(f.checkboxes[3].checked, true);
+  assert.equal(f.list.hidden, true);
+});
+
+test("Tab accepts a new tag and dismissed or unmatched suggestions retain native Tab navigation", () => {
+  const f = fixture(true);
+  f.type("#Brand new");
+  assert.equal(f.key("Tab").defaultPrevented, true);
+  assert.equal(f.document.querySelector("[data-new-tags]").children[0].value, "Brand new");
+  assert.equal(f.input.value, "");
+  f.type("#birth");
+  f.key("Escape");
+  assert.equal(f.key("Tab").defaultPrevented, undefined);
+  assert.equal(f.checkboxes[1].checked, false);
+  f.type("without hash");
+  assert.equal(f.key("Tab").defaultPrevented, undefined);
+  assert.equal(f.key("Enter", { isComposing: true }).defaultPrevented, undefined);
 });
 
 test("clicking outside dismisses suggestions and selection respects the caret", () => {

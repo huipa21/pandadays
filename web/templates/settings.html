@@ -5,7 +5,7 @@
   {{with .Error}}<p class="alert" role="alert">{{t .}}</p>{{end}}
   <section class="card settings-card" aria-labelledby="settings-timezone">
     <h2 id="settings-timezone">{{t "settings.timezone"}}</h2>
-    <form method="post" action="/settings" class="form">
+    <form method="post" action="{{privatePrefix}}/settings" class="form">
       {{template "csrf-field" .}}
       <label><span class="visually-hidden">{{t "settings.timezone"}}</span>
         <select name="timezone">
@@ -26,9 +26,9 @@
     <h2 id="settings-backup">{{t "settings.backup"}}</h2>
     <h3>{{t "settings.backup_export"}}</h3>
     <p class="hint">{{t "export.hint"}}</p>
-    <p><a class="btn" href="/settings/export" download>{{t "export.download"}}</a></p>
+    <p><a class="btn" href="{{privatePrefix}}/settings/export" download>{{t "export.download"}}</a></p>
     <h3>{{t "settings.backup_import"}}</h3>
-    <form method="post" action="/settings/import" enctype="multipart/form-data" class="form">
+    <form method="post" action="{{privatePrefix}}/settings/import" enctype="multipart/form-data" class="form">
       {{template "csrf-field" .}}
       <label>{{t "import.file"}}<input type="file" name="file" accept=".zip,.csv,application/zip,text/csv" required></label>
       <p class="hint">{{t "import.hint"}}</p>

@@ -16,7 +16,7 @@
 <script src="{{asset "upload-progress.js"}}" defer></script>
 {{if .CaptureTimezone}}<script src="{{asset "timezone.js"}}" defer></script>{{end}}
 </head>
-<body hx-headers='{"X-CSRF-Token":"{{.CSRFToken}}"}'>
+<body hx-headers='{"X-CSRF-Token":"{{.CSRFToken}}"}'{{if or .Private .VaultUnlocked}} hx-history="false"{{end}}>
 <a class="skip-link" href="#main">{{t "nav.skip"}}</a>
 <header class="site-header">
   <a class="brand" href="/"><span aria-hidden="true">🐼</span> {{t "app.name"}}</a>
@@ -27,7 +27,7 @@
     <a href="/">{{t "nav.home"}}</a>
     <a href="/collections">{{t "nav.collections"}}</a>
     <a href="/tags">{{t "nav.tags"}}</a>
-    <a href="/media">{{t "nav.media"}}</a>
+    <a href="{{privatePrefix}}/media">{{t "nav.media"}}</a>
     {{end}}
     {{if .IsAdmin}}<a href="/admin/users">{{t "admin.users"}}</a>
     <a href="/admin/backup">{{t "backup.title"}}</a>
@@ -39,7 +39,7 @@
         <a href="/archive">{{t "nav.archive"}}</a>
         <a href="/sharing">{{t "sharing.title"}}</a>{{end}}
         <a href="/profile">{{t "nav.profile"}}</a>
-        <a href="/settings">{{t "nav.settings"}}</a>
+        <a href="{{privatePrefix}}/settings">{{t "nav.settings"}}</a>
         <form method="post" action="/logout">{{template "csrf-field" $}}<button type="submit" class="link-button">{{t "nav.logout"}}</button></form>
       </div>
     </details>
@@ -59,6 +59,18 @@
   </span>
 </template>
 {{with .User}}{{if .IsAdmin}}<dialog class="card confirm-dialog" id="app-dialog" aria-labelledby="dialog-title"></dialog>{{end}}{{end}}
+{{if .User}}{{if not .User.IsAdmin}}{{if not .VaultUnlocked}}
+<dialog class="card confirm-dialog" id="vault-dialog" aria-labelledby="vault-dialog-title">
+  <div class="page-heading"><h2 id="vault-dialog-title">{{t "vault.title"}}</h2><button type="button" class="icon-button" data-close-dialog aria-label="{{t "days.dialog.close"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div>
+  <p>{{t "vault.password_hint"}}</p>
+  <form method="post" action="/vault/unlock" class="form" data-vault-unlock>
+    {{template "csrf-field" .}}
+    <p class="alert" role="alert" data-vault-error hidden></p>
+    <label>{{t "login.password"}}<input type="password" name="password" autocomplete="current-password" required autofocus></label>
+    <button type="submit" class="btn">{{t "vault.unlock"}}</button>
+  </form>
+</dialog>
+{{end}}{{end}}{{end}}
 </body>
 </html>
 {{end}}
@@ -69,14 +81,19 @@
         <label class="search-field"><span class="visually-hidden">{{t "search.label"}}</span><input type="search" name="q" value="{{.SearchQuery}}" placeholder="{{t "search.hint"}}"></label>
         <button class="icon-button" type="submit" aria-label="{{t "search.submit"}}" title="{{t "search.submit"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg></button>
       </form>
-    </details>{{end}}{{end}}
+    </details>
+    {{if .VaultUnlocked}}<form method="post" action="/vault/lock">{{template "csrf-field" .}}<input type="hidden" name="return_to" value="{{.ReturnTo}}">
+      <button type="submit" class="icon-button vault-toggle" id="vault-toggle" aria-pressed="true" aria-label="{{t "vault.hide"}}" title="{{t "vault.hide"}}">{{template "vault-icon"}}</button>
+    </form>{{else}}<a href="/private/unlock" class="icon-button vault-toggle" id="vault-toggle" role="button" aria-pressed="false" aria-haspopup="dialog" aria-controls="vault-dialog" aria-label="{{t "vault.show"}}" title="{{t "vault.show"}}" data-open-dialog="vault-dialog">{{template "vault-icon"}}</a>{{end}}
+    {{end}}{{end}}
     <button type="button" class="icon-button" id="theme-toggle" aria-label="{{t "theme.toggle"}}" title="{{t "theme.toggle"}}" aria-pressed="false"><svg class="icon theme-light" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg><svg class="icon theme-dark" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14A8 8 0 0 1 10 4a8 8 0 1 0 10 10Z"/></svg></button>
     {{$label := t "language.switch_zh"}}{{if eq .Lang "zh"}}{{$label = t "language.switch_en"}}{{end}}
-    {{if .User}}<form method="post" action="/settings/language">
+    {{if .User}}<form method="post" action="{{privatePrefix}}/settings/language">
       {{template "csrf-field" .}}<input type="hidden" name="return_to" value="{{.ReturnTo}}">
       <button class="icon-button language-toggle" type="submit" name="lang" value="{{if eq .Lang "zh"}}en{{else}}zh{{end}}" aria-label="{{$label}}" title="{{$label}}">{{template "globe-icon"}}</button>
     </form>{{else}}<a class="icon-button language-toggle" href="{{.LanguageURL}}" aria-label="{{$label}}" title="{{$label}}">{{template "globe-icon"}}</a>{{end}}
   </div>{{end}}
+{{define "vault-icon"}}<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><circle cx="12" cy="12" r="4"/><path d="M12 8v2m0 4v2m-4-4h2m4 0h2M7 2v2m10-2v2"/></svg>{{end}}
 {{define "globe-icon"}}<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 3.75 5.5 3.75 9S14.5 18.5 12 21c-2.5-2.5-3.75-5.5-3.75-9S9.5 5.5 12 3Z"/></svg>{{end}}
 {{define "user-details"}}<dl class="profile-details">
     <dt>{{t "profile.avatar"}}</dt><dd>{{template "user-avatar" .}}</dd>
@@ -143,32 +160,32 @@
     <a class="btn btn-secondary" href="/admin/users/{{.ID}}" data-close-dialog>{{t "admin.cancel"}}</a>
     <button class="btn btn-danger" type="submit">{{t "admin.delete"}}</button>
   </form>{{end}}{{end}}
-{{define "media-thumb"}}{{if eq .Kind "image"}}<img src="/attachments/{{.ID}}" alt="" loading="lazy">{{else}}<span class="media-thumb-icon" data-filename="{{.Filename}}" data-mime="{{.MIME}}" aria-hidden="true">FILE</span>{{end}}{{end}}
+{{define "media-thumb"}}{{if eq .Kind "image"}}<img src="{{privatePrefix}}/attachments/{{.ID}}" alt="" loading="lazy">{{else}}<span class="media-thumb-icon" data-filename="{{.Filename}}" data-mime="{{.MIME}}" aria-hidden="true">FILE</span>{{end}}{{end}}
 {{define "audio-player"}}<figure class="audio-player" data-audio-player
     data-error-playback="{{t "attachments.error.playback"}}" data-error-network="{{t "error.network"}}">
-  <figcaption><a href="/attachments/{{.ID}}">{{.Filename}}</a></figcaption>
+  <figcaption><a href="{{privatePrefix}}/attachments/{{.ID}}">{{.Filename}}</a></figcaption>
   {{template "audio-controls" .}}
 </figure>{{end}}
 {{define "audio-controls"}}
-  <audio controls preload="metadata" src="/attachments/{{.ID}}" aria-label="{{.Filename}}"></audio>
+  <audio controls preload="metadata" src="{{privatePrefix}}/attachments/{{.ID}}" aria-label="{{.Filename}}"></audio>
   <p class="alert" role="status" hidden data-audio-error></p>
 {{end}}
 {{define "attachment-row"}}
 <div class="attachment-row">
-  <a class="attachment-name" href="/attachments/{{.ID}}" title="{{.Filename}}">{{.Filename}}</a>
+  <a class="attachment-name" href="{{privatePrefix}}/attachments/{{.ID}}" title="{{.Filename}}">{{.Filename}}</a>
   <span class="hint">{{bytes .Size}}</span>
   {{if eq .Kind "audio"}}<button type="button" class="attachment-action link-button" data-audio-play aria-expanded="false" aria-controls="{{.PlayerID}}" aria-label="{{t "attachments.play"}}: {{.Filename}}" title="{{t "attachments.play"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg></button>{{end}}
   {{if not .Shared}}
   <details class="attachment-edit">
     <summary class="attachment-action link-button" aria-label="{{t "attachments.edit"}}: {{.Filename}}" title="{{t "attachments.edit"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m16 3 5 5-12 12-6 1 1-6zM14 5l5 5"/></svg></summary>
-    <form method="post" action="/attachments/{{.ID}}/rename" class="form attachment-rename">
+    <form method="post" action="{{privatePrefix}}/attachments/{{.ID}}/rename" class="form attachment-rename">
       {{template "csrf-field" .}}
       <label>{{t "attachments.filename"}}<input type="text" name="filename" value="{{.Filename}}" required maxlength="255"></label>
       <button type="submit" class="btn">{{t "days.save"}}</button>
     </form>
   </details>
-  <form method="post" action="/days/{{.DayID}}/attachments/{{.ID}}/remove" class="inline-form"
-        hx-post="/days/{{.DayID}}/attachments/{{.ID}}/remove" hx-confirm="{{t "attachments.remove_confirm"}}">
+  <form method="post" action="{{privatePrefix}}/days/{{.DayID}}/attachments/{{.ID}}/remove" class="inline-form"
+        hx-post="{{privatePrefix}}/days/{{.DayID}}/attachments/{{.ID}}/remove" hx-confirm="{{t "attachments.remove_confirm"}}">
     {{template "csrf-field" .}}
     <button type="submit" class="attachment-action link-button danger-text" aria-label="{{t "attachments.remove"}}: {{.Filename}}" title="{{t "attachments.remove"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button>
   </form>
@@ -181,8 +198,8 @@
 {{end}}
 {{define "attachment-preview"}}
 {{if or (eq .Kind "image") (eq .Kind "video")}}<div class="attachment-preview">
-  {{if eq .Kind "image"}}<a href="/attachments/{{.ID}}"><img src="/attachments/{{.ID}}" alt="{{.Filename}}" loading="lazy"></a>
-  {{else}}<video controls playsinline preload="metadata" src="/attachments/{{.ID}}"></video>{{end}}
+  {{if eq .Kind "image"}}<a href="{{privatePrefix}}/attachments/{{.ID}}"><img src="{{privatePrefix}}/attachments/{{.ID}}" alt="{{.Filename}}" loading="lazy"></a>
+  {{else}}<video controls playsinline preload="metadata" src="{{privatePrefix}}/attachments/{{.ID}}"></video>{{end}}
 </div>{{end}}
 {{end}}
 {{define "media-picker-panel"}}
@@ -253,24 +270,24 @@
   </div>
   <label class="check"><input type="checkbox" name="no_color" value="1"{{if .NoColor}} checked{{end}}> {{t "groups.no_color"}}</label>
 </div>{{end}}
-{{define "day-delete"}}<form method="post" action="/days/{{.Day.ID}}/delete" class="card form danger-zone"
-      hx-post="/days/{{.Day.ID}}/delete" hx-confirm="{{t "days.delete_confirm"}}">
+{{define "day-delete"}}<form method="post" action="{{privatePrefix}}/days/{{.Day.ID}}/delete" class="card form danger-zone"
+      hx-post="{{privatePrefix}}/days/{{.Day.ID}}/delete" hx-confirm="{{t "days.delete_confirm"}}">
   {{template "csrf-field" .}}
   <button type="submit" class="btn btn-danger">{{t "days.delete"}}</button>
 </form>{{end}}
 {{/* Custom accent color is an SVG fill because the CSP forbids inline styles; CSS supplies state defaults. */}}
 {{define "day-accent"}}<svg class="day-accent" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true"><rect width="1" height="1"{{with .}} fill="{{.}}"{{end}}/></svg>{{end}}
 {{define "day-icon"}}{{if .Day.StyleIcon}}{{.Day.StyleIcon}}{{else if .Day.ArchivedAt}}📦{{else if eq .State "past"}}✓{{else}}⏳{{end}}{{end}}
-{{define "day-badges"}}{{if .Day.ArchivedAt}}<span class="badge badge-archived"><span aria-hidden="true">📦</span> {{t "days.archived"}}</span>{{end}}{{end}}
+{{define "day-badges"}}{{if .Day.Private}}<span class="badge badge-private">{{t "days.field.private"}}</span>{{end}}{{if .Day.ArchivedAt}}<span class="badge badge-archived"><span aria-hidden="true">📦</span> {{t "days.archived"}}</span>{{end}}{{end}}
 {{define "day-when"}}<time datetime="{{.Target.Format "2006-01-02"}}">{{.Target.Format "2006-01-02"}}</time>{{if .Day.Time}} {{.Target.Format "15:04"}}{{end}}{{end}}
-{{define "day-item"}}<li{{if .Shared}} class="shared-list-item"{{end}}><a class="day-item day-{{.State}}{{if .Shared}} day-shared{{end}}{{if .Day.ArchivedAt}} day-archived{{end}}" href="/days/{{.Day.ID}}">
+{{define "day-item"}}{{$prefix := ""}}{{if .Day.Private}}{{$prefix = "/private"}}{{end}}<li{{if .Shared}} class="shared-list-item"{{end}}><a class="day-item day-{{.State}}{{if .Shared}} day-shared{{end}}{{if .Day.Private}} day-private{{end}}{{if .Day.ArchivedAt}} day-archived{{end}}" href="{{$prefix}}/days/{{.Day.ID}}">
   {{template "day-accent" .Day.StyleColor}}
   <span class="day-item-icon" aria-hidden="true">{{template "day-icon" .}}</span>
   <span class="day-item-when"><time class="day-item-date" datetime="{{.Target.Format "2006-01-02"}}">{{.Target.Format "2006-01-02"}}</time>{{if .Day.Time}}<span class="day-item-time">{{.Target.Format "15:04"}}</span>{{end}}</span>
   <span class="day-item-main">
     <span class="day-item-title">{{.Day.Title}}</span>
     {{if ne .Day.Repeat "none"}}<span class="day-item-repeat"><span aria-hidden="true">↻</span> {{t (printf "days.repeat.%s" .Day.Repeat)}}</span>{{end}}
-    {{$show := false}}{{if or .Day.ArchivedAt .Shared}}{{$show = true}}{{end}}{{with .Collection}}{{if not .Reserved}}{{$show = true}}{{end}}{{end}}{{range .Tags}}{{if not .Reserved}}{{$show = true}}{{end}}{{end}}
+    {{$show := false}}{{if or .Day.ArchivedAt .Shared .Day.Private}}{{$show = true}}{{end}}{{with .Collection}}{{if not .Reserved}}{{$show = true}}{{end}}{{end}}{{range .Tags}}{{if not .Reserved}}{{$show = true}}{{end}}{{end}}
     {{if $show}}<span class="chips chips-small">{{template "day-badges" .}}{{if .Shared}}<span class="badge badge-shared">{{t "sharing.from" .ShareOwner}}</span>{{end}}{{with .Collection}}{{if not .Reserved}}<span class="chip chip-small" title="{{t "days.field.collection"}}"><span aria-hidden="true">📚</span><span class="visually-hidden">{{t "days.field.collection"}}:</span> {{if .Color}}{{template "swatch" .Color}} {{end}}{{.Name}}</span>{{end}}{{end}}{{$first := true}}{{range .Tags}}{{if not .Reserved}}<span class="chip chip-small">{{if $first}}<span class="visually-hidden">{{t "days.field.tags"}}:</span> {{$first = false}}{{end}}{{template "swatch" .Color}} {{.Name}}</span>{{end}}{{end}}</span>{{end}}
   </span>
   <span class="day-item-label">{{.Label}}</span>

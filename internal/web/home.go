@@ -83,10 +83,13 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		s.dayFail(w, r, "list groups for", err)
 		return
 	}
-	shared, err := s.shares.ListForUser(r.Context(), u.ID, false)
-	if err != nil {
-		s.dayFail(w, r, "list shared days", err)
-		return
+	var shared []share.SharedDay
+	if !days.IsPrivate(r.Context()) || days.IncludesPrivate(r.Context()) {
+		shared, err = s.shares.ListForUser(r.Context(), u.ID, false)
+		if err != nil {
+			s.dayFail(w, r, "list shared days", err)
+			return
+		}
 	}
 	sharedDays := make([]days.Day, 0, len(shared))
 	sharedByID := make(map[int64]share.SharedDay, len(shared))

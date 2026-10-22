@@ -4,7 +4,7 @@
   <p><a href="{{.Section.Base}}">← {{t (printf "%s.title" .Section.Key)}}</a></p>
   {{template "group-days" .}}
   {{$path := printf "%s/%d" .Section.Base .Group.ID}}{{if .HideArchived}}{{$path = printf "%s?hide_archived=1" $path}}{{end}}
-  {{if eq .Section.Key "collections"}}
+  {{if and (eq .Section.Key "collections") (not .Private)}}
   <dialog id="group-share" class="card confirm-dialog" aria-labelledby="group-share-title"{{if eq .Dialog "share"}} open data-auto-open{{end}}>
   <section class="form">
     <h2 id="group-share-title">{{t "sharing.manage"}}</h2>
@@ -81,7 +81,7 @@
       </form>
       <a class="icon-button" href="{{$dialogURL}}edit" data-open-dialog="group-edit" aria-label="{{t "groups.edit"}}" title="{{t "groups.edit"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m16 3 5 5-12 12-6 1 1-6ZM14 5l5 5"/></svg></a>
       {{if not .Group.Reserved}}<a class="icon-button danger-text" href="{{$dialogURL}}delete" data-open-dialog="group-delete" aria-label="{{t "groups.delete"}}" title="{{t "groups.delete"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/></svg></a>{{end}}
-      {{if eq .Section.Key "collections"}}<a class="icon-button" href="{{$dialogURL}}share" data-open-dialog="group-share" aria-label="{{t "sharing.manage"}}" title="{{t "sharing.manage"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m9 10.5 6-4m-6 7 6 4"/></svg></a>{{end}}
+      {{if and (eq .Section.Key "collections") (not .Private)}}<a class="icon-button" href="{{$dialogURL}}share" data-open-dialog="group-share" aria-label="{{t "sharing.manage"}}" title="{{t "sharing.manage"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m9 10.5 6-4m-6 7 6 4"/></svg></a>{{end}}
     </div>
   </header>
   <p class="hint">{{if eq .Group.DayCount 1}}{{t "groups.days.one" .Group.DayCount}}{{else}}{{t "groups.days.other" .Group.DayCount}}{{end}}</p>

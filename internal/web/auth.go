@@ -87,7 +87,7 @@ func adminSiteOnly(next http.Handler) http.Handler {
 				authRedirect(w, r, "/admin/users")
 				return
 			}
-			for _, prefix := range []string{"/days", "/archive", "/collections", "/tags", "/sharing", "/shared", "/shares", "/messages", "/attachments", "/media", "/settings/export", "/settings/import"} {
+			for _, prefix := range []string{"/vault", "/private", "/days", "/archive", "/collections", "/tags", "/sharing", "/shared", "/shares", "/messages", "/attachments", "/media", "/settings/export", "/settings/import"} {
 				if r.URL.Path == prefix || strings.HasPrefix(r.URL.Path, prefix+"/") {
 					http.NotFound(w, r)
 					return
@@ -115,6 +115,7 @@ func forcePasswordChange(next http.Handler) http.Handler {
 }
 
 func authRedirect(w http.ResponseWriter, r *http.Request, target string) {
+	target = privatePath(r, target)
 	w.Header().Set("Cache-Control", "no-store")
 	if strings.EqualFold(r.Header.Get("HX-Request"), "true") {
 		w.Header().Set("HX-Redirect", target)

@@ -4,7 +4,7 @@
   {{if .Shared}}<p><a href="/shared">← {{t "sharing.received"}}</a></p>{{end}}
   <article class="card day-card day-{{.State}}{{if .Shared}} day-shared{{end}}{{if .Day.ArchivedAt}} day-archived{{end}}">
     {{template "day-accent" .Day.StyleColor}}
-    {{range .Attachments}}{{if eq $.Day.StyleBgAttachmentID .ID}}<img class="day-background" src="/attachments/{{.ID}}" alt="">{{end}}{{end}}
+    {{range .Attachments}}{{if eq $.Day.StyleBgAttachmentID .ID}}<img class="day-background" src="{{privatePrefix}}/attachments/{{.ID}}" alt="">{{end}}{{end}}
     <header class="day-card-head">
       <span class="day-card-icon" aria-hidden="true">{{template "day-icon" .}}</span>
       <h1 class="day-heading">{{.Day.Title}}</h1>
@@ -16,9 +16,9 @@
       {{if or .Breakdown .Clock}}<ul class="breakdown">{{range .Breakdown}}<li><strong>{{.Value}}</strong> {{.Unit}}</li>{{end}}{{with .Clock}}<li class="day-clock">{{.}}</li>{{end}}</ul>{{end}}
       <p class="countdown-caption">{{.Direction}}</p>
       {{$switchLabel := t "days.display.show_days"}}{{if .DaysOnly}}{{$switchLabel = t "days.display.show_calendar"}}{{end}}
-      <a class="day-display-toggle" href="/days/{{.Day.ID}}{{if not .DaysOnly}}?display=days{{end}}" aria-label="{{$switchLabel}}" title="{{$switchLabel}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4 3 8l4 4"/><path d="M3 8h14"/><path d="m17 20 4-4-4-4"/><path d="M21 16H7"/></svg></a>
+      <a class="day-display-toggle" href="{{privatePrefix}}/days/{{.Day.ID}}{{if not .DaysOnly}}?display=days{{end}}" aria-label="{{$switchLabel}}" title="{{$switchLabel}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4 3 8l4 4"/><path d="M3 8h14"/><path d="m17 20 4-4-4-4"/><path d="M21 16H7"/></svg></a>
       {{if and .Day.ArchivedAt (not .Shared)}}{{$playLabel := t "days.archive.play"}}{{if .Day.ArchiveLive}}{{$playLabel = t "days.archive.pause"}}{{end}}
-      <form method="post" action="/days/{{.Day.ID}}/{{if .Day.ArchiveLive}}pause{{else}}play{{end}}" hx-post="/days/{{.Day.ID}}/{{if .Day.ArchiveLive}}pause{{else}}play{{end}}" class="inline-form day-play-form">
+      <form method="post" action="{{privatePrefix}}/days/{{.Day.ID}}/{{if .Day.ArchiveLive}}pause{{else}}play{{end}}" hx-post="{{privatePrefix}}/days/{{.Day.ID}}/{{if .Day.ArchiveLive}}pause{{else}}play{{end}}" class="inline-form day-play-form">
         {{template "csrf-field" .}}
         {{if .DaysOnly}}<input type="hidden" name="display" value="days">{{end}}
         <button type="submit" class="day-play-toggle" aria-label="{{$playLabel}}" title="{{$playLabel}}">{{if .Day.ArchiveLive}}<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg>{{else}}<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14"/><path d="M16 5v14"/></svg>{{end}}</button>
@@ -35,23 +35,23 @@
         {{if not .Created.IsZero}}<span class="day-created">{{t "days.created"}} <time datetime="{{.Created.Format "2006-01-02T15:04:05Z07:00"}}">{{.Created.Format "2006-01-02 15:04"}}</time></span>{{end}}
         <span class="day-repeat"><span aria-hidden="true">↻</span> {{t (printf "days.repeat.%s" .Day.Repeat)}}</span>
         {{if not .Shared}}
-        {{if not .Collection.Reserved}}<a class="chip chip-small" href="/collections/{{.Collection.ID}}">{{template "swatch" .Collection.Color}} {{template "group-name" .Collection}}</a>{{end}}
-        {{range .Tags}}{{if not .Reserved}}<a class="chip chip-small" href="/tags/{{.ID}}">{{template "swatch" .Color}} {{template "group-name" .}}</a>{{end}}{{end}}
+        {{if not .Collection.Reserved}}<a class="chip chip-small" href="{{privatePrefix}}/collections/{{.Collection.ID}}">{{template "swatch" .Collection.Color}} {{template "group-name" .Collection}}</a>{{end}}
+        {{range .Tags}}{{if not .Reserved}}<a class="chip chip-small" href="{{privatePrefix}}/tags/{{.ID}}">{{template "swatch" .Color}} {{template "group-name" .}}</a>{{end}}{{end}}
         {{end}}
       </div>
       {{if not .Shared}}<details class="dropdown day-actions">
         <summary class="dots" aria-label="{{t "days.actions"}}" title="{{t "days.actions"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></summary>
         <div class="dropdown-panel">
-          <a href="/days/{{.Day.ID}}/edit">{{t "days.action.edit"}}</a>
-          <form method="post" action="/days/{{.Day.ID}}/{{if .Day.ArchivedAt}}unarchive{{else}}archive{{end}}" hx-post="/days/{{.Day.ID}}/{{if .Day.ArchivedAt}}unarchive{{else}}archive{{end}}">
+          <a href="{{privatePrefix}}/days/{{.Day.ID}}/edit">{{t "days.action.edit"}}</a>
+          <form method="post" action="{{privatePrefix}}/days/{{.Day.ID}}/{{if .Day.ArchivedAt}}unarchive{{else}}archive{{end}}" hx-post="{{privatePrefix}}/days/{{.Day.ID}}/{{if .Day.ArchivedAt}}unarchive{{else}}archive{{end}}">
             {{template "csrf-field" .}}
             <button type="submit" class="link-button">{{if .Day.ArchivedAt}}{{t "days.action.unarchive"}}{{else}}{{t "days.action.archive"}}{{end}}</button>
           </form>
-          <form method="post" action="/days/{{.Day.ID}}/delete" data-confirm="{{t "days.delete_confirm"}}">
+          <form method="post" action="{{privatePrefix}}/days/{{.Day.ID}}/delete" data-confirm="{{t "days.delete_confirm"}}">
             {{template "csrf-field" .}}
             <button type="submit" class="link-button danger-text">{{t "days.action.delete"}}</button>
           </form>
-          <a href="#day-sharing" data-expand-section="day-sharing">{{t "days.action.share"}}</a>
+          {{if not .Day.Private}}<a href="#day-sharing" data-expand-section="day-sharing">{{t "days.action.share"}}</a>{{end}}
           <a href="#attachments" data-expand-section="attachments">{{t "days.action.attachment"}}</a>
         </div>
       </details>{{end}}
@@ -78,8 +78,8 @@
         {{template "attachment-row" ($.AttachmentRow . "attachment")}}
         {{template "attachment-preview" .}}
         {{if not $.Shared}}
-          {{if eq .Kind "image"}}<form method="post" action="/days/{{$.Day.ID}}/attachments/{{.ID}}/background" class="inline-form"
-                hx-post="/days/{{$.Day.ID}}/attachments/{{.ID}}/background">
+          {{if eq .Kind "image"}}<form method="post" action="{{privatePrefix}}/days/{{$.Day.ID}}/attachments/{{.ID}}/background" class="inline-form"
+                hx-post="{{privatePrefix}}/days/{{$.Day.ID}}/attachments/{{.ID}}/background">
             {{template "csrf-field" $}}
             {{if eq $.Day.StyleBgAttachmentID .ID}}<input type="hidden" name="clear" value="1">{{end}}
             <button type="submit" class="link-button">{{if eq $.Day.StyleBgAttachmentID .ID}}{{t "attachments.clear_background"}}{{else}}{{t "attachments.set_background"}}{{end}}</button>
@@ -90,7 +90,7 @@
     {{else}}<p class="hint">{{t "days.attachments_empty"}}</p>{{end}}
     {{if not .Shared}}<details class="attachment-add">
       <summary class="btn">{{t "attachments.add"}}</summary>
-      <form method="post" action="/days/{{.Day.ID}}/attachments" enctype="multipart/form-data"
+      <form method="post" action="{{privatePrefix}}/days/{{.Day.ID}}/attachments" enctype="multipart/form-data"
           class="form attachment-upload" data-media-picker data-media-inline>
       {{template "csrf-field" .}}
       {{template "media-picker-panel" .}}
@@ -100,7 +100,7 @@
     {{end}}
       </div>
     </section>
-  <section class="card day-menu-section day-sharing" id="day-sharing" tabindex="-1" aria-labelledby="sharing-heading">
+  {{if not .Day.Private}}<section class="card day-menu-section day-sharing" id="day-sharing" tabindex="-1" aria-labelledby="sharing-heading">
     <a class="day-dialog-close link-button" href="#" data-close-dialog>{{t "days.dialog.close"}}</a>
     <h2 class="day-section-heading" id="sharing-heading">{{t "sharing.manage"}}</h2>
     <div class="form">
@@ -124,7 +124,7 @@
       </form>
       {{end}}
     </div>
-  </section>
+  </section>{{end}}
   <script src="{{asset "attachments.js"}}" defer></script>
   <script src="{{asset "media-picker.js"}}" defer></script>
   {{end}}

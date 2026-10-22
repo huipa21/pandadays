@@ -44,6 +44,50 @@
     return flash() ? flash().dataset.errorGeneric : "";
   }
 
+  var vaultForm = document.querySelector("[data-vault-unlock]");
+  if (vaultForm) {
+    var vaultDialog = vaultForm.closest("dialog");
+    var vaultError = vaultForm.querySelector("[data-vault-error]");
+    vaultDialog.addEventListener("close", function () {
+      vaultForm.reset();
+      vaultError.hidden = true;
+    });
+    vaultForm.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var submit = vaultForm.querySelector('button[type="submit"]');
+      submit.disabled = true;
+      vaultError.hidden = true;
+      try {
+        var response = await fetch(vaultForm.action, {
+          method: "POST",
+          headers: { "Accept": "application/json" },
+          body: new URLSearchParams(new FormData(vaultForm))
+        });
+        if (response.redirected) {
+          window.location.assign(response.url);
+          return;
+        }
+        if ((response.headers.get("Content-Type") || "").indexOf("application/json") !== -1) {
+          var result = await response.json();
+          if (response.ok) {
+            window.location.reload();
+            return;
+          }
+          vaultError.textContent = result.error;
+        } else {
+          vaultError.textContent = flash().dataset.errorGeneric;
+        }
+        vaultError.hidden = false;
+        vaultForm.querySelector('input[name="password"]').select();
+      } catch (error) {
+        vaultError.textContent = flash().dataset.errorNetwork;
+        vaultError.hidden = false;
+      } finally {
+        submit.disabled = false;
+      }
+    });
+  }
+
   function progressFor(elt) {
     return elt && elt.querySelector ? elt.querySelector("[data-upload-progress]") : null;
   }
@@ -64,7 +108,7 @@
         queryLabel.querySelector("[data-tag-query-text]").classList.add("visually-hidden");
         editor.append(queryLabel);
       }
-      var input = editor.querySelector("textarea");
+      var input = editor.querySelector("[name=tag_query]");
       var chips = editor.querySelector("[data-tag-chips]");
       var list = editor.querySelector("[role=listbox]");
       var empty = editor.querySelector("[data-tag-empty]");
@@ -167,10 +211,15 @@
           option.type = "button";
           option.id = "tag-option-" + (tag.input ? tag.input.value : "new");
           option.className = "tag-option";
+          option.tabIndex = -1;
           option.setAttribute("role", "option");
           if (tag.swatch) option.append(tag.swatch.cloneNode(true));
           option.append(document.createTextNode((tag.create ? picker.dataset.createLabel + " " : "") + tag.name));
           option.addEventListener("mousedown", function (event) { event.preventDefault(); });
+          option.addEventListener("mouseenter", function () {
+            active = matches.indexOf(tag);
+            highlight();
+          });
           option.addEventListener("click", function () { select(tag); });
           list.append(option);
         });
@@ -192,9 +241,11 @@
           event.preventDefault();
           active = (active + (event.key === "ArrowDown" ? 1 : matches.length - 1)) % matches.length;
           highlight();
-        } else if (!list.hidden && event.key === "Enter") {
+        } else if (!list.hidden && (event.key === "Enter" || (event.key === "Tab" && !event.shiftKey))) {
           event.preventDefault();
           select(matches[active]);
+        } else if (event.key === "Enter") {
+          event.preventDefault();
         }
       });
       picker.addEventListener("change", function (event) {

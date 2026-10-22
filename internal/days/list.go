@@ -98,8 +98,8 @@ func (s *Days) ListTag(ctx context.Context, ownerID, tagID int64, hideArchived b
 
 // list accepts only predicates supplied by the repository, never user input.
 func (s *Days) list(ctx context.Context, ownerID int64, filter string, args ...any) ([]Day, error) {
-	args = append([]any{ownerID}, args...)
-	where := " WHERE owner_id = ? AND " + filter
+	args = append([]any{ownerID, IncludesPrivate(ctx), IsPrivate(ctx)}, args...)
+	where := " WHERE owner_id = ? AND (? OR is_private = ?) AND " + filter
 	rows, err := s.db.QueryContext(ctx, `SELECT `+dayColumns+` FROM days
 		`+where+` ORDER BY id`, args...)
 	if err != nil {

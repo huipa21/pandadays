@@ -1,5 +1,7 @@
 // Package portability exports a user's own days as a zip (days.csv + media)
 // and imports such an archive (or a bare days.csv) in merge mode (SPEC §6).
+// Exports contain only the context's privacy mode; the optional is_private
+// column preserves privacy when importing into either mode.
 package portability
 
 import (
@@ -8,7 +10,7 @@ import (
 
 // Columns is the days.csv header (SPEC §6.1).
 var Columns = []string{"title", "date", "time", "repeat", "collection", "tags", "comment",
-	"archived", "style_color", "style_icon", "style_bg", "attachments", "archive_live"}
+	"archived", "style_color", "style_icon", "style_bg", "attachments", "archive_live", "is_private"}
 
 const (
 	csvName     = "days.csv"

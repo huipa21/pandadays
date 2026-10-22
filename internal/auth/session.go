@@ -20,11 +20,12 @@ const SessionCookieName = "panda_session"
 var ErrSession = errors.New("invalid or expired session")
 
 type Session struct {
-	User       User
-	TokenHash  string
-	CSRFToken  string
-	Persistent bool
-	ExpiresAt  time.Time
+	VaultUnlocked bool
+	User          User
+	TokenHash     string
+	CSRFToken     string
+	Persistent    bool
+	ExpiresAt     time.Time
 }
 
 func randomToken() (string, error) {
@@ -101,13 +102,13 @@ func (s *Service) LookupSession(ctx context.Context, token string, now time.Time
 	err := s.db.QueryRowContext(ctx, `SELECT u.id, u.username, u.email,
 		u.is_admin, u.is_active, u.must_change_password, COALESCE(u.lang, ''), COALESCE(u.timezone, ''),
 		u.display_name, u.comment, u.created_at, COALESCE(length(u.avatar), 0) > 0,
-		s.persistent, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
+		s.persistent, s.expires_at, s.vault_unlocked FROM sessions s JOIN users u ON u.id = s.user_id
 		WHERE s.token_hash = ? AND s.expires_at > ? AND u.is_active = 1`,
 		session.TokenHash, now.Unix()).Scan(
 		&session.User.ID, &session.User.Username, &session.User.Email,
 		&session.User.IsAdmin, &session.User.IsActive, &session.User.MustChangePassword,
 		&session.User.Lang, &session.User.Timezone, &session.User.DisplayName, &session.User.Comment,
-		&created, &session.User.HasAvatar, &session.Persistent, &expires)
+		&created, &session.User.HasAvatar, &session.Persistent, &expires, &session.VaultUnlocked)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrSession
 	}

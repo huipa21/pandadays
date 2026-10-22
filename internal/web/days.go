@@ -16,6 +16,7 @@ import (
 )
 
 type dayForm struct {
+	Private      bool
 	Title        string
 	Date         string
 	Time         string
@@ -198,6 +199,7 @@ func parseID(v string) int64 {
 
 func parseDayForm(r *http.Request) dayForm {
 	f := dayForm{
+		Private:      r.PostForm.Get("private") != "",
 		Title:        r.PostForm.Get("title"),
 		Date:         r.PostForm.Get("date"),
 		Time:         r.PostForm.Get("time"),
@@ -224,7 +226,7 @@ func parseDayForm(r *http.Request) dayForm {
 }
 
 func (f dayForm) input() days.DayInput {
-	in := days.DayInput{Title: f.Title, Date: f.Date, Time: f.Time, Repeat: days.Repeat(f.Repeat),
+	in := days.DayInput{Private: f.Private, Title: f.Title, Date: f.Date, Time: f.Time, Repeat: days.Repeat(f.Repeat),
 		CollectionID: f.CollectionID, TagIDs: f.TagIDs, TagNames: append([]string(nil), f.TagNames...), Comment: f.Comment, StyleColor: f.Color, StyleIcon: f.Icon}
 	for _, name := range strings.Split(f.TagQuery, "#")[1:] {
 		if name = strings.TrimSpace(name); name != "" {
@@ -238,7 +240,7 @@ func (f dayForm) input() days.DayInput {
 }
 
 func formFromDay(d days.Day) dayForm {
-	f := dayForm{Title: d.Title, Date: d.Date, Time: d.Time, Repeat: string(d.Repeat), CollectionID: d.CollectionID,
+	f := dayForm{Private: d.Private, Title: d.Title, Date: d.Date, Time: d.Time, Repeat: string(d.Repeat), CollectionID: d.CollectionID,
 		TagIDs: d.TagIDs, Comment: d.Comment, Color: d.StyleColor, NoColor: d.StyleColor == "", Icon: d.StyleIcon}
 	if f.NoColor {
 		f.Color = defaultGroupColor
@@ -310,7 +312,9 @@ func (s *Server) handleDayNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	form := dayForm{
+		Private:      days.IsPrivate(r.Context()),
 		Date:         s.now().In(userLocation(u)).Format(time.DateOnly),
+		Time:         "00:00",
 		Repeat:       string(days.RepeatNone),
 		CollectionID: col,
 		Color:        defaultGroupColor,
@@ -436,6 +440,7 @@ func (s *Server) handleDayCreate(w http.ResponseWriter, r *http.Request) {
 		s.dayFail(w, r, "create", err)
 		return
 	}
+	r = r.WithContext(days.WithPrivate(r.Context(), d.Private))
 	for _, a := range library {
 		if _, err := s.media.CopyToDay(r.Context(), owner, a.ID, d.ID); err != nil {
 			s.log.Error("copy library attachment for new day", "day_id", d.ID, "attachment_id", a.ID, "err", err)
@@ -457,7 +462,11 @@ func (s *Server) handleDayCreate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	http.Redirect(w, r, dayPath(d.ID), http.StatusSeeOther)
+	if d.Private {
+		authRedirect(w, r.WithContext(days.WithPrivate(r.Context(), false)), "/")
+		return
+	}
+	authRedirect(w, r, dayPath(d.ID))
 }
 
 func dayPath(id int64) string { return "/days/" + strconv.FormatInt(id, 10) }
@@ -472,7 +481,7 @@ func (s *Server) handleDayView(w http.ResponseWriter, r *http.Request) {
 	shared := false
 	shareOwner := ""
 	showComment := true
-	if errors.Is(err, days.ErrNotFound) {
+	if errors.Is(err, days.ErrNotFound) && !days.IsPrivate(r.Context()) {
 		var sharedDay share.SharedDay
 		sharedDay, err = s.shares.GetShared(r.Context(), u.ID, id)
 		if err == nil {
@@ -604,7 +613,7 @@ func (s *Server) handleDayUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	owner := CurrentUser(r.Context()).ID
 	form := parseDayForm(r)
-	_, err := s.days.Update(r.Context(), owner, id, form.input(), time.Now())
+	d, err := s.days.Update(r.Context(), owner, id, form.input(), s.now())
 	if key, ok := dayErrorKey(err); ok {
 		d, gerr := s.days.Get(r.Context(), owner, id)
 		if gerr != nil {
@@ -621,7 +630,8 @@ func (s *Server) handleDayUpdate(w http.ResponseWriter, r *http.Request) {
 		s.dayFail(w, r, "update", err)
 		return
 	}
-	http.Redirect(w, r, dayPath(id), http.StatusSeeOther)
+	r = r.WithContext(days.WithPrivate(r.Context(), d.Private))
+	authRedirect(w, r, dayPath(id))
 }
 
 func (s *Server) handleDayDelete(w http.ResponseWriter, r *http.Request) {

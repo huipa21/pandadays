@@ -145,6 +145,7 @@ var templateFuncs = template.FuncMap{
 	"megabytes":     formatMegabytes,
 	"localtime":     func(time.Time) template.HTML { return "" },
 	"pendingShares": func() int { return 0 },
+	"privatePrefix": func() string { return "" },
 }
 
 // localTime renders t in the viewer's timezone. Without a saved timezone the
@@ -219,6 +220,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /setup", s.handleSetup)
 	mux.HandleFunc("POST /login", s.handleLogin)
 	mux.HandleFunc("POST /logout", s.handleLogout)
+	mux.Handle("POST /vault/unlock", RequireLogin(http.HandlerFunc(s.handleVaultUnlock)))
+	mux.Handle("POST /vault/lock", RequireLogin(http.HandlerFunc(s.handleVaultLock)))
 	mux.Handle("GET /password", RequireLogin(http.HandlerFunc(s.handlePasswordForm)))
 	mux.Handle("POST /password", RequireLogin(http.HandlerFunc(s.handlePassword)))
 	mux.Handle("GET /profile", RequireLogin(http.HandlerFunc(s.handleProfile)))
@@ -246,7 +249,9 @@ func (s *Server) routes() http.Handler {
 		s.resolveLang,
 		forcePasswordChange,
 		adminSiteOnly,
+		s.vaultNamespace,
 		s.csrf,
+		s.vaultGate,
 	)
 }
 
@@ -298,12 +303,14 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 }
 
 type pageData struct {
-	Lang        string
-	CSRFToken   string
-	User        *auth.User
-	ReturnTo    string
-	LanguageURL string
-	SearchQuery string
+	VaultUnlocked bool
+	Private       bool
+	Lang          string
+	CSRFToken     string
+	User          *auth.User
+	ReturnTo      string
+	LanguageURL   string
+	SearchQuery   string
 	// CaptureTimezone loads the script that posts the browser timezone (SPEC §4.5).
 	CaptureTimezone bool
 }
@@ -326,7 +333,9 @@ func newPageData(r *http.Request) pageData {
 		Lang:            i18n.LangFrom(r.Context()),
 		CSRFToken:       CSRFToken(r.Context()),
 		User:            user,
-		ReturnTo:        r.URL.RequestURI(),
+		Private:         days.IsPrivate(r.Context()),
+		VaultUnlocked:   CurrentSession(r.Context()) != nil && CurrentSession(r.Context()).VaultUnlocked,
+		ReturnTo:        privatePath(r, r.URL.RequestURI()),
 		LanguageURL:     u.RequestURI(),
 		SearchQuery:     searchQuery,
 		CaptureTimezone: user != nil && user.Timezone == "" && !user.MustChangePassword,
@@ -368,6 +377,12 @@ func (s *Server) execute(w http.ResponseWriter, r *http.Request, page, name stri
 		}
 	}
 	t.Funcs(template.FuncMap{
+		"privatePrefix": func() string {
+			if days.IsPrivate(r.Context()) {
+				return "/private"
+			}
+			return ""
+		},
 		"t":             s.i18n.Func(i18n.LangFrom(r.Context())),
 		"asset":         func(name string) string { return "/static/" + name + "?v=" + s.assetVersion },
 		"localtime":     localTime(CurrentUser(r.Context())),

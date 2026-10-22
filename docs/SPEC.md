@@ -83,11 +83,48 @@ A meaningful date owned by one user.
 | archived_at | null = active; set = archived |
 | archive_live | archived day keeps counting (default 0 = frozen at `archived_at`) |
 | attachments | images, audio (incl. in-browser voice recording), video, generic files |
+| is_private | defaults to false; private days are accessible only in the password-gated Vault |
+
+The header's **Vault** icon sits between search and the light/dark switch, not
+in the avatar dropdown. Toggling on opens a password confirmation dialog with
+an X and Escape to cancel without changing visibility. After verification,
+home, future/past views, title/comment search, archives, collections, and tags
+include normal and private days together; shared days remain visible as before.
+Private list rows have a distinct border and localized Private day badge.
+The pressed icon toggles off without another password prompt and hides private
+rows and their collection/tag counts again, preserving the current normal view.
+Private day CRUD, attachments, media, and export/import retain their authorized
+`/private` routes. New days outside private routes default to normal (unchecked Private
+day); new days inside Vault default to private. Editing the checkbox moves a
+day between namespaces. "Normal/public" does not grant anonymous access.
+While locked, private days never appear in home, search, archive, collection/tag
+contents or counts. Normal media listings and exports always exclude them.
+They retain their collection and tags. Private attachments
+also require unlocked Vault access. Both namespaces count toward account quotas.
+Private days cannot be shared, including through collection shares; making a
+day private revokes direct shares. Making it normal again does not restore those
+direct shares (normal collection-sharing rules apply again).
+Unlock is scoped to the current login session and persists across navigation
+until the Vault icon is toggled off or the session ends. The legacy
+`/private/unlock` entry still requires the password again. Password confirmation uses
+the existing login rate limiter and CSRF protection. Private and unlocked pages disable htmx
+history snapshots and use non-cacheable responses.
+Vault export/import routes use the same `/private` prefix. The optional
+`is_private` CSV column preserves privacy across imports; legacy CSV is still
+accepted, and importing within Vault always creates private days. Site backups
+still include all data and must be treated as sensitive.
 
 Create and edit forms warn through the browser's native exit confirmation when
 unsaved fields would be lost by navigation, reload, or closing the tab. Unchanged
 forms and valid save submissions do not prompt; validation errors remain unsaved.
 Draft contents are not stored in browser storage.
+Day forms place title and privacy on the first row, date/time and recurrence on
+the second, collections and tags on the third, and comments below on desktop.
+Mobile fields stack in a single column. New-day time defaults to 00:00; clearing
+it still creates an all-day date, and editing preserves the saved time.
+Successfully creating a private day returns to the normal homepage without
+unlocking Vault or opening its password screen. The header privacy icon remains
+the entry point for the password dialog.
 With JavaScript, all file uploads show transferred-byte progress and remain busy
 while the server processes the uploaded files. Failures are shown explicitly and
 allow retry; validation pages and import/restore previews are preserved. Without
@@ -165,9 +202,13 @@ their display/download name, not file contents, type, storage ID, or quota usage
 Stopped recordings have an editable filename before saving/uploading. Renames
 require 1–255 characters without paths or control characters.
 
-With JavaScript, tags use a multiline editor: typing `#` filters the owner's
-existing tags, with click or arrow-key/Enter selection, Escape dismissal, and
-removable selected chips that do not display the trigger `#`. A nonmatching name
+With JavaScript, tags use a single-line, 44px-high editor aligned with other form
+controls. Selected chips scroll horizontally within the field. Typing `#` filters
+the owner's existing tags in an overlay dropdown that does not move other fields.
+The first match is selected initially; hovering or Up/Down arrows changes the
+selection, and click, Tab, or Enter accepts it. Shift+Tab retains normal backward
+navigation; Escape, outside clicks, and leaving the field dismiss suggestions.
+The picker supports removable selected chips that do not display the trigger `#`. A nonmatching name
 offers a create option. The automatic reserved Default tag is omitted from the
 picker; no explanatory text is shown beneath the tag editor. New tag names and any remaining `#name` input are resolved
 case-insensitively against the owner's tags or created atomically with a successful
@@ -362,9 +403,10 @@ pandadays-export-<username>-<date>.zip
 ```
 `days.csv` columns (UTF-8 with BOM for Excel, RFC 4180):
 ```
-title,date,time,repeat,collection,tags,comment,archived,style_color,style_icon,style_bg,attachments,archive_live
+title,date,time,repeat,collection,tags,comment,archived,style_color,style_icon,style_bg,attachments,archive_live,is_private
 ```
 - `archive_live` is `true`/`false` for archived days (resumed vs. frozen counter) and empty otherwise. Imports accept files without this column; missing or empty values import archived days paused, and the value is ignored for unarchived rows.
+- `is_private` is `true`/`false`; missing or empty means normal, except Vault imports always create private days. Normal exports include only normal days; Vault exports include only private days. Staged import tokens are bound to both the owner and privacy namespace.
 - `tags` and `attachments` are `|`-separated; attachments refer to paths inside `media/`; `style_bg` refers to one of them.
 - Cells beginning with `= + - @ \t \r` are prefixed with `'` (CSV injection guard); importer strips that prefix.
 - Only the user's own days (not shared-with-me).
@@ -482,7 +524,7 @@ users(
   created_at, updated_at)
 
 sessions(token_hash TEXT PK, user_id FK CASCADE, persistent INTEGER,
-  expires_at, created_at, last_seen_at)
+  expires_at, created_at, last_seen_at, vault_unlocked INTEGER DEFAULT 0)
 
 settings(key TEXT PK, value TEXT)
   -- site_lang, session_days, default_quota_days, default_quota_bytes,
@@ -499,6 +541,7 @@ days(id PK, owner_id FK CASCADE, collection_id FK RESTRICT,
   repeat TEXT CHECK(repeat IN('none','weekly','monthly','yearly')) DEFAULT 'none',
   comment TEXT NULL, style_color TEXT NULL, style_icon TEXT NULL,
   style_bg_attachment_id INTEGER NULL, archived_at NULL, archive_live INTEGER DEFAULT 0,
+  is_private INTEGER DEFAULT 0,
   created_at, updated_at)
   INDEX(owner_id, archived_at, date)
 
@@ -506,7 +549,7 @@ day_tags(day_id FK CASCADE, tag_id FK CASCADE, PK(day_id, tag_id))
 
 attachments(id PK, day_id NULL FK CASCADE, owner_id FK CASCADE, uuid TEXT UNIQUE,
   kind TEXT, filename TEXT, mime TEXT, size INTEGER, created_at, detached INTEGER,
-  sha256 TEXT NULL)  -- indexed by (owner_id, sha256) and (sha256)
+  sha256 TEXT NULL, is_private INTEGER DEFAULT 0)  -- indexed by (owner_id, sha256) and (sha256)
 blob_gc(sha256 PK)  -- filled by an AFTER DELETE trigger on attachments
 
 shares(id PK, owner_id FK CASCADE, target_type TEXT CHECK(IN('day','collection')),
@@ -530,6 +573,9 @@ Deleting a day/collection also deletes shares targeting it (application-level, s
 | `GET/POST /login`, `POST /logout` | Auth |
 | `GET/POST /password` | Change password (forced when flagged) |
 | `GET /` | Home: list of active own + accepted shared days, toggle **Future / Past** (htmx partial `?when=future|past`); `?q=...` searches visible day titles and authorized comments across both |
+| `GET/POST /private/unlock` | Legacy password entry for Vault |
+| `POST /vault/unlock`, `POST /vault/lock` | Password-confirmed session visibility toggle; both require CSRF |
+| `/private/`, `/private/days/...`, `/private/archive`, `/private/collections/...`, `/private/tags/...`, `/private/media/...`, `/private/attachments/...`, `/private/settings/...` | Password-gated private details/actions/media/export; lists include all days while unlocked; private sharing is unavailable |
 | `GET /days/new`, `POST /days` | Create |
 | `GET /days/{id}` | Calendar card view (countdown, comment, attachments, style) |
 | `GET/POST /days/{id}/edit`, `POST /days/{id}/delete` | Edit / delete |

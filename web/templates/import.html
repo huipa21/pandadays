@@ -4,7 +4,7 @@
   <h1>{{t "import.title"}}</h1>
   {{with .Result}}
   <p class="notice" role="status">{{t "import.done" .Imported .Skipped .Errors}}</p>
-  <p><a class="btn" href="/">{{t "import.home"}}</a> <a href="/settings">{{t "nav.settings"}}</a></p>
+  <p><a class="btn" href="{{privatePrefix}}/">{{t "import.home"}}</a> <a href="{{privatePrefix}}/settings">{{t "nav.settings"}}</a></p>
   {{end}}
   {{with .Preview}}
   <dl class="day-facts">
@@ -28,13 +28,13 @@
   {{end}}
   {{if .Preview}}
   {{if .Preview.CanImport}}
-  <form method="post" action="/settings/import/confirm" class="form">
+  <form method="post" action="{{privatePrefix}}/settings/import/confirm" class="form">
     {{template "csrf-field" .}}
     <input type="hidden" name="token" value="{{.Token}}">
     <button type="submit" class="btn">{{t "import.confirm" .Preview.New}}</button>
   </form>
   {{else if not (or .Preview.DaysExceeded .Preview.BytesExceeded)}}<p class="hint">{{t "import.nothing"}}</p>{{end}}
-  <p><a href="/settings">{{t "import.cancel"}}</a></p>
+  <p><a href="{{privatePrefix}}/settings">{{t "import.cancel"}}</a></p>
   {{end}}
 </section>
 {{end}}

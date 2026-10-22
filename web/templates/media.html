@@ -10,7 +10,7 @@
       <h2 id="media-upload-title">{{t "media.tab.upload"}}</h2>
       <button type="button" class="icon-button" data-close-dialog hidden aria-label="{{t "media.done"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
     </div>
-    <form method="post" action="/media" enctype="multipart/form-data" class="form">
+    <form method="post" action="{{privatePrefix}}/media" enctype="multipart/form-data" class="form">
       {{template "csrf-field" .}}
       {{template "upload-files" .}}
       <div class="dialog-actions media-upload-actions">
@@ -19,7 +19,7 @@
       </div>
     </form>
   </section>
-  <form method="get" action="/media" class="form media-filters">
+  <form method="get" action="{{privatePrefix}}/media" class="form media-filters">
     <label>{{t "media.group"}}
       <select name="group">
         <option value="day" {{if eq .GroupBy "day"}}selected{{end}}>{{t "media.group.day"}}</option>
@@ -41,30 +41,30 @@
   <p class="hint">{{t "media.timeline_hint"}}</p>
   {{end}}
   {{if .Item.ID}}
-  <p><a href="/media">← {{t "media.title"}}</a></p>
+  <p><a href="{{privatePrefix}}/media">← {{t "media.title"}}</a></p>
   <article class="card media-detail">
     <div class="media-detail-preview">
-      {{if eq .Item.Kind "image"}}<img src="/attachments/{{.Item.ID}}" alt="{{.Item.Filename}}">
+      {{if eq .Item.Kind "image"}}<img src="{{privatePrefix}}/attachments/{{.Item.ID}}" alt="{{.Item.Filename}}">
       {{else if eq .Item.Kind "audio"}}{{template "audio-player" .Item}}
-      {{else if eq .Item.Kind "video"}}<video controls playsinline src="/attachments/{{.Item.ID}}"></video>
+      {{else if eq .Item.Kind "video"}}<video controls playsinline src="{{privatePrefix}}/attachments/{{.Item.ID}}"></video>
       {{else}}{{template "media-thumb" .Item}}{{end}}
     </div>
     <aside class="media-card-body">
       <h2>{{.Item.Filename}}</h2>
-      <a href="/attachments/{{.Item.ID}}">{{t "media.open"}}</a>
+      <a href="{{privatePrefix}}/attachments/{{.Item.ID}}">{{t "media.open"}}</a>
       <span class="hint">{{bytes .Item.Size}} · {{localtime .Item.CreatedAt}}</span>
       <span class="hint">{{.Item.MIME}}</span>
-      {{if .Item.DayID}}<span>{{t "media.from"}} <a href="/days/{{.Item.DayID}}">{{.Item.DayTitle}}</a></span>{{end}}
+      {{if .Item.DayID}}<span>{{t "media.from"}} <a href="{{privatePrefix}}/days/{{.Item.DayID}}">{{.Item.DayTitle}}</a></span>{{end}}
       <details>
         <summary class="link-button">{{t "attachments.edit"}}</summary>
-        <form method="post" action="/attachments/{{.Item.ID}}/rename" class="form">
+        <form method="post" action="{{privatePrefix}}/attachments/{{.Item.ID}}/rename" class="form">
           {{template "csrf-field" .}}<input type="hidden" name="return_to" value="/media">
           <label>{{t "attachments.filename"}}<input type="text" name="filename" value="{{.Item.Filename}}" required maxlength="255"></label>
           <button type="submit" class="btn">{{t "days.save"}}</button>
         </form>
       </details>
-      <form method="post" action="/attachments/{{.Item.ID}}/delete" class="inline-form"
-            hx-post="/attachments/{{.Item.ID}}/delete" hx-confirm="{{t "attachments.delete_confirm"}}">
+      <form method="post" action="{{privatePrefix}}/attachments/{{.Item.ID}}/delete" class="inline-form"
+            hx-post="{{privatePrefix}}/attachments/{{.Item.ID}}/delete" hx-confirm="{{t "attachments.delete_confirm"}}">
         {{template "csrf-field" .}}<input type="hidden" name="return_to" value="/media">
         <button type="submit" class="link-button danger-text">{{t "attachments.delete"}}</button>
       </form>
@@ -77,11 +77,11 @@
   <h2 id="media-date-{{.Date}}"><time datetime="{{.Date}}">{{.Date}}</time></h2>
   <ul class="media-grid">
     {{range .Items}}<li class="card media-card">
-      <a class="media-card-preview" href="/media/{{.ID}}" aria-label="{{.Filename}}">
-        {{if eq .Kind "video"}}<video muted playsinline preload="metadata" src="/attachments/{{.ID}}#t=0.1" aria-label="{{.Filename}}"></video>
+      <a class="media-card-preview" href="{{privatePrefix}}/media/{{.ID}}" aria-label="{{.Filename}}">
+        {{if eq .Kind "video"}}<video muted playsinline preload="metadata" src="{{privatePrefix}}/attachments/{{.ID}}#t=0.1" aria-label="{{.Filename}}"></video>
         {{else}}{{template "media-thumb" .}}{{end}}
       </a>
-      <a class="media-card-name" href="/media/{{.ID}}" title="{{.Filename}}">{{.Filename}}</a>
+      <a class="media-card-name" href="{{privatePrefix}}/media/{{.ID}}" title="{{.Filename}}">{{.Filename}}</a>
       <span class="hint">{{if eq .Kind "image"}}{{t "media.kind.image"}}{{else if eq .Kind "video"}}{{t "media.kind.video"}}{{else if eq .Kind "audio"}}{{t "media.kind.audio"}}{{else}}{{t "media.kind.file"}}{{end}} · {{bytes .Size}}</span>
     </li>{{end}}
   </ul>

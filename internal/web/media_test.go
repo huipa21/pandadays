@@ -436,11 +436,13 @@ func TestMediaDetailIsOwnerScoped(t *testing.T) {
 	for _, lang := range []string{"en", "zh"} {
 		rr := get(s.Handler(), path+"?lang="+lang, token)
 		body := rr.Body.String()
+		_, main, _ := strings.Cut(body, `<main `)
+		main, _, _ = strings.Cut(main, `</main>`)
 		for _, want := range []string{"beach.txt", `class="card media-detail"`, `href="` + dayPath(d.ID) + `"`, `name="return_to" value="/media"`} {
 			if rr.Code != http.StatusOK || !strings.Contains(body, want) {
 				t.Fatalf("detail missing %q: %d", want, rr.Code)
 			}
-			if strings.Contains(body, `<div class="page-heading">`) {
+			if strings.Contains(main, `<div class="page-heading">`) {
 				t.Error("media detail retains the library page heading")
 			}
 			if !strings.Contains(body, `<h2>beach.txt</h2>`) {

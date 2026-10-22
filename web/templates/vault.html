@@ -1,0 +1,14 @@
+{{define "title"}}{{t "vault.title"}} · {{t "app.name"}}{{end}}
+{{define "content"}}
+<section class="stack narrow">
+  <h1>{{t "vault.title"}}</h1>
+  <p>{{t "vault.password_hint"}}</p>
+  {{with .Error}}<p class="alert" role="alert">{{t .}}</p>{{end}}
+  <form method="post" action="/private/unlock" class="card form">
+    {{template "csrf-field" .}}
+    <label>{{t "login.password"}}<input type="password" name="password" autocomplete="current-password" required autofocus></label>
+    <button type="submit" class="btn">{{t "vault.unlock"}}</button>
+    <a href="/">{{t "nav.home"}}</a>
+  </form>
+</section>
+{{end}}

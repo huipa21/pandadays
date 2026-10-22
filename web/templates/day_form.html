@@ -1,51 +1,62 @@
 {{define "title"}}{{if .Day.ID}}{{t "days.edit"}}{{else}}{{t "days.new"}}{{end}} · {{t "app.name"}}{{end}}
 {{define "content"}}
 <section class="stack">
-  {{if .Day.ID}}<p><a href="/days/{{.Day.ID}}">← {{.Day.Title}}</a></p>{{else}}<p><a href="/">← {{t "nav.home"}}</a></p>{{end}}
+  {{if .Day.ID}}<p><a href="{{privatePrefix}}/days/{{.Day.ID}}">← {{.Day.Title}}</a></p>{{else}}<p><a href="{{privatePrefix}}/">← {{t "nav.home"}}</a></p>{{end}}
   <h1>{{if .Day.ID}}{{t "days.edit"}}{{else}}{{t "days.new"}}{{end}}</h1>
   {{with .Error}}<p class="alert" role="alert">{{t .}}</p>{{end}}
-  {{if eq .Error "attachments.create_error"}}<p><a href="/days/{{.Day.ID}}#attachments">{{t "media.attach"}}</a></p>{{end}}
-  <form method="post" action="{{if .Day.ID}}/days/{{.Day.ID}}/edit{{else}}/days{{end}}"{{if not .Day.ID}} enctype="multipart/form-data"{{end}} class="card form" data-day-form data-unsaved="{{if .Error}}true{{else}}false{{end}}">
+  {{if eq .Error "attachments.create_error"}}<p><a href="{{privatePrefix}}/days/{{.Day.ID}}#attachments">{{t "media.attach"}}</a></p>{{end}}
+  <form method="post" action="{{privatePrefix}}{{if .Day.ID}}/days/{{.Day.ID}}/edit{{else}}/days{{end}}"{{if not .Day.ID}} enctype="multipart/form-data"{{end}} class="card form" data-day-form data-unsaved="{{if .Error}}true{{else}}false{{end}}">
     {{template "csrf-field" .}}
     <p class="hint">{{t "days.unsaved_hint"}}</p>
-    <label>{{t "days.field.title"}}
-      <input type="text" name="title" value="{{.Form.Title}}" maxlength="200" required>
-    </label>
-    <div class="field-row">
-      <label>{{t "days.field.date"}}
-        <input type="date" name="date" value="{{.Form.Date}}" min="0001-01-01" max="9999-12-31" required>
+    <div class="day-form-title-row">
+      <label>{{t "days.field.title"}}
+        <input type="text" name="title" value="{{.Form.Title}}" maxlength="200" required>
       </label>
-      <label>{{t "days.field.time"}}
-        <input type="time" name="time" value="{{.Form.Time}}">
-        <span class="hint">{{t "days.field.time_hint"}}</span>
+      <label class="chip-check day-form-private" title="{{t "days.field.private_hint"}}"><input type="checkbox" aria-describedby="day-private-hint" name="private" value="1"{{if .Form.Private}} checked{{end}}> {{t "days.field.private"}}</label>
+    </div>
+    <p class="hint" id="day-private-hint">{{t "days.field.private_hint"}}</p>
+    <div class="day-form-schedule-row">
+      <fieldset class="day-form-datetime">
+        <legend>{{t "days.field.datetime"}}</legend>
+        <div class="day-form-datetime-inputs">
+          <label><span class="visually-hidden">{{t "days.field.date"}}</span>
+            <input type="date" name="date" value="{{.Form.Date}}" min="0001-01-01" max="9999-12-31" required>
+          </label>
+          <label><span class="visually-hidden">{{t "days.field.time"}}</span>
+            <input type="time" name="time" value="{{.Form.Time}}" aria-describedby="day-time-hint">
+          </label>
+        </div>
+        <p class="hint" id="day-time-hint">{{t "days.field.time_hint"}}</p>
+      </fieldset>
+      <label>{{t "days.field.repeat"}}
+        <select name="repeat">
+          {{range .Repeats}}<option value="{{.}}"{{if eq (print .) $.Form.Repeat}} selected{{end}}>{{t (printf "days.repeat.%s" .)}}</option>{{end}}
+        </select>
       </label>
     </div>
-    <label>{{t "days.field.repeat"}}
-      <select name="repeat">
-        {{range .Repeats}}<option value="{{.}}"{{if eq (print .) $.Form.Repeat}} selected{{end}}>{{t (printf "days.repeat.%s" .)}}</option>{{end}}
-      </select>
-    </label>
-    <label>{{t "days.field.collection"}}
-      <select name="collection">
-        {{range .Collections}}<option value="{{.Group.ID}}"{{if .Selected}} selected{{end}}>{{template "group-name" .Group}}</option>{{end}}
-      </select>
-    </label>
-    <fieldset class="choice-group tag-field" data-tag-picker data-remove-label="{{t "days.tags.remove"}}" data-create-label="{{t "days.tags.create"}}">
-      <legend>{{t "days.field.tags"}}</legend>
-      <div data-tag-fallback class="chips">
-        {{range .Tags}}<label class="chip-check"><input type="checkbox" name="tags" value="{{.Group.ID}}"{{if .Selected}} checked{{end}}>
-          {{template "swatch" .Group.Color}} <span data-tag-name>{{template "group-name" .Group}}</span></label>{{end}}
-      </div>
-      <div data-new-tags hidden>{{range .Form.TagNames}}<input type="hidden" name="new_tags" value="{{.}}">{{end}}</div>
-      <div class="tag-editor" data-tag-editor hidden>
-        <div class="chips" data-tag-chips></div>
-        <div id="tag-suggestions" class="tag-suggestions" role="listbox" aria-label="{{t "days.field.tags"}}" hidden></div>
-        <p class="hint" data-tag-empty role="status" hidden>{{t "days.tags.empty"}}</p>
-      </div>
-      <label class="tag-query-label" data-tag-query-label for="tag-query"><span data-tag-query-text>{{t "days.tags.search"}}</span>
-        <textarea id="tag-query" name="tag_query" rows="2" maxlength="100" placeholder="{{t "days.tags.placeholder"}}" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="tag-suggestions">{{.Form.TagQuery}}</textarea>
+    <div class="day-form-groups-row">
+      <label>{{t "days.field.collection"}}
+        <select name="collection">
+          {{range .Collections}}<option value="{{.Group.ID}}"{{if .Selected}} selected{{end}}>{{template "group-name" .Group}}</option>{{end}}
+        </select>
       </label>
-    </fieldset>
+      <fieldset class="choice-group tag-field" data-tag-picker data-remove-label="{{t "days.tags.remove"}}" data-create-label="{{t "days.tags.create"}}">
+        <legend>{{t "days.field.tags"}}</legend>
+        <div data-tag-fallback class="chips">
+          {{range .Tags}}<label class="chip-check"><input type="checkbox" name="tags" value="{{.Group.ID}}"{{if .Selected}} checked{{end}}>
+            {{template "swatch" .Group.Color}} <span data-tag-name>{{template "group-name" .Group}}</span></label>{{end}}
+        </div>
+        <div data-new-tags hidden>{{range .Form.TagNames}}<input type="hidden" name="new_tags" value="{{.}}">{{end}}</div>
+        <div class="tag-editor" data-tag-editor hidden>
+          <div class="chips" data-tag-chips></div>
+          <div id="tag-suggestions" class="tag-suggestions" role="listbox" aria-label="{{t "days.field.tags"}}" hidden></div>
+          <p class="hint" data-tag-empty role="status" hidden>{{t "days.tags.empty"}}</p>
+        </div>
+        <label class="tag-query-label" data-tag-query-label for="tag-query"><span data-tag-query-text>{{t "days.tags.search"}}</span>
+          <input type="text" id="tag-query" name="tag_query" value="{{.Form.TagQuery}}" maxlength="100" placeholder="{{t "days.tags.placeholder"}}" autocomplete="off" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="tag-suggestions">
+        </label>
+      </fieldset>
+    </div>
     <label>{{t "days.field.comment"}}
       <textarea name="comment" rows="4" maxlength="10000">{{.Form.Comment}}</textarea>
       <span class="hint">{{t "days.field.comment_hint"}}</span>

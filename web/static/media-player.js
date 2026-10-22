@@ -34,7 +34,7 @@
       async function failed() {
         const source = audio.getAttribute("src");
         show(player.dataset.errorPlayback);
-        if (!source?.startsWith("/attachments/")) return;
+        if (!source?.startsWith("/attachments/") && !source?.startsWith("/private/attachments/")) return;
         try {
           const diagnosticURL = `${source}${source.includes("?") ? "&" : "?"}lang=${encodeURIComponent(document.documentElement.lang)}`;
           const response = await fetch(diagnosticURL, { headers: { Range: "bytes=0-0" } });

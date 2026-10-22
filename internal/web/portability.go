@@ -72,6 +72,7 @@ func importErrorKey(err error) string {
 		{portability.ErrFieldCount, "import.error.field_count"},
 		{portability.ErrArchivedInvalid, "import.error.archived"},
 		{portability.ErrArchiveLive, "import.error.archive_live"},
+		{portability.ErrPrivateInvalid, "import.error.private"},
 		{portability.ErrCollectionName, "import.error.collection_name"},
 		{portability.ErrTagName, "import.error.tag_name"},
 		{portability.ErrAttachmentMissing, "import.error.attachment_missing"},

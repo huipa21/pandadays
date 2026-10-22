@@ -34,6 +34,7 @@ var (
 )
 
 type Day struct {
+	Private      bool
 	ID           int64
 	OwnerID      int64
 	CollectionID int64
@@ -67,6 +68,7 @@ func (d Day) CountAt(now time.Time) time.Time {
 // DayInput is user-supplied data for create/update. A zero CollectionID
 // selects the reserved default collection; empty TagIDs select the default tag.
 type DayInput struct {
+	Private      bool
 	Title        string
 	Date         string
 	Time         string
@@ -174,7 +176,7 @@ func uniqueIDs(ids []int64) []int64 {
 }
 
 const dayColumns = `id, owner_id, collection_id, title, date, COALESCE(time, ''), repeat, COALESCE(comment, ''),
-	COALESCE(style_color, ''), COALESCE(style_icon, ''), COALESCE(style_bg_attachment_id, 0), archived_at, archive_live, created_at, updated_at`
+	COALESCE(style_color, ''), COALESCE(style_icon, ''), COALESCE(style_bg_attachment_id, 0), archived_at, archive_live, created_at, updated_at, is_private`
 
 // Get returns ErrNotFound when the day does not exist or belongs to someone else.
 func (s *Days) Get(ctx context.Context, ownerID, id int64) (Day, error) {
@@ -191,7 +193,7 @@ func scanDay(sc scanner) (Day, error) {
 	var archived sql.NullInt64
 	var created, updated int64
 	if err := sc.Scan(&d.ID, &d.OwnerID, &d.CollectionID, &d.Title, &d.Date, &d.Time, &d.Repeat, &d.Comment,
-		&d.StyleColor, &d.StyleIcon, &d.StyleBgAttachmentID, &archived, &d.ArchiveLive, &created, &updated); err != nil {
+		&d.StyleColor, &d.StyleIcon, &d.StyleBgAttachmentID, &archived, &d.ArchiveLive, &created, &updated, &d.Private); err != nil {
 		return Day{}, err
 	}
 	if archived.Valid {
@@ -204,7 +206,7 @@ func scanDay(sc scanner) (Day, error) {
 }
 
 func (s *Days) get(ctx context.Context, q rowsQuerier, ownerID, id int64) (Day, error) {
-	d, err := scanDay(q.QueryRowContext(ctx, `SELECT `+dayColumns+` FROM days WHERE owner_id = ? AND id = ?`, ownerID, id))
+	d, err := scanDay(q.QueryRowContext(ctx, `SELECT `+dayColumns+` FROM days WHERE owner_id = ? AND id = ? AND is_private = ?`, ownerID, id, IsPrivate(ctx)))
 	if errors.Is(err, sql.ErrNoRows) {
 		return Day{}, ErrNotFound
 	}
@@ -392,9 +394,9 @@ func (s *Days) Create(ctx context.Context, ownerID int64, in DayInput, now time.
 		return Day{}, err
 	}
 	res, err := tx.ExecContext(ctx, `INSERT INTO days (owner_id, collection_id, title, date, time, repeat, comment,
-		style_color, style_icon, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		style_color, style_icon, created_at, updated_at, is_private) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ownerID, in.CollectionID, in.Title, in.Date, nullString(in.Time), string(in.Repeat), nullString(in.Comment),
-		nullString(in.StyleColor), nullString(in.StyleIcon), now.Unix(), now.Unix())
+		nullString(in.StyleColor), nullString(in.StyleIcon), now.Unix(), now.Unix(), in.Private)
 	if err != nil {
 		return Day{}, fmt.Errorf("create day: %w", err)
 	}
@@ -405,7 +407,7 @@ func (s *Days) Create(ctx context.Context, ownerID int64, in DayInput, now time.
 	if err := setDayTags(ctx, tx, id, in.TagIDs); err != nil {
 		return Day{}, err
 	}
-	d, err := s.get(ctx, tx, ownerID, id)
+	d, err := s.get(WithPrivate(ctx, in.Private), tx, ownerID, id)
 	if err != nil {
 		return Day{}, err
 	}
@@ -433,15 +435,15 @@ func (s *Days) Update(ctx context.Context, ownerID, id int64, in DayInput, now t
 		return Day{}, err
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE days SET collection_id = ?, title = ?, date = ?, time = ?, repeat = ?,
-		comment = ?, style_color = ?, style_icon = ?, updated_at = ? WHERE owner_id = ? AND id = ?`,
+		comment = ?, style_color = ?, style_icon = ?, updated_at = ?, is_private = ? WHERE owner_id = ? AND id = ?`,
 		in.CollectionID, in.Title, in.Date, nullString(in.Time), string(in.Repeat), nullString(in.Comment),
-		nullString(in.StyleColor), nullString(in.StyleIcon), now.Unix(), ownerID, id); err != nil {
+		nullString(in.StyleColor), nullString(in.StyleIcon), now.Unix(), in.Private, ownerID, id); err != nil {
 		return Day{}, fmt.Errorf("update day: %w", err)
 	}
 	if err := setDayTags(ctx, tx, id, in.TagIDs); err != nil {
 		return Day{}, err
 	}
-	d, err := s.get(ctx, tx, ownerID, id)
+	d, err := s.get(WithPrivate(ctx, in.Private), tx, ownerID, id)
 	if err != nil {
 		return Day{}, err
 	}
@@ -458,7 +460,7 @@ func (s *Days) SetArchived(ctx context.Context, ownerID, id int64, archived bool
 	res, err := s.db.ExecContext(ctx, `UPDATE days
 		SET archived_at = CASE WHEN ? THEN COALESCE(archived_at, ?) ELSE NULL END,
 			archive_live = CASE WHEN ? AND archived_at IS NOT NULL THEN archive_live ELSE 0 END, updated_at = ?
-		WHERE owner_id = ? AND id = ?`, archived, now.Unix(), archived, now.Unix(), ownerID, id)
+		WHERE owner_id = ? AND id = ? AND is_private = ?`, archived, now.Unix(), archived, now.Unix(), ownerID, id, IsPrivate(ctx))
 	if err != nil {
 		return fmt.Errorf("archive day: %w", err)
 	}
@@ -474,7 +476,7 @@ func (s *Days) SetArchived(ctx context.Context, ownerID, id int64, archived bool
 // not archived behave as not found.
 func (s *Days) SetArchiveLive(ctx context.Context, ownerID, id int64, live bool) error {
 	res, err := s.db.ExecContext(ctx, `UPDATE days SET archive_live = ?
-		WHERE owner_id = ? AND id = ? AND archived_at IS NOT NULL`, live, ownerID, id)
+		WHERE owner_id = ? AND id = ? AND archived_at IS NOT NULL AND is_private = ?`, live, ownerID, id, IsPrivate(ctx))
 	if err != nil {
 		return fmt.Errorf("set archive play state: %w", err)
 	}
@@ -502,6 +504,9 @@ func (s *Days) DeleteWithAttachments(ctx context.Context, ownerID, id int64) ([]
 		return nil, fmt.Errorf("delete day: %w", err)
 	}
 	defer tx.Rollback()
+	if _, err := s.get(ctx, tx, ownerID, id); err != nil {
+		return nil, err
+	}
 	rows, err := tx.QueryContext(ctx, `SELECT uuid FROM attachments WHERE day_id = ? AND owner_id = ? AND sha256 IS NULL`,
 		id, ownerID)
 	if err != nil {

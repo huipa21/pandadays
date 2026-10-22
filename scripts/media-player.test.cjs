@@ -6,10 +6,10 @@ const { runInNewContext } = require("node:vm");
 
 const script = readFileSync(join(__dirname, "..", "web", "static", "media-player.js"), "utf8");
 
-function fixture({ status = 410, message = "Stored file missing. Restore or upload again.", type = "text/plain", networkError = false, initialError = false, lang = "en", compact = false, playFailure = false, count = 1, pendingPlay = false } = {}) {
+function fixture({ status = 410, message = "Stored file missing. Restore or upload again.", type = "text/plain", networkError = false, initialError = false, lang = "en", compact = false, playFailure = false, count = 1, pendingPlay = false, source = "/attachments/7" } = {}) {
   const entries = Array.from({ length: count }, () => {
     const audio = new EventTarget();
-    audio.getAttribute = () => "/attachments/7";
+    audio.getAttribute = () => source;
     audio.error = initialError ? {} : null;
     const error = { hidden: true };
     const play = new EventTarget();
@@ -76,6 +76,13 @@ test("playback errors show the server's actionable plain-text message", async ()
   assert.equal(f.error.hidden, false);
   assert.equal(f.error.textContent, "Stored file missing. Restore or upload again.");
   assert.deepEqual(f.requests, [{ url: "/attachments/7?lang=en", range: "bytes=0-0" }]);
+});
+
+test("Vault playback diagnostics keep the private namespace", async () => {
+  const f = fixture({ source: "/private/attachments/7" });
+  await f.fail();
+  assert.equal(f.error.hidden, false);
+  assert.deepEqual(f.requests, [{ url: "/private/attachments/7?lang=en", range: "bytes=0-0" }]);
 });
 
 test("compact attachment audio is revealed and started only by Play", async () => {

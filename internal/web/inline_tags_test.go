@@ -18,7 +18,7 @@ func TestDayInlineTagFormSubmissionAndValidation(t *testing.T) {
 		t.Fatalf("invalid day: %d", rr.Code)
 	}
 	body := rr.Body.String()
-	for _, want := range []string{`name="new_tags" value="Family trip"`, `value="&lt;b&gt;literal&lt;/b&gt;"`, `>#工作</textarea>`} {
+	for _, want := range []string{`name="new_tags" value="Family trip"`, `value="&lt;b&gt;literal&lt;/b&gt;"`, `name="tag_query" value="#工作"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("validation lost %q", want)
 		}

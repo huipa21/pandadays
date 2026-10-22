@@ -3,6 +3,7 @@ package portability
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -14,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"pandadays/internal/days"
 )
 
 var (
@@ -155,7 +158,8 @@ func safeEntryName(name string) bool {
 
 // Stage stores an uploaded import for the owner and returns its token. Uploads
 // larger than limit fail with ErrArchiveTooLarge. Expired staged uploads of
-// all users are removed on the way.
+// all users are removed on the way. The first preview or confirmation binds
+// the staged upload to that request's privacy context.
 func (s *Service) Stage(ownerID int64, r io.Reader, limit int64, now time.Time) (string, error) {
 	if err := os.MkdirAll(s.tmpDir, 0o700); err != nil {
 		return "", fmt.Errorf("create import directory: %w", err)
@@ -190,7 +194,10 @@ func (s *Service) Stage(ownerID int64, r io.Reader, limit int64, now time.Time) 
 // Discard removes a staged upload; unknown tokens are ignored.
 func (s *Service) Discard(ownerID int64, token string) {
 	if validToken(token) {
-		os.Remove(s.stagedPath(ownerID, token))
+		path := s.stagedPath(ownerID, token)
+		os.Remove(path)
+		os.Remove(path + "-normal")
+		os.Remove(path + "-private")
 	}
 }
 
@@ -198,18 +205,31 @@ func (s *Service) stagedPath(ownerID int64, token string) string {
 	return filepath.Join(s.tmpDir, "import-"+strconv.FormatInt(ownerID, 10)+"-"+token)
 }
 
-// staged resolves a token to the owner's staged file; tokens of other users
-// resolve to a different, missing path.
-func (s *Service) staged(ownerID int64, token string, now time.Time) (string, error) {
+// staged resolves a token for its owner and privacy mode. Renaming the initial
+// file atomically binds its first use, including across service instances.
+func (s *Service) staged(ctx context.Context, ownerID int64, token string, now time.Time) (string, error) {
 	if !validToken(token) {
 		return "", ErrStagedNotFound
 	}
 	path := s.stagedPath(ownerID, token)
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() || now.Sub(info.ModTime()) > StagedTTL {
-		return "", ErrStagedNotFound
+	bound := path + "-normal"
+	if days.IsPrivate(ctx) {
+		bound = path + "-private"
 	}
-	return path, nil
+	valid := func(path string) bool {
+		info, err := os.Stat(path)
+		return err == nil && info.Mode().IsRegular() && now.Sub(info.ModTime()) <= StagedTTL
+	}
+	if valid(bound) {
+		return bound, nil
+	}
+	if valid(path) {
+		// Another request may have bound the file since the initial check.
+		if err := os.Rename(path, bound); err == nil || valid(bound) {
+			return bound, nil
+		}
+	}
+	return "", ErrStagedNotFound
 }
 
 func validToken(token string) bool {

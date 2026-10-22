@@ -26,6 +26,7 @@ var (
 	ErrFieldCount        = errors.New("row has the wrong number of fields")
 	ErrArchivedInvalid   = errors.New("archived must be empty, true/false or an RFC 3339 time")
 	ErrArchiveLive       = errors.New("archive_live must be empty or true/false")
+	ErrPrivateInvalid    = errors.New("is_private must be empty or true/false")
 	ErrCollectionName    = errors.New("collection name is invalid")
 	ErrTagName           = errors.New("tag name is invalid")
 	ErrAttachmentMissing = errors.New("attachment is not in the archive")
@@ -73,6 +74,7 @@ type row struct {
 	tags        []string
 	archivedAt  *time.Time
 	archiveLive bool
+	private     bool
 	attachments []string
 	styleBg     string
 }
@@ -137,8 +139,14 @@ func parseRows(data []byte, bare bool, now time.Time) ([]row, []RowError, error)
 			rowErrs = append(rowErrs, RowError{Line: line, Err: err})
 			continue
 		}
+		private, err := parseBool(cell("is_private"))
+		if err != nil {
+			rowErrs = append(rowErrs, RowError{Line: line, Err: ErrPrivateInvalid})
+			continue
+		}
 		rw := row{line: line, in: in, collection: strings.TrimSpace(cell("collection")),
-			tags: splitList(cell("tags")), archivedAt: archivedAt, archiveLive: archiveLive && archivedAt != nil}
+			tags: splitList(cell("tags")), archivedAt: archivedAt, archiveLive: archiveLive && archivedAt != nil,
+			private: private}
 		if !bare {
 			rw.attachments = unique(splitList(cell("attachments")))
 			rw.styleBg = strings.TrimSpace(cell("style_bg"))
@@ -303,7 +311,7 @@ type queryer interface {
 }
 
 // makePlan matches parsed rows against the owner's current data: duplicates by
-// (title, date, collection) are skipped, and quotas are checked.
+// (title, date, collection, privacy) are skipped, and total quotas are checked.
 func makePlan(ctx context.Context, q queryer, ownerID int64, src *source, rows []row, rowErrs []RowError) (*plan, error) {
 	p := &plan{preview: Preview{Skipped: 0, Errors: append([]RowError(nil), rowErrs...), BareCSV: src.bare}}
 	var err error
@@ -326,18 +334,19 @@ func makePlan(ctx context.Context, q queryer, ownerID int64, src *source, rows [
 	}
 
 	existing := map[string]bool{}
-	dayRows, err := q.QueryContext(ctx, `SELECT title, date, collection_id FROM days WHERE owner_id = ?`, ownerID)
+	dayRows, err := q.QueryContext(ctx, `SELECT title, date, collection_id, is_private FROM days WHERE owner_id = ?`, ownerID)
 	if err != nil {
 		return nil, fmt.Errorf("load existing days: %w", err)
 	}
 	for dayRows.Next() {
 		var title, date string
 		var coll int64
-		if err := dayRows.Scan(&title, &date, &coll); err != nil {
+		var private bool
+		if err := dayRows.Scan(&title, &date, &coll, &private); err != nil {
 			dayRows.Close()
 			return nil, fmt.Errorf("load existing days: %w", err)
 		}
-		existing[dayKey(title, date, groupRef{id: coll})] = true
+		existing[dayKey(title, date, groupRef{id: coll}, private)] = true
 	}
 	if err := dayRows.Close(); err != nil {
 		return nil, fmt.Errorf("load existing days: %w", err)
@@ -348,13 +357,14 @@ func makePlan(ctx context.Context, q queryer, ownerID int64, src *source, rows [
 
 	for i := range rows {
 		rw := &rows[i]
+		rw.private = rw.private || days.IsPrivate(ctx)
 		fail := func(err error) { p.preview.Errors = append(p.preview.Errors, RowError{Line: rw.line, Err: err}) }
 		coll, err := p.collections.resolve(rw.collection)
 		if err != nil {
 			fail(fmt.Errorf("%w: %w", ErrCollectionName, err))
 			continue
 		}
-		key := dayKey(rw.in.Title, rw.in.Date, coll)
+		key := dayKey(rw.in.Title, rw.in.Date, coll, rw.private)
 		if existing[key] {
 			p.preview.Skipped++
 			continue
@@ -416,12 +426,12 @@ func makePlan(ctx context.Context, q queryer, ownerID int64, src *source, rows [
 	return p, nil
 }
 
-func dayKey(title, date string, coll groupRef) string {
-	return title + "\x00" + date + "\x00" + coll.key()
+func dayKey(title, date string, coll groupRef, private bool) string {
+	return title + "\x00" + date + "\x00" + coll.key() + "\x00" + strconv.FormatBool(private)
 }
 
-func (s *Service) load(ownerID int64, token string, now time.Time) (*source, []row, []RowError, error) {
-	path, err := s.staged(ownerID, token, now)
+func (s *Service) load(ctx context.Context, ownerID int64, token string, now time.Time) (*source, []row, []RowError, error) {
+	path, err := s.staged(ctx, ownerID, token, now)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -440,7 +450,7 @@ func (s *Service) load(ownerID int64, token string, now time.Time) (*source, []r
 // Preview analyses a staged upload without changing anything. Archive-level
 // problems (unsafe paths, size, malformed CSV) are returned as errors.
 func (s *Service) Preview(ctx context.Context, ownerID int64, token string, now time.Time) (Preview, error) {
-	src, rows, rowErrs, err := s.load(ownerID, token, now)
+	src, rows, rowErrs, err := s.load(ctx, ownerID, token, now)
 	if err != nil {
 		return Preview{}, err
 	}
@@ -538,7 +548,7 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 // transaction and new content blobs are removed again if it does not commit.
 // Content already stored (by this or another user) is shared, not duplicated.
 func (s *Service) Import(ctx context.Context, ownerID int64, token string, now time.Time) (Result, error) {
-	src, rows, rowErrs, err := s.load(ownerID, token, now)
+	src, rows, rowErrs, err := s.load(ctx, ownerID, token, now)
 	if err != nil {
 		return Result{}, err
 	}
@@ -678,9 +688,10 @@ func (s *Service) insertDay(ctx context.Context, tx *sql.Tx, x *extractor, owner
 		archived = d.row.archivedAt.Unix()
 	}
 	res, err := tx.ExecContext(ctx, `INSERT INTO days (owner_id, collection_id, title, date, time, repeat, comment,
-		style_color, style_icon, archived_at, archive_live, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		style_color, style_icon, archived_at, archive_live, is_private, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ownerID, refID(d.collection, collIDs), in.Title, in.Date, nullString(in.Time), string(in.Repeat),
-		nullString(in.Comment), nullString(in.StyleColor), nullString(in.StyleIcon), archived, d.row.archiveLive, now.Unix(), now.Unix())
+		nullString(in.Comment), nullString(in.StyleColor), nullString(in.StyleIcon), archived, d.row.archiveLive,
+		d.row.private, now.Unix(), now.Unix())
 	if err != nil {
 		return 0, fmt.Errorf("import day: %w", err)
 	}

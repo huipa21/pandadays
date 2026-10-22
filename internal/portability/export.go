@@ -14,6 +14,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"pandadays/internal/days"
 	"pandadays/internal/media"
 )
 
@@ -94,8 +95,9 @@ type exportFile struct {
 	created time.Time
 }
 
-// Export writes the owner's days (not shared-with-me) and their attachments
-// as a zip to w. Media files are checked before anything is written.
+// Export writes the owner's days matching the context's privacy mode (not
+// shared-with-me) and their attachments as a zip to w. Media files are checked
+// before anything is written.
 func (s *Service) Export(ctx context.Context, ownerID int64, now time.Time, w io.Writer) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -169,9 +171,9 @@ func (s *Service) Export(ctx context.Context, ownerID int64, now time.Time, w io
 func exportDays(ctx context.Context, tx *sql.Tx, ownerID int64) ([]*exportDay, map[int64]*exportDay, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT d.id, d.title, d.date, COALESCE(d.time, ''), d.repeat, c.name,
 		COALESCE(d.comment, ''), d.archived_at, d.archive_live, COALESCE(d.style_color, ''), COALESCE(d.style_icon, ''),
-		COALESCE(d.style_bg_attachment_id, 0)
+		COALESCE(d.style_bg_attachment_id, 0), d.is_private
 		FROM days d JOIN collections c ON c.id = d.collection_id AND c.owner_id = d.owner_id
-		WHERE d.owner_id = ? ORDER BY d.date, d.id`, ownerID)
+		WHERE d.owner_id = ? AND d.is_private = ? ORDER BY d.date, d.id`, ownerID, days.IsPrivate(ctx))
 	if err != nil {
 		return nil, nil, fmt.Errorf("export days: %w", err)
 	}
@@ -184,9 +186,10 @@ func exportDays(ctx context.Context, tx *sql.Tx, ownerID int64) ([]*exportDay, m
 			title, date, clock, repeat, coll, comment, color, ic string
 			archived                                             sql.NullInt64
 			live                                                 bool
+			private                                              bool
 		)
 		if err := rows.Scan(&d.id, &title, &date, &clock, &repeat, &coll, &comment, &archived, &live,
-			&color, &ic, &d.bgID); err != nil {
+			&color, &ic, &d.bgID, &private); err != nil {
 			return nil, nil, fmt.Errorf("export days: %w", err)
 		}
 		archivedAt, archiveLive := "", ""
@@ -194,7 +197,8 @@ func exportDays(ctx context.Context, tx *sql.Tx, ownerID int64) ([]*exportDay, m
 			archivedAt = time.Unix(archived.Int64, 0).UTC().Format(time.RFC3339)
 			archiveLive = strconv.FormatBool(live)
 		}
-		d.record = []string{title, date, clock, repeat, coll, "", comment, archivedAt, color, ic, "", "", archiveLive}
+		d.record = []string{title, date, clock, repeat, coll, "", comment, archivedAt, color, ic, "", "", archiveLive,
+			strconv.FormatBool(private)}
 		list = append(list, &d)
 		byID[d.id] = &d
 	}
@@ -207,7 +211,8 @@ func exportDays(ctx context.Context, tx *sql.Tx, ownerID int64) ([]*exportDay, m
 func exportTags(ctx context.Context, tx *sql.Tx, ownerID int64, byID map[int64]*exportDay) error {
 	rows, err := tx.QueryContext(ctx, `SELECT dt.day_id, t.name FROM day_tags dt
 		JOIN tags t ON t.id = dt.tag_id JOIN days d ON d.id = dt.day_id
-		WHERE d.owner_id = ? AND t.owner_id = ? ORDER BY t.is_reserved DESC, t.name, t.id`, ownerID, ownerID)
+		WHERE d.owner_id = ? AND t.owner_id = ? AND d.is_private = ?
+		ORDER BY t.is_reserved DESC, t.name, t.id`, ownerID, ownerID, days.IsPrivate(ctx))
 	if err != nil {
 		return fmt.Errorf("export tags: %w", err)
 	}
@@ -231,7 +236,8 @@ func exportTags(ctx context.Context, tx *sql.Tx, ownerID int64, byID map[int64]*
 func (s *Service) exportAttachments(ctx context.Context, tx *sql.Tx, ownerID int64, byID map[int64]*exportDay) ([]exportFile, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT a.id, a.day_id, a.uuid, COALESCE(a.sha256, ''), a.filename, a.size, a.created_at
 		FROM attachments a JOIN days d ON d.id = a.day_id
-		WHERE a.owner_id = ? AND d.owner_id = ? AND a.detached = 0 ORDER BY a.created_at, a.id`, ownerID, ownerID)
+		WHERE a.owner_id = ? AND d.owner_id = ? AND d.is_private = ? AND a.detached = 0
+		ORDER BY a.created_at, a.id`, ownerID, ownerID, days.IsPrivate(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("export attachments: %w", err)
 	}

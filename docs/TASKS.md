@@ -411,6 +411,38 @@ Status legend: `[ ]` todo, `[x]` done.
 - **Done when**: date-engine, rendering/access, and mobile/desktop regressions pass, along with full Go tests and vet.
 - Verified: each card switches between 2 months 1 day and 62 days, then back, at 375px and 1280px without overflow; new-day file uploads preserve the saved day/attachment. Leap-year, DST, timed, repeat, today, locale, owner/shared/archived access regressions, 74 JavaScript tests, full Go tests, and vet pass.
 
+### [x] T52 Private days and password-gated Vault
+- Add a persisted Private day checkbox (normal days default public); allow editing privacy.
+- Reuse home, search, day CRUD, archive, collections, tags, and media under `/private/`.
+- Add Vault to the avatar menu; require the current password on entry, with CSRF and rate limiting; lock on leaving for normal pages.
+- Exclude private days and attachments from normal views, searches, group counts, exports, and all sharing; count them toward account quotas.
+- Preserve privacy on CSV export/import and maintain legacy CSV compatibility.
+- **Done when**: privacy/authorization, password gating, route parity, import/export, and 375px/1280px checks pass, together with full Go tests/vet and JavaScript tests.
+- Verified: private/normal namespace isolation, title/comment search, group counts, attachment access, non-sharing, privacy transitions, quotas, password re-entry/locking, and namespace-bound CSV round trips pass. Browser checks at 375px and 1280px cover Vault entry, creation, htmx future/past navigation, tags, comment search, attachment upload, and locking on exit without overflow. Full Go tests/vet and all 75 JavaScript tests pass.
+
+### [x] T53 Header Vault visibility toggle
+- Replace the avatar-menu Vault entry with an icon between search and theme.
+- Confirm the account password in a cancellable modal before enabling private-day visibility.
+- Include private days alongside normal/shared days in home, collections, tags, search, and archives while unlocked; distinguish them with a border and badge.
+- Persist the toggle across navigation in the current session; toggle off to hide private rows and counts and revoke private-route access.
+- Preserve private attachment, export, sharing, CSRF, rate-limit, and owner/session isolation rules.
+- **Done when**: targeted and full Go tests/vet, JavaScript tests, and 375px/1280px browser checks pass.
+- Verified: full Go tests and vet pass; all 80 JavaScript tests pass. Browser checks at 375px and 1280px cover icon placement, password confirmation, X/Escape cancellation, mixed lists, persistent navigation, toggle-off hiding, no overflow, and readable private badges in both themes. Authorization tests cover mixed group counts, title/comment search, archives, shared-day preservation, session isolation, CSRF, rate limiting, and direct-access revocation.
+
+### [x] T54 Private creation return and day-form layout
+- Return successful private-day creations to the homepage without opening or unlocking Vault.
+- Match the compact desktop form rows: title/privacy, date and time/recurrence, collections/tags, then comments; retain other controls and stack fields on mobile.
+- Default new-day time to 00:00 while preserving optional all-day dates and saved edit values.
+- **Done when**: redirect/authorization and form regressions, 375px/1280px browser checks, full Go tests/vet, and JavaScript tests pass.
+- Verified: locked and unlocked private creations return to the homepage with Vault visibility unchanged, including native multipart and htmx requests. Midnight, all-day, custom-time, edit, and validation regressions pass. Browser checks confirm desktop row alignment, single-column mobile fields without overflow, and privacy-icon password dialog behavior. Full Go tests/vet and all 80 JavaScript tests pass.
+
+### [x] T55 Compact tag field and overlay autocomplete
+- Match the tag field to the 44px title/collection controls; keep selected chips inside the single-line field.
+- Overlay suggestions without shifting other fields, with hover, Tab/Enter acceptance, and Up/Down navigation.
+- Retain tag creation, no-JavaScript fallback, IME, dismissal, accessibility, and unsaved-change protection.
+- **Done when**: picker regressions, full Go tests/vet, JavaScript tests, and 375px/1280px browser checks pass.
+- Verified: tag controls measure 44px at 375px and 1280px, including multiple long selected chips, without horizontal page overflow. Overlay hit-testing and unchanged comment positioning confirm suggestions float above other fields. Tab/Enter, arrow keys, hover selection, creation, Escape/outside dismissal, IME, and validation persistence pass; full Go tests/vet and all 83 JavaScript tests pass.
+
 ## Dependency Graph
 
 ```mermaid

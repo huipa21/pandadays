@@ -5,6 +5,18 @@ multi-user spaces, collections, tags, attachments, and read-only sharing.
 English and Simplified Chinese are included. No self-registration, external
 database, or frontend build step is needed.
 
+Days are normal/public within your account by default, not publicly accessible
+on the internet. Tick **Private day** when creating or editing a day to keep it
+private. The **Vault** icon between search and the theme switch opens a password
+confirmation dialog. After verification, private days are included in home,
+collections, tags, search, and archives, with a distinct border and Private day
+badge. Cancel with the X or Escape; toggle Vault off to hide private days again.
+Unlocking is scoped to your login session and survives navigation. Private
+details and attachments remain password-gated under `/private/` and cannot be
+shared. Normal exports
+exclude private days; use `/private/settings/export` after unlocking to export
+Vault days. Full site backups include both.
+
 ## Install with Docker Compose
 
 Build the image on your development laptop, then transfer it to the cloud

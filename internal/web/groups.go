@@ -53,6 +53,10 @@ type groupHandlers struct {
 	section groupSection
 }
 
+func (h *groupHandlers) pageSection(r *http.Request) groupSection {
+	return groupSection{Key: h.section.Key, Base: privatePath(r, h.section.Base)}
+}
+
 func (s *Server) registerGroupRoutes(mux *http.ServeMux, store *days.Groups, key string) {
 	h := &groupHandlers{s: s, store: store, section: groupSection{Key: key, Base: "/" + key}}
 	base := h.section.Base
@@ -119,7 +123,7 @@ func (h *groupHandlers) renderList(w http.ResponseWriter, r *http.Request, statu
 	if form.Color == "" && !form.NoColor {
 		form.Color = defaultGroupColor
 	}
-	h.s.renderStatus(w, r, "groups.html", status, groupsPage{pageData: newPageData(r), Section: h.section,
+	h.s.renderStatus(w, r, "groups.html", status, groupsPage{pageData: newPageData(r), Section: h.pageSection(r),
 		Groups: groups, Form: form, Error: errKey, CreateOpen: errKey != "" || r.URL.Query().Get("create") == "1"})
 }
 
@@ -146,7 +150,7 @@ func (h *groupHandlers) create(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, "create", err)
 		return
 	}
-	http.Redirect(w, r, h.section.Base, http.StatusSeeOther)
+	authRedirect(w, r, h.section.Base)
 }
 
 func (h *groupHandlers) renderDetail(w http.ResponseWriter, r *http.Request, status int, g days.Group, form groupForm, errKey string) {
@@ -168,7 +172,7 @@ func (h *groupHandlers) renderDetail(w http.ResponseWriter, r *http.Request, sta
 		h.fail(w, r, "list day groups in", err)
 		return
 	}
-	page := groupPage{pageData: newPageData(r), Section: h.section,
+	page := groupPage{pageData: newPageData(r), Section: h.pageSection(r),
 		Group: g, Form: form, Error: errKey, HideArchived: hideArchived, Items: items}
 	switch dialog := r.URL.Query().Get("dialog"); dialog {
 	case "edit":
@@ -178,14 +182,14 @@ func (h *groupHandlers) renderDetail(w http.ResponseWriter, r *http.Request, sta
 			page.Dialog = dialog
 		}
 	case "share":
-		if h.section.Key == "collections" {
+		if h.section.Key == "collections" && !days.IsPrivate(r.Context()) {
 			page.Dialog = dialog
 		}
 	}
 	if errKey != "" {
 		page.Dialog = "edit"
 	}
-	if h.section.Key == "collections" {
+	if h.section.Key == "collections" && !days.IsPrivate(r.Context()) {
 		shares, err := h.s.shares.List(r.Context(), owner, share.TargetCollection, g.ID)
 		if err != nil {
 			h.fail(w, r, "list collection shares for", err)
@@ -253,7 +257,7 @@ func (h *groupHandlers) update(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, "update", err)
 		return
 	}
-	http.Redirect(w, r, h.section.Base+"/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+	authRedirect(w, r, h.section.Base+"/"+strconv.FormatInt(id, 10))
 }
 
 func (h *groupHandlers) delete(w http.ResponseWriter, r *http.Request) {

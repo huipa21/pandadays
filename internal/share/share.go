@@ -146,7 +146,7 @@ func checkTarget(ctx context.Context, tx *sql.Tx, ownerID int64, targetType Targ
 	var query string
 	switch targetType {
 	case TargetDay:
-		query = `SELECT 1 FROM days WHERE owner_id = ? AND id = ?`
+		query = `SELECT 1 FROM days WHERE owner_id = ? AND id = ? AND is_private = 0`
 	case TargetCollection:
 		query = `SELECT 1 FROM collections WHERE owner_id = ? AND id = ?`
 	default:
@@ -314,7 +314,7 @@ func (s *Store) Target(ctx context.Context, ownerID, shareID int64) (TargetType,
 	return targetType, targetID, nil
 }
 
-const accessPredicate = `EXISTS (
+const accessPredicate = `d.is_private = 0 AND EXISTS (
 	SELECT 1 FROM shares sh
 	JOIN share_recipients sr ON sr.share_id = sh.id
 	WHERE sh.owner_id = d.owner_id AND sr.recipient_id = ? AND sr.status = 'accepted'
