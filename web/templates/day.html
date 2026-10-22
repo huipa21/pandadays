@@ -17,6 +17,12 @@
       <p class="countdown-caption">{{.Direction}}</p>
       {{$switchLabel := t "days.display.show_days"}}{{if .DaysOnly}}{{$switchLabel = t "days.display.show_calendar"}}{{end}}
       <a class="day-display-toggle" href="/days/{{.Day.ID}}{{if not .DaysOnly}}?display=days{{end}}" aria-label="{{$switchLabel}}" title="{{$switchLabel}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4 3 8l4 4"/><path d="M3 8h14"/><path d="m17 20 4-4-4-4"/><path d="M21 16H7"/></svg></a>
+      {{if and .Day.ArchivedAt (not .Shared)}}{{$playLabel := t "days.archive.play"}}{{if .Day.ArchiveLive}}{{$playLabel = t "days.archive.pause"}}{{end}}
+      <form method="post" action="/days/{{.Day.ID}}/{{if .Day.ArchiveLive}}pause{{else}}play{{end}}" hx-post="/days/{{.Day.ID}}/{{if .Day.ArchiveLive}}pause{{else}}play{{end}}" class="inline-form day-play-form">
+        {{template "csrf-field" .}}
+        {{if .DaysOnly}}<input type="hidden" name="display" value="days">{{end}}
+        <button type="submit" class="day-play-toggle" aria-label="{{$playLabel}}" title="{{$playLabel}}">{{if .Day.ArchiveLive}}<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg>{{else}}<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14"/><path d="M16 5v14"/></svg>{{end}}</button>
+      </form>{{end}}
     </div>
     {{if ne .Day.Repeat "none"}}<p class="day-next hint">{{t "days.next"}}: {{template "day-when" .}}</p>{{end}}
     {{with .Ordinal}}<p class="day-ordinal"><span aria-hidden="true">🎉</span> {{.}}</p>{{end}}
@@ -26,6 +32,7 @@
     </div>{{end}}
     <div class="day-meta">
       <div class="day-meta-groups">
+        {{if not .Created.IsZero}}<span class="day-created">{{t "days.created"}} <time datetime="{{.Created.Format "2006-01-02T15:04:05Z07:00"}}">{{.Created.Format "2006-01-02 15:04"}}</time></span>{{end}}
         <span class="day-repeat"><span aria-hidden="true">↻</span> {{t (printf "days.repeat.%s" .Day.Repeat)}}</span>
         {{if not .Shared}}
         {{if not .Collection.Reserved}}<a class="chip chip-small" href="/collections/{{.Collection.ID}}">{{template "swatch" .Collection.Color}} {{template "group-name" .Collection}}</a>{{end}}

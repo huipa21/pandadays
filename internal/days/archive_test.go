@@ -64,6 +64,47 @@ func TestSetArchivedPreservesContentAndOwnership(t *testing.T) {
 	}
 }
 
+func TestArchiveLivePlayState(t *testing.T) {
+	ctx := context.Background()
+	db := dbtest.Open(t)
+	owner := newOwner(t, db, "alice")
+	other := newOwner(t, db, "bob")
+	s := NewDays(db)
+	d, err := s.Create(ctx, owner, DayInput{Title: "Job", Date: "2020-01-02"}, groupNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	live := func() bool {
+		t.Helper()
+		got, err := s.Get(ctx, owner, d.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got.ArchiveLive
+	}
+	if err := s.SetArchiveLive(ctx, owner, d.ID, true); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("play on active day: %v", err)
+	}
+	if err := s.SetArchived(ctx, owner, d.ID, true, groupNow); err != nil || live() {
+		t.Fatalf("new archive must start paused: %v", err)
+	}
+	if err := s.SetArchiveLive(ctx, other, d.ID, true); !errors.Is(err, ErrNotFound) || live() {
+		t.Fatalf("foreign play: %v", err)
+	}
+	if err := s.SetArchiveLive(ctx, owner, d.ID, true); err != nil || !live() {
+		t.Fatalf("play: %v", err)
+	}
+	if err := s.SetArchived(ctx, owner, d.ID, true, groupNow.Add(time.Hour)); err != nil || !live() {
+		t.Fatalf("repeated archive must keep play state: %v", err)
+	}
+	if err := s.SetArchived(ctx, owner, d.ID, false, groupNow); err != nil || live() {
+		t.Fatalf("unarchive must reset play state: %v", err)
+	}
+	if err := s.SetArchived(ctx, owner, d.ID, true, groupNow); err != nil || live() {
+		t.Fatalf("re-archive must start paused: %v", err)
+	}
+}
+
 func TestArchiveAndGroupLists(t *testing.T) {
 	ctx := context.Background()
 	db := dbtest.Open(t)

@@ -170,6 +170,9 @@ func (f *fixture) seed(t *testing.T, owner int64) {
 	if err := f.days.SetArchived(ctx, owner, created[3].ID, true, testNow.Add(-time.Hour)); err != nil {
 		t.Fatal(err)
 	}
+	if err := f.days.SetArchiveLive(ctx, owner, created[3].ID, true); err != nil {
+		t.Fatal(err)
+	}
 	img, err := f.media.Upload(ctx, owner, created[0].ID, "photo 1.png", bytes.NewReader(fixturePNG(t)))
 	if err != nil {
 		t.Fatal(err)
@@ -201,7 +204,7 @@ func (f *fixture) snapshot(t *testing.T, owner int64) ([]string, int64) {
 	t.Helper()
 	rows, err := f.db.Query(`SELECT d.id, d.title, d.date, COALESCE(d.time, ''), d.repeat,
 		CASE WHEN c.is_reserved = 1 THEN '<default>' ELSE c.name END, COALESCE(d.comment, ''),
-		COALESCE(d.archived_at, 0), COALESCE(d.style_color, ''), COALESCE(d.style_icon, ''),
+		COALESCE(d.archived_at, 0), d.archive_live, COALESCE(d.style_color, ''), COALESCE(d.style_icon, ''),
 		COALESCE((SELECT filename FROM attachments WHERE id = d.style_bg_attachment_id), '')
 		FROM days d JOIN collections c ON c.id = d.collection_id WHERE d.owner_id = ?`, owner)
 	if err != nil {
@@ -214,12 +217,13 @@ func (f *fixture) snapshot(t *testing.T, owner int64) ([]string, int64) {
 	var list []dayRow
 	for rows.Next() {
 		var id, archived int64
+		var live bool
 		var title, date, clock, repeat, coll, comment, color, icon, bg string
-		if err := rows.Scan(&id, &title, &date, &clock, &repeat, &coll, &comment, &archived, &color, &icon, &bg); err != nil {
+		if err := rows.Scan(&id, &title, &date, &clock, &repeat, &coll, &comment, &archived, &live, &color, &icon, &bg); err != nil {
 			t.Fatal(err)
 		}
-		list = append(list, dayRow{id, fmt.Sprintf("%q %s %s %s %s %q %d %s %s bg=%q",
-			title, date, clock, repeat, coll, comment, archived, color, icon, bg)})
+		list = append(list, dayRow{id, fmt.Sprintf("%q %s %s %s %s %q %d live=%t %s %s bg=%q",
+			title, date, clock, repeat, coll, comment, archived, live, color, icon, bg)})
 	}
 	rows.Close()
 	var out []string
@@ -416,7 +420,7 @@ func TestExportFormatAndCSVInjection(t *testing.T) {
 		!strings.HasSuffix(paris[10], "_photo 1.png") || len(splitList(paris[11])) != 2 {
 		t.Fatalf("paris row = %v", paris)
 	}
-	if r := byTitle["Archived thing"]; r == nil || r[7] != testNow.Add(-time.Hour).Format(time.RFC3339) ||
+	if r := byTitle["Archived thing"]; r == nil || r[7] != testNow.Add(-time.Hour).Format(time.RFC3339) || r[12] != "true" ||
 		!strings.HasSuffix(r[11], "_b_c_d_.txt") {
 		t.Fatalf("archived row = %v", r)
 	}
@@ -517,6 +521,26 @@ func TestImportBareCSVAndRowErrors(t *testing.T) {
 	f.db.QueryRow(`SELECT c.is_reserved FROM days d JOIN collections c ON c.id = d.collection_id WHERE d.title = 'Default coll'`).Scan(&defaultColl)
 	if tagCount != 3 || defaultColl != 1 {
 		t.Fatalf("tags=%d default collection=%d", tagCount, defaultColl)
+	}
+}
+
+func TestImportArchiveLive(t *testing.T) {
+	f := newFixture(t)
+	b := f.user(t, "bob")
+	csvData := "title,date,archived,archive_live\n" +
+		"Live,2026-02-03,true,true\n" +
+		"Paused,2026-02-03,true,\n" +
+		"Active,2026-02-03,,true\n" +
+		"Bad,2026-02-03,true,maybe\n"
+	p, res := f.importData(t, b, []byte(csvData))
+	if res.Imported != 3 || len(p.Errors) != 1 || p.Errors[0].Line != 5 || !errors.Is(p.Errors[0].Err, ErrArchiveLive) {
+		t.Fatalf("preview=%+v result=%+v", p, res)
+	}
+	for title, want := range map[string]bool{"Live": true, "Paused": false, "Active": false} {
+		var live bool
+		if err := f.db.QueryRow(`SELECT archive_live FROM days WHERE owner_id = ? AND title = ?`, b, title).Scan(&live); err != nil || live != want {
+			t.Errorf("%s: archive_live=%v err=%v, want %v", title, live, err, want)
+		}
 	}
 }
 

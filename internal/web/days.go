@@ -57,7 +57,8 @@ type dayPage struct {
 	Clock       string
 	Breakdown   []breakdownPart
 	DaysOnly    bool
-	Ordinal     string // repeating days from the first repeat on
+	Created     time.Time // zero for shared days
+	Ordinal     string    // repeating days from the first repeat on
 	Since       []breakdownPart
 	SinceClock  string
 	Collection  days.Group
@@ -99,6 +100,8 @@ func (s *Server) registerDayRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /days/{id}/delete", RequireLogin(http.HandlerFunc(s.handleDayDelete)))
 	mux.Handle("POST /days/{id}/archive", RequireLogin(http.HandlerFunc(s.handleDayArchive)))
 	mux.Handle("POST /days/{id}/unarchive", RequireLogin(http.HandlerFunc(s.handleDayUnarchive)))
+	mux.Handle("POST /days/{id}/play", RequireLogin(http.HandlerFunc(s.handleDayPlay)))
+	mux.Handle("POST /days/{id}/pause", RequireLogin(http.HandlerFunc(s.handleDayPause)))
 	mux.Handle("GET /archive", RequireLogin(http.HandlerFunc(s.handleArchive)))
 }
 
@@ -120,6 +123,30 @@ func (s *Server) setDayArchived(w http.ResponseWriter, r *http.Request, archived
 		return
 	}
 	authRedirect(w, r, dayPath(id))
+}
+
+func (s *Server) handleDayPlay(w http.ResponseWriter, r *http.Request) {
+	s.setDayArchiveLive(w, r, true)
+}
+
+func (s *Server) handleDayPause(w http.ResponseWriter, r *http.Request) {
+	s.setDayArchiveLive(w, r, false)
+}
+
+func (s *Server) setDayArchiveLive(w http.ResponseWriter, r *http.Request, live bool) {
+	id, ok := s.dayID(w, r)
+	if !ok {
+		return
+	}
+	if err := s.days.SetArchiveLive(r.Context(), CurrentUser(r.Context()).ID, id, live); err != nil {
+		s.dayFail(w, r, "set archive play state for", err)
+		return
+	}
+	target := dayPath(id)
+	if r.PostFormValue("display") == "days" {
+		target += "?display=days"
+	}
+	authRedirect(w, r, target)
 }
 
 func dayErrorKey(err error) (string, bool) {
@@ -453,7 +480,7 @@ func (s *Server) handleDayView(w http.ResponseWriter, r *http.Request) {
 				ID: sharedDay.ID, OwnerID: sharedDay.OwnerID, Title: sharedDay.Title, Date: sharedDay.Date,
 				Time: sharedDay.Time, Repeat: days.Repeat(sharedDay.Repeat), Comment: sharedDay.Comment,
 				StyleColor: sharedDay.StyleColor, StyleIcon: sharedDay.StyleIcon,
-				StyleBgAttachmentID: sharedDay.StyleBgAttachmentID, ArchivedAt: sharedDay.ArchivedAt,
+				StyleBgAttachmentID: sharedDay.StyleBgAttachmentID, ArchivedAt: sharedDay.ArchivedAt, ArchiveLive: sharedDay.ArchiveLive,
 			}
 			shared, shareOwner, showComment = true, sharedDay.OwnerUsername, sharedDay.ShowComment
 		} else if errors.Is(err, share.ErrNotFound) {
@@ -466,7 +493,11 @@ func (s *Server) handleDayView(w http.ResponseWriter, r *http.Request) {
 	}
 	page := dayPage{pageData: newPageData(r), Day: d, Shared: shared, ShareOwner: shareOwner, ShowComment: showComment,
 		DaysOnly: r.URL.Query().Get("display") == "days"}
-	calc, err := days.Calculate(d.Schedule(), s.now(), userLocation(u))
+	loc := userLocation(u)
+	if !d.CreatedAt.IsZero() {
+		page.Created = d.CreatedAt.In(loc)
+	}
+	calc, err := days.Calculate(d.Schedule(), d.CountAt(s.now()), loc)
 	if err != nil {
 		s.dayFail(w, r, "calculate", err)
 		return

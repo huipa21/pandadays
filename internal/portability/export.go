@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -167,7 +168,7 @@ func (s *Service) Export(ctx context.Context, ownerID int64, now time.Time, w io
 
 func exportDays(ctx context.Context, tx *sql.Tx, ownerID int64) ([]*exportDay, map[int64]*exportDay, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT d.id, d.title, d.date, COALESCE(d.time, ''), d.repeat, c.name,
-		COALESCE(d.comment, ''), d.archived_at, COALESCE(d.style_color, ''), COALESCE(d.style_icon, ''),
+		COALESCE(d.comment, ''), d.archived_at, d.archive_live, COALESCE(d.style_color, ''), COALESCE(d.style_icon, ''),
 		COALESCE(d.style_bg_attachment_id, 0)
 		FROM days d JOIN collections c ON c.id = d.collection_id AND c.owner_id = d.owner_id
 		WHERE d.owner_id = ? ORDER BY d.date, d.id`, ownerID)
@@ -182,16 +183,18 @@ func exportDays(ctx context.Context, tx *sql.Tx, ownerID int64) ([]*exportDay, m
 			d                                                    exportDay
 			title, date, clock, repeat, coll, comment, color, ic string
 			archived                                             sql.NullInt64
+			live                                                 bool
 		)
-		if err := rows.Scan(&d.id, &title, &date, &clock, &repeat, &coll, &comment, &archived,
+		if err := rows.Scan(&d.id, &title, &date, &clock, &repeat, &coll, &comment, &archived, &live,
 			&color, &ic, &d.bgID); err != nil {
 			return nil, nil, fmt.Errorf("export days: %w", err)
 		}
-		archivedAt := ""
+		archivedAt, archiveLive := "", ""
 		if archived.Valid {
 			archivedAt = time.Unix(archived.Int64, 0).UTC().Format(time.RFC3339)
+			archiveLive = strconv.FormatBool(live)
 		}
-		d.record = []string{title, date, clock, repeat, coll, "", comment, archivedAt, color, ic, "", ""}
+		d.record = []string{title, date, clock, repeat, coll, "", comment, archivedAt, color, ic, "", "", archiveLive}
 		list = append(list, &d)
 		byID[d.id] = &d
 	}

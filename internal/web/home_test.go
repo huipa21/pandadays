@@ -96,7 +96,8 @@ func TestHomeToggleFilteringAndOrdering(t *testing.T) {
 		`<span class="day-item-label">2 days left</span>`,
 		`<span class="day-item-label">08:00 left</span>`,
 		// Repeating days show the effective (next) target, not the original date.
-		`<time datetime="2026-11-01">2026-11-01</time> · <span aria-hidden="true">↻</span> Every year`,
+		`<time class="day-item-date" datetime="2026-11-01">2026-11-01</time></span>`,
+		`<span class="day-item-repeat"><span aria-hidden="true">↻</span> Every year</span>`,
 		`class="day-item day-today"`,
 		`class="day-item day-future"`,
 		`<a class="btn" href="/days/new">`,

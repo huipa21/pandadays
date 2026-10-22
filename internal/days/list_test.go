@@ -65,6 +65,41 @@ func TestHomeListFiltersAndOrders(t *testing.T) {
 	}
 }
 
+func TestHomeListMovesPassedDayToPast(t *testing.T) {
+	loc := time.UTC
+	list := []Day{{ID: 1, Title: "Deadline", Date: "2026-11-16"}}
+	before := time.Date(2026, 11, 15, 12, 0, 0, 0, loc)
+	if got := HomeList(list, WhenFuture, before, loc); len(got) != 1 || got[0].Calc.ListLabel.Args[0] != 1 {
+		t.Fatalf("before: %+v", got)
+	}
+	after := time.Date(2026, 11, 20, 12, 0, 0, 0, loc)
+	if got := HomeList(list, WhenFuture, after, loc); len(got) != 0 {
+		t.Fatalf("passed day still upcoming: %+v", got)
+	}
+	got := HomeList(list, WhenPast, after, loc)
+	if len(got) != 1 || got[0].Calc.ListLabel.Key != "days.count.ago.other" || got[0].Calc.ListLabel.Args[0] != 4 {
+		t.Fatalf("after: %+v", got)
+	}
+}
+
+func TestHomeListFreezesPausedArchive(t *testing.T) {
+	loc := time.UTC
+	archivedAt := time.Date(2026, 11, 10, 9, 0, 0, 0, loc)
+	now := time.Date(2026, 11, 20, 12, 0, 0, 0, loc)
+	paused := Day{ID: 1, Title: "Paused", Date: "2026-11-16", ArchivedAt: &archivedAt}
+	live := paused
+	live.ID, live.Title, live.ArchiveLive = 2, "Live", true
+	// Archived 6 days before the date: stays a 6-day countdown while paused.
+	future := HomeList([]Day{paused, live}, WhenFuture, now, loc)
+	if len(future) != 1 || future[0].Day.ID != 1 || future[0].Calc.ListLabel.Args[0] != 6 {
+		t.Fatalf("paused: %+v", future)
+	}
+	past := HomeList([]Day{paused, live}, WhenPast, now, loc)
+	if len(past) != 1 || past[0].Day.ID != 2 || past[0].Calc.ListLabel.Args[0] != 4 {
+		t.Fatalf("live: %+v", past)
+	}
+}
+
 func TestListActiveScopedAndExcludesArchived(t *testing.T) {
 	ctx := context.Background()
 	db := dbtest.Open(t)

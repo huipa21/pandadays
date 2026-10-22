@@ -139,7 +139,7 @@ func sharedDayForList(d share.SharedDay) days.Day {
 	return days.Day{
 		ID: d.ID, OwnerID: d.OwnerID, Title: d.Title, Date: d.Date, Time: d.Time, Repeat: days.Repeat(d.Repeat),
 		StyleColor: d.StyleColor, StyleIcon: d.StyleIcon, StyleBgAttachmentID: d.StyleBgAttachmentID,
-		ArchivedAt: d.ArchivedAt,
+		ArchivedAt: d.ArchivedAt, ArchiveLive: d.ArchiveLive,
 	}
 }
 

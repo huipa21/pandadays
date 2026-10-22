@@ -60,6 +60,7 @@ type Day struct {
 	StyleIcon           string
 	StyleBgAttachmentID int64
 	ArchivedAt          *time.Time
+	ArchiveLive         bool
 }
 
 type Store struct {
@@ -399,7 +400,7 @@ func (s *Store) queryShared(ctx context.Context, viewerID int64, includeHidden b
 	args = append(args, viewerID)
 	query := `SELECT d.id, d.owner_id, d.title, d.date, COALESCE(d.time, ''), d.repeat,
 		COALESCE(d.comment, ''), COALESCE(d.style_color, ''), COALESCE(d.style_icon, ''),
-		COALESCE(d.style_bg_attachment_id, 0), d.archived_at, u.username,
+		COALESCE(d.style_bg_attachment_id, 0), d.archived_at, d.archive_live, u.username,
 		COALESCE(MAX(sh.show_comment), 0), ` + hidden + `
 		FROM days d JOIN users u ON u.id = d.owner_id
 		JOIN shares sh ON sh.owner_id = d.owner_id
@@ -419,7 +420,7 @@ func scanSharedDay(rows sharedRows) (SharedDay, error) {
 	var archived sql.NullInt64
 	var show, hidden int
 	if err := rows.Scan(&out.ID, &out.OwnerID, &out.Title, &out.Date, &out.Time, &out.Repeat,
-		&out.Comment, &out.StyleColor, &out.StyleIcon, &out.StyleBgAttachmentID, &archived,
+		&out.Comment, &out.StyleColor, &out.StyleIcon, &out.StyleBgAttachmentID, &archived, &out.ArchiveLive,
 		&out.OwnerUsername, &show, &hidden); err != nil {
 		return SharedDay{}, err
 	}

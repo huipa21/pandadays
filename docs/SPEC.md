@@ -81,6 +81,7 @@ A meaningful date owned by one user.
 | comment | optional, free text (max 10,000 chars); not shown in list view, shown on card view |
 | style | optional accent color, icon/emoji, background image (from the day's own image attachments) |
 | archived_at | null = active; set = archived |
+| archive_live | archived day keeps counting (default 0 = frozen at `archived_at`) |
 | attachments | images, audio (incl. in-browser voice recording), video, generic files |
 
 Create and edit forms warn through the browser's native exit confirmation when
@@ -211,9 +212,9 @@ Reserved names are displayed localized ("Default" / "默认") but stored with `i
 - Monthly repeat on day 29–31: clamp to the last day of shorter months.
 - Yearly repeat on Feb 29: Feb 28 in non-leap years.
 - Display:
-  - List: `N days left` / `N days ago` / `Today`. Timed differences under 24 hours use zero-padded `HH:MM left` / `HH:MM ago`, without seconds.
+  - List: `N days left` / `N days ago` / `Today`. Timed differences under 24 hours use zero-padded `HH:MM left` / `HH:MM ago`, without seconds. List entries show the icon, then the highlighted effective date (time below it) in a fixed-width column so titles align vertically, then title, recurrence, and badges.
   - Card: centered square calendar (up to 32rem wide, growing vertically for long content), calendar-style icon/title row, large date row, then calendar years/months/days and `HH:MM` (if time set), labeled as remaining or elapsed. For repeating days, also show the next occurrence, occurrence ordinal (e.g. "3rd anniversary"), and time since the original date.
-  - Below a separator, recurrence, non-default collection, and non-default tags share a wrapping row without collection/tag labels. Owners have a right-aligned three-dot menu for Edit, Archive/Unarchive, Delete (with confirmation), Share, and Attachment. Shared recipients remain read-only.
+  - Below a separator, the created date/time (owner only, user timezone), recurrence, non-default collection, and non-default tags share a wrapping row without collection/tag labels. Owners have a right-aligned three-dot menu for Edit, Archive/Unarchive, Delete (with confirmation), Share, and Attachment. Shared recipients remain read-only.
   - The optional visible comment follows the metadata row. Owner Share and Attachment menu links open modal dialogs outside the calendar, with Close and Escape support. Without JavaScript, the links open fixed overlays with Close links. Attachment and share actions redirect back to the appropriate open dialog. Shared attachments remain read-only and expandable.
   - Day list entries omit reserved Default collection and tag badges, even when no other groups are assigned. Non-default group badges remain visible in home, search, subgroup, and archive lists. Shared recipients retain an expandable read-only attachments section. Menu actions use consistent plain styling, with Delete distinguished by its danger color.
 - Classification: **future** (target > now or repeating), **today**, **past** (target < now, non-repeating).
@@ -236,6 +237,7 @@ Badges are never removed by custom styles so states remain distinguishable witho
 
 ### 3.6 Archive
 - Archiving sets `archived_at`; unarchiving clears it.
+- A newly archived day is **paused**: every list and card calculates it at `archived_at` instead of now, as a snapshot. Owners can press the play button (shown as a pause icon while paused, after the display-mode toggle on the card) to resume live counting, and press it again to return to the snapshot. The play state is saved per day, is shown to share recipients read-only, and resets to paused on unarchive.
 - Archived days are hidden from Home.
 - Archived days are visible in: Archive page, Collection detail, Tag detail (with a filter to hide them).
 
@@ -360,8 +362,9 @@ pandadays-export-<username>-<date>.zip
 ```
 `days.csv` columns (UTF-8 with BOM for Excel, RFC 4180):
 ```
-title,date,time,repeat,collection,tags,comment,archived,style_color,style_icon,style_bg,attachments
+title,date,time,repeat,collection,tags,comment,archived,style_color,style_icon,style_bg,attachments,archive_live
 ```
+- `archive_live` is `true`/`false` for archived days (resumed vs. frozen counter) and empty otherwise. Imports accept files without this column; missing or empty values import archived days paused, and the value is ignored for unarchived rows.
 - `tags` and `attachments` are `|`-separated; attachments refer to paths inside `media/`; `style_bg` refers to one of them.
 - Cells beginning with `= + - @ \t \r` are prefixed with `'` (CSV injection guard); importer strips that prefix.
 - Only the user's own days (not shared-with-me).
@@ -495,7 +498,8 @@ days(id PK, owner_id FK CASCADE, collection_id FK RESTRICT,
   title, date TEXT, time TEXT NULL,
   repeat TEXT CHECK(repeat IN('none','weekly','monthly','yearly')) DEFAULT 'none',
   comment TEXT NULL, style_color TEXT NULL, style_icon TEXT NULL,
-  style_bg_attachment_id INTEGER NULL, archived_at NULL, created_at, updated_at)
+  style_bg_attachment_id INTEGER NULL, archived_at NULL, archive_live INTEGER DEFAULT 0,
+  created_at, updated_at)
   INDEX(owner_id, archived_at, date)
 
 day_tags(day_id FK CASCADE, tag_id FK CASCADE, PK(day_id, tag_id))
@@ -530,6 +534,7 @@ Deleting a day/collection also deletes shares targeting it (application-level, s
 | `GET /days/{id}` | Calendar card view (countdown, comment, attachments, style) |
 | `GET/POST /days/{id}/edit`, `POST /days/{id}/delete` | Edit / delete |
 | `POST /days/{id}/archive`, `/unarchive` | Archive toggle |
+| `POST /days/{id}/play`, `/pause` | Resume / freeze an archived day's counter |
 | `POST /days/{id}/attachments`, `POST /attachments/{id}/delete`, `GET /attachments/{id}` | Attachments |
 | `GET /media` | Media library: all own attachments across days |
 | `GET /media/{id}` | Owner-only media preview, details, and source |

@@ -29,14 +29,15 @@ type Entry struct {
 	Calc Calculation
 }
 
-// HomeList classifies days at now in loc and keeps those in the requested half:
+// HomeList classifies days at now in loc (paused archived days at their
+// archive time) and keeps those in the requested half:
 // future (including today) ascending by effective target, or past descending.
 // Ties are broken by title, then ID. Days whose schedule cannot be calculated
 // are skipped.
 func HomeList(list []Day, when When, now time.Time, loc *time.Location) []Entry {
 	out := make([]Entry, 0, len(list))
 	for _, d := range list {
-		c, err := Calculate(d.Schedule(), now, loc)
+		c, err := Calculate(d.Schedule(), d.CountAt(now), loc)
 		if err != nil {
 			continue
 		}

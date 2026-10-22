@@ -25,6 +25,7 @@ import (
 var (
 	ErrFieldCount        = errors.New("row has the wrong number of fields")
 	ErrArchivedInvalid   = errors.New("archived must be empty, true/false or an RFC 3339 time")
+	ErrArchiveLive       = errors.New("archive_live must be empty or true/false")
 	ErrCollectionName    = errors.New("collection name is invalid")
 	ErrTagName           = errors.New("tag name is invalid")
 	ErrAttachmentMissing = errors.New("attachment is not in the archive")
@@ -71,6 +72,7 @@ type row struct {
 	collection  string
 	tags        []string
 	archivedAt  *time.Time
+	archiveLive bool
 	attachments []string
 	styleBg     string
 }
@@ -130,8 +132,13 @@ func parseRows(data []byte, bare bool, now time.Time) ([]row, []RowError, error)
 			rowErrs = append(rowErrs, RowError{Line: line, Err: err})
 			continue
 		}
+		archiveLive, err := parseBool(cell("archive_live"))
+		if err != nil {
+			rowErrs = append(rowErrs, RowError{Line: line, Err: err})
+			continue
+		}
 		rw := row{line: line, in: in, collection: strings.TrimSpace(cell("collection")),
-			tags: splitList(cell("tags")), archivedAt: archivedAt}
+			tags: splitList(cell("tags")), archivedAt: archivedAt, archiveLive: archiveLive && archivedAt != nil}
 		if !bare {
 			rw.attachments = unique(splitList(cell("attachments")))
 			rw.styleBg = strings.TrimSpace(cell("style_bg"))
@@ -160,6 +167,16 @@ func parseArchived(s string, now time.Time) (*time.Time, error) {
 	}
 	t = time.Unix(t.Unix(), 0).UTC()
 	return &t, nil
+}
+
+func parseBool(s string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", "false", "no", "0":
+		return false, nil
+	case "true", "yes", "1":
+		return true, nil
+	}
+	return false, ErrArchiveLive
 }
 
 func unique(items []string) []string {
@@ -661,9 +678,9 @@ func (s *Service) insertDay(ctx context.Context, tx *sql.Tx, x *extractor, owner
 		archived = d.row.archivedAt.Unix()
 	}
 	res, err := tx.ExecContext(ctx, `INSERT INTO days (owner_id, collection_id, title, date, time, repeat, comment,
-		style_color, style_icon, archived_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		style_color, style_icon, archived_at, archive_live, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ownerID, refID(d.collection, collIDs), in.Title, in.Date, nullString(in.Time), string(in.Repeat),
-		nullString(in.Comment), nullString(in.StyleColor), nullString(in.StyleIcon), archived, now.Unix(), now.Unix())
+		nullString(in.Comment), nullString(in.StyleColor), nullString(in.StyleIcon), archived, d.row.archiveLive, now.Unix(), now.Unix())
 	if err != nil {
 		return 0, fmt.Errorf("import day: %w", err)
 	}

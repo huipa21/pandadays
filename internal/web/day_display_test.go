@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -62,6 +63,53 @@ func TestDayDisplayTodayTimedAndRepeating(t *testing.T) {
 				t.Errorf("%s: missing %q", tc.in.Title, want)
 			}
 		}
+	}
+}
+
+func TestArchivedDayFreezesUntilPlayed(t *testing.T) {
+	ctx := context.Background()
+	s, owner, token := homeServer(t)
+	_, bobToken := secondUser(t, s)
+	archivedAt := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	d := mustDay(t, s, owner, days.DayInput{Title: "Frozen", Date: "2026-05-02"})
+	if err := s.days.SetArchived(ctx, owner, d.ID, true, archivedAt); err != nil {
+		t.Fatal(err)
+	}
+	s.now = func() time.Time { return archivedAt.AddDate(0, 0, 10) }
+	path := dayPath(d.ID)
+	check := func(step string, wants ...string) {
+		t.Helper()
+		body := get(s.Handler(), path+"?display=days", token).Body.String() + get(s.Handler(), "/archive", token).Body.String()
+		for _, want := range wants {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s: missing %q", step, want)
+			}
+		}
+	}
+	check("paused", `<li><strong>30</strong> days</li>`, `<span class="day-item-label">30 days ago</span>`,
+		`action="`+path+`/play"`, `aria-label="Paused at archive time. Resume counting"`,
+		`<input type="hidden" name="display" value="days">`, `class="day-created">Created <time datetime="`)
+
+	if rr := sessionPost(t, s, path+"/play", bobToken, nil); rr.Code != http.StatusNotFound {
+		t.Fatalf("foreign play: %d", rr.Code)
+	}
+	rr := sessionPost(t, s, path+"/play", token, url.Values{"display": {"days"}})
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != path+"?display=days" {
+		t.Fatalf("play: %d %q", rr.Code, rr.Header().Get("Location"))
+	}
+	check("live", `<li><strong>40</strong> days</li>`, `<span class="day-item-label">40 days ago</span>`, `action="`+path+`/pause"`)
+
+	if rr := sessionPost(t, s, path+"/pause", token, nil); rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != path {
+		t.Fatalf("pause: %d %q", rr.Code, rr.Header().Get("Location"))
+	}
+	check("paused again", `<li><strong>30</strong> days</li>`)
+
+	active := mustDay(t, s, owner, days.DayInput{Title: "Active", Date: "2026-05-02"})
+	if rr := sessionPost(t, s, dayPath(active.ID)+"/play", token, nil); rr.Code != http.StatusNotFound {
+		t.Fatalf("play on active day: %d", rr.Code)
+	}
+	if body := get(s.Handler(), dayPath(active.ID), token).Body.String(); strings.Contains(body, "day-play-toggle") {
+		t.Error("active day shows play toggle")
 	}
 }
 

@@ -48,11 +48,21 @@ type Day struct {
 	// StyleBgAttachmentID is 0 when unset; it is managed by attachments (T13).
 	StyleBgAttachmentID int64
 	ArchivedAt          *time.Time
+	ArchiveLive         bool // archived day keeps counting instead of freezing at ArchivedAt
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 }
 
 func (d Day) Schedule() Schedule { return Schedule{Date: d.Date, Time: d.Time, Repeat: d.Repeat} }
+
+// CountAt is the instant the day's counter shows: the archive snapshot while
+// archived and paused, otherwise now.
+func (d Day) CountAt(now time.Time) time.Time {
+	if d.ArchivedAt != nil && !d.ArchiveLive {
+		return *d.ArchivedAt
+	}
+	return now
+}
 
 // DayInput is user-supplied data for create/update. A zero CollectionID
 // selects the reserved default collection; empty TagIDs select the default tag.
@@ -164,7 +174,7 @@ func uniqueIDs(ids []int64) []int64 {
 }
 
 const dayColumns = `id, owner_id, collection_id, title, date, COALESCE(time, ''), repeat, COALESCE(comment, ''),
-	COALESCE(style_color, ''), COALESCE(style_icon, ''), COALESCE(style_bg_attachment_id, 0), archived_at, created_at, updated_at`
+	COALESCE(style_color, ''), COALESCE(style_icon, ''), COALESCE(style_bg_attachment_id, 0), archived_at, archive_live, created_at, updated_at`
 
 // Get returns ErrNotFound when the day does not exist or belongs to someone else.
 func (s *Days) Get(ctx context.Context, ownerID, id int64) (Day, error) {
@@ -181,7 +191,7 @@ func scanDay(sc scanner) (Day, error) {
 	var archived sql.NullInt64
 	var created, updated int64
 	if err := sc.Scan(&d.ID, &d.OwnerID, &d.CollectionID, &d.Title, &d.Date, &d.Time, &d.Repeat, &d.Comment,
-		&d.StyleColor, &d.StyleIcon, &d.StyleBgAttachmentID, &archived, &created, &updated); err != nil {
+		&d.StyleColor, &d.StyleIcon, &d.StyleBgAttachmentID, &archived, &d.ArchiveLive, &created, &updated); err != nil {
 		return Day{}, err
 	}
 	if archived.Valid {
@@ -442,16 +452,34 @@ func (s *Days) Update(ctx context.Context, ownerID, id int64, in DayInput, now t
 }
 
 // SetArchived changes archive state without changing the day's content.
-// Repeated archive requests preserve the original archive timestamp.
+// Repeated archive requests preserve the original archive timestamp and play
+// state; a new archive starts paused.
 func (s *Days) SetArchived(ctx context.Context, ownerID, id int64, archived bool, now time.Time) error {
 	res, err := s.db.ExecContext(ctx, `UPDATE days
-		SET archived_at = CASE WHEN ? THEN COALESCE(archived_at, ?) ELSE NULL END, updated_at = ?
-		WHERE owner_id = ? AND id = ?`, archived, now.Unix(), now.Unix(), ownerID, id)
+		SET archived_at = CASE WHEN ? THEN COALESCE(archived_at, ?) ELSE NULL END,
+			archive_live = CASE WHEN ? AND archived_at IS NOT NULL THEN archive_live ELSE 0 END, updated_at = ?
+		WHERE owner_id = ? AND id = ?`, archived, now.Unix(), archived, now.Unix(), ownerID, id)
 	if err != nil {
 		return fmt.Errorf("archive day: %w", err)
 	}
 	if n, err := res.RowsAffected(); err != nil {
 		return fmt.Errorf("archive day: %w", err)
+	} else if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetArchiveLive pauses or resumes an archived day's counter. Days that are
+// not archived behave as not found.
+func (s *Days) SetArchiveLive(ctx context.Context, ownerID, id int64, live bool) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE days SET archive_live = ?
+		WHERE owner_id = ? AND id = ? AND archived_at IS NOT NULL`, live, ownerID, id)
+	if err != nil {
+		return fmt.Errorf("set archive play state: %w", err)
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return fmt.Errorf("set archive play state: %w", err)
 	} else if n == 0 {
 		return ErrNotFound
 	}
