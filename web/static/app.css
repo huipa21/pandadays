@@ -342,15 +342,54 @@ dialog.confirm-dialog { margin: auto; }
 .day-form-datetime-inputs { display: grid; gap: 0.875rem; min-width: 0; align-items: start; }
 .day-form-title-row > label, .day-form-schedule-row > label,
 .day-form-groups-row > label, .day-form-datetime-inputs > label { min-width: 0; }
-.form label.day-form-private { border-radius: 8px; align-self: end; }
+.day-form-title-field { position: relative; min-width: 0; }
+.day-form-title-field > label { min-width: 0; }
+.form .day-form-title-field > label input { padding-right: 3rem; }
+.form label.day-form-private { display: inline-flex; position: absolute; right: 0; bottom: 0; align-items: center; justify-content: center; width: 44px; height: 44px; cursor: pointer; }
+.day-form-private .privacy-locked, .day-form-private input:checked ~ .privacy-unlocked { display: none; }
+.day-form-private input:checked ~ .privacy-locked { display: block; }
+.day-form-private:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
 .day-form-datetime { margin: 0; padding: 0; border: 0; min-width: 0; }
 .day-form-datetime legend { padding: 0; margin-bottom: 0.25rem; font-weight: 500; }
 .day-form-datetime .hint { margin: 0.25rem 0 0; }
+.day-calendar-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.375rem; min-height: 28px; }
+.form label.day-calendar-check { display: inline-flex; align-items: center; gap: 0.375rem; font-size: 0.875rem; cursor: pointer; }
+.day-calendar-check input { accent-color: var(--accent); }
+.day-calendar-check .icon { display: none; }
+.datetime-enhanced .datetime-native, .datetime-enhanced .day-calendar-toolbar { display: none; }
+.form label.datetime-calendar-toggle { position: relative; display: inline-flex; flex: none; align-items: center; justify-content: center; width: 28px; height: 40px; border-radius: 6px; color: var(--muted); cursor: pointer; }
+.datetime-calendar-toggle input, .datetime-calendar-toggle span { position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.datetime-calendar-toggle .icon { display: block; }
+.datetime-calendar-toggle:hover { background: var(--surface); }
+.datetime-calendar-toggle:has(input:focus-visible) { outline: 2px solid var(--accent); }
+.datetime-calendar-toggle input:checked ~ .icon { color: var(--accent); }
+.datetime-calendar-toggle input:checked ~ .icon .lunar-crescent { fill: currentColor; }
+.datetime-segments {
+  display: flex; align-items: center; gap: 0; min-width: 0; min-height: 44px;
+  border: 1px solid var(--control-border); border-radius: 8px; background: var(--bg);
+  padding: 0 0.375rem 0 0.125rem;
+}
+.datetime-segments:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.form .datetime-segments input {
+  min-width: 0; min-height: 0; width: 2.5em; flex: 1 0 auto; border: 0; border-radius: 4px;
+  padding: 0.25rem 0.125rem; text-align: center; background: transparent;
+  font-variant-numeric: tabular-nums;
+}
+.form .datetime-segments input[data-segment="year"] { flex: 2.4 0 5.5em; width: 5.5em; }
+.form .datetime-segments input:is([data-segment="hour"], [data-segment="minute"]) { flex: 1 1 2.5em; min-width: 1.5em; }
+.form .datetime-segments input:focus { outline: none; background: var(--surface); }
+.datetime-weekday { flex: 0 0 auto; min-width: 0; color: var(--muted); font-size: 0.875rem; text-align: center; }
+.form label.datetime-leap { justify-self: start; }
+.datetime-clear { justify-self: start; }
+.lunar-date-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 0.7fr); gap: 0.375rem; }
+.lunar-date-fields > label { min-width: 0; }
+.lunar-date-fields label > span { font-size: 0.75rem; font-weight: 400; }
+.lunar-date-fields input, .lunar-date-fields select { width: 100%; min-width: 0; padding-inline: 0.375rem; }
+.day-lunar-date { font-size: 0.875rem; color: var(--muted); overflow-wrap: anywhere; }
 @media (min-width: 768px) {
-  .day-form-title-row { grid-template-columns: minmax(0, 1fr) auto; }
   .day-form-schedule-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+  .day-form-schedule-row > label.day-form-repeat { margin-top: calc(1.5em + 0.25rem); }
   .day-form-groups-row { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
-  .day-form-datetime-inputs { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
 }
 
 .choice-group {

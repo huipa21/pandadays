@@ -9,12 +9,17 @@ const script = readFileSync(join(__dirname, "..", "web", "static", "app.js"), "u
 function fixture({ unsaved = false, hasForm = true } = {}) {
   const form = new EventTarget();
   form.dataset = { unsaved: String(unsaved) };
+  form.querySelector = () => form.lunarDraft || null;
   form.fields = [
     ["csrf_token", "token"],
     ["title", ""],
     ["date", "2026-10-19"],
     ["time", ""],
     ["repeat", "none"],
+    ["calendar", "gregorian"],
+    ["lunar_year", "2026"],
+    ["lunar_month", "9"],
+    ["lunar_day", "9"],
     ["collection", "1"],
     ["tags", "1"],
     ["tag_query", ""],
@@ -54,7 +59,7 @@ test("unchanged forms and pages without a day form do not warn", () => {
 });
 
 test("every editable day field is protected, and reverting changes clears the warning", () => {
-  for (const name of ["title", "date", "time", "repeat", "collection", "tags", "tag_query", "comment", "color", "no_color", "icon"]) {
+  for (const name of ["title", "date", "time", "repeat", "calendar", "collection", "tags", "tag_query", "comment", "color", "no_color", "icon"]) {
     const f = fixture();
     const original = f.form.fields.find(entry => entry[0] === name)[1];
     f.set(name, "changed");
@@ -77,6 +82,30 @@ test("CSRF token changes are not unsaved user data", () => {
   const f = fixture();
   f.set("csrf_token", "new-token");
   assert.equal(f.warns(), false);
+});
+
+test("inactive lunar fields do not warn when enhanced controls are initialized", () => {
+  const f = fixture();
+  f.form.fields = f.form.fields.filter(entry => !entry[0].startsWith("lunar_"));
+  assert.equal(f.warns(), false);
+});
+
+test("unfinished lunar text is protected even before its numeric value changes", () => {
+  const f = fixture();
+  f.form.lunarDraft = {};
+  assert.equal(f.warns(), true);
+  f.form.lunarDraft = null;
+  assert.equal(f.warns(), false);
+});
+
+test("switching calendar or editing an active lunar field warns", () => {
+  for (const field of ["lunar_year", "lunar_month", "lunar_day"]) {
+    const f = fixture();
+    f.set("calendar", "lunar");
+    assert.equal(f.warns(), true);
+    f.set(field, "1");
+    assert.equal(f.warns(), true);
+  }
 });
 
 test("unselected upload and recording inputs do not trigger exit warnings", () => {

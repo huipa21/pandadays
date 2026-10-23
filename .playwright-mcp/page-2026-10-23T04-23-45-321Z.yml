@@ -1,0 +1,41 @@
+- generic [active] [ref=f2e1]:
+  - link "跳到主要内容" [ref=f2e2] [cursor=pointer]:
+    - /url: "#main"
+  - banner [ref=f2e3]:
+    - link "PandaDays" [ref=f2e4] [cursor=pointer]:
+      - /url: /
+      - text: 🐼 PandaDays
+    - generic [ref=f2e5]:
+      - generic [ref=f2e6]:
+        - button "切换浅色 / 深色模式" [ref=f2e7] [cursor=pointer]
+        - button "切换为英文" [ref=f2e12] [cursor=pointer]
+      - navigation "主导航" [ref=f2e16]:
+        - link "用户管理" [ref=f2e17] [cursor=pointer]:
+          - /url: /admin/users
+        - link "备份与恢复" [ref=f2e18] [cursor=pointer]:
+          - /url: /admin/backup
+        - link "网站设置" [ref=f2e19] [cursor=pointer]:
+          - /url: /admin/settings
+        - group [ref=f2e20]:
+          - generic "qa-admin" [ref=f2e21] [cursor=pointer]
+  - main [ref=f2e28]:
+    - heading "用户管理" [level=1] [ref=f2e29]
+    - generic [ref=f2e30]:
+      - search [ref=f2e31]:
+        - generic [ref=f2e32]:
+          - generic [ref=f2e33]: 搜索用户
+          - searchbox "搜索用户" [ref=f2e37]
+      - link "创建用户" [ref=f2e38] [cursor=pointer]:
+        - /url: /admin/users/new
+    - list [ref=f2e41]:
+      - listitem [ref=f2e42]:
+        - 'link "qa-admin 创建时间: 2026-10-23 12:23 CST 已使用 0 个日子 已启用" [ref=f2e43] [cursor=pointer]':
+          - /url: /admin/users/1
+          - strong [ref=f2e45]: qa-admin
+          - generic [ref=f2e46]:
+            - generic [ref=f2e47]: "创建时间:"
+            - time [ref=f2e48]: 2026-10-23 12:23 CST
+          - generic [ref=f2e49]: 已使用 0 个日子
+          - generic [ref=f2e50]: 已启用
+        - group [ref=f2e51]:
+          - generic "用户操作" [ref=f2e52] [cursor=pointer]

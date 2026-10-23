@@ -171,7 +171,7 @@ func (s *Service) Export(ctx context.Context, ownerID int64, now time.Time, w io
 func exportDays(ctx context.Context, tx *sql.Tx, ownerID int64) ([]*exportDay, map[int64]*exportDay, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT d.id, d.title, d.date, COALESCE(d.time, ''), d.repeat, c.name,
 		COALESCE(d.comment, ''), d.archived_at, d.archive_live, COALESCE(d.style_color, ''), COALESCE(d.style_icon, ''),
-		COALESCE(d.style_bg_attachment_id, 0), d.is_private
+		COALESCE(d.style_bg_attachment_id, 0), d.is_private, d.calendar
 		FROM days d JOIN collections c ON c.id = d.collection_id AND c.owner_id = d.owner_id
 		WHERE d.owner_id = ? AND d.is_private = ? ORDER BY d.date, d.id`, ownerID, days.IsPrivate(ctx))
 	if err != nil {
@@ -182,14 +182,14 @@ func exportDays(ctx context.Context, tx *sql.Tx, ownerID int64) ([]*exportDay, m
 	byID := map[int64]*exportDay{}
 	for rows.Next() {
 		var (
-			d                                                    exportDay
-			title, date, clock, repeat, coll, comment, color, ic string
-			archived                                             sql.NullInt64
-			live                                                 bool
-			private                                              bool
+			d                                                              exportDay
+			title, date, clock, repeat, coll, comment, color, ic, calendar string
+			archived                                                       sql.NullInt64
+			live                                                           bool
+			private                                                        bool
 		)
 		if err := rows.Scan(&d.id, &title, &date, &clock, &repeat, &coll, &comment, &archived, &live,
-			&color, &ic, &d.bgID, &private); err != nil {
+			&color, &ic, &d.bgID, &private, &calendar); err != nil {
 			return nil, nil, fmt.Errorf("export days: %w", err)
 		}
 		archivedAt, archiveLive := "", ""
@@ -198,7 +198,7 @@ func exportDays(ctx context.Context, tx *sql.Tx, ownerID int64) ([]*exportDay, m
 			archiveLive = strconv.FormatBool(live)
 		}
 		d.record = []string{title, date, clock, repeat, coll, "", comment, archivedAt, color, ic, "", "", archiveLive,
-			strconv.FormatBool(private)}
+			strconv.FormatBool(private), calendar}
 		list = append(list, &d)
 		byID[d.id] = &d
 	}

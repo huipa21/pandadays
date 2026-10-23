@@ -71,6 +71,16 @@ func TestDayNewFormDefaults(t *testing.T) {
 		`class="day-form-title-row"`,
 		`class="day-form-schedule-row"`,
 		`class="day-form-datetime-inputs"`,
+		`data-datetime-picker`,
+		`data-lunar-data=`,
+		`class="datetime-native"`,
+		`datetime-picker.js`,
+		`data-lunar-digits="〇一二三四五六七八九"`,
+		`class="day-form-private"`,
+		`class="icon privacy-unlocked"`,
+		`class="icon privacy-locked"`,
+		`aria-label="Private day" aria-describedby="day-private-hint" name="private" value="1">`,
+		`name="calendar" value="lunar" data-calendar-toggle>`,
 		`class="day-form-groups-row"`,
 		`<option value="none" selected>Does not repeat</option>`,
 		`<option value="` + strconv.FormatInt(defCol, 10) + `" selected>Default</option>`,
@@ -332,7 +342,12 @@ func TestDayCrossUserAccess404(t *testing.T) {
 		t.Errorf("bob uses alice's tag: %d", rr.Code)
 	}
 	body := get(s.Handler(), "/days/new", bobToken).Body.String()
-	if strings.Contains(body, `<option value="`+strconv.FormatInt(aliceCol, 10)+`"`) {
+	_, collectionOptions, found := strings.Cut(body, `<select name="collection">`)
+	if !found {
+		t.Fatal("missing collection selector")
+	}
+	collectionOptions, _, _ = strings.Cut(collectionOptions, `</select>`)
+	if strings.Contains(collectionOptions, `<option value="`+strconv.FormatInt(aliceCol, 10)+`"`) {
 		t.Error("bob's form lists alice's collection")
 	}
 	if strings.Contains(body, `name="tags" value="`+strconv.FormatInt(aliceTag, 10)+`"`) {

@@ -111,6 +111,41 @@ func TestExportDoesNotReattachRemovedLibraryMedia(t *testing.T) {
 	}
 }
 
+func TestLunarCalendarRoundTrip(t *testing.T) {
+	f := newFixture(t)
+	owner := f.user(t, "lunar-owner")
+	recipient := f.user(t, "lunar-recipient")
+	input := days.DayInput{Title: "New Year", Date: "2024-02-10", Calendar: days.CalendarLunar, Repeat: days.RepeatYearly}
+	if _, err := f.days.Create(context.Background(), owner, input, testNow); err != nil {
+		t.Fatal(err)
+	}
+	input.Calendar = days.CalendarGregorian
+	if _, err := f.days.Create(context.Background(), recipient, input, testNow); err != nil {
+		t.Fatal(err)
+	}
+	preview, result := f.importData(t, recipient, f.export(t, owner))
+	if result.Imported != 1 || preview.Skipped != 0 {
+		t.Fatalf("lunar and Gregorian must remain distinct: %+v %+v", preview, result)
+	}
+	list, err := f.days.ListActive(context.Background(), recipient)
+	if err != nil || len(list) != 2 {
+		t.Fatalf("imported days: %+v %v", list, err)
+	}
+	var lunar days.Day
+	for _, day := range list {
+		if day.Calendar == days.CalendarLunar {
+			lunar = day
+		}
+	}
+	if lunar.Date != "2024-02-10" || lunar.Repeat != days.RepeatYearly {
+		t.Fatalf("calendar lost: %+v", list)
+	}
+	_, result = f.importData(t, recipient, f.export(t, owner))
+	if result.Imported != 0 || result.Skipped != 1 {
+		t.Fatalf("duplicate lunar import: %+v", result)
+	}
+}
+
 func (f *fixture) stage(t *testing.T, owner int64, data []byte) string {
 	t.Helper()
 	token, err := f.svc.Stage(owner, bytes.NewReader(data), 1<<30, testNow)

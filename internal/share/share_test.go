@@ -112,6 +112,25 @@ func TestListOwnedTargets(t *testing.T) {
 	}
 }
 
+func TestSharedLunarCalendar(t *testing.T) {
+	store, owner, recipient, _, _, dayID, _ := shareFixture(t)
+	ctx := context.Background()
+	if _, err := store.db.Exec(`UPDATE days SET calendar = 'lunar', date = '2024-02-10', repeat = 'yearly' WHERE owner_id = ? AND id = ?`, owner, dayID); err != nil {
+		t.Fatal(err)
+	}
+	shared, err := store.Create(ctx, owner, TargetDay, dayID, []string{"Bob"}, false, time.Unix(1_700_000_000, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Respond(ctx, recipient, shared.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.GetShared(ctx, recipient, dayID)
+	if err != nil || got.Calendar != "lunar" || got.Repeat != "yearly" {
+		t.Fatalf("shared lunar day: %+v %v", got, err)
+	}
+}
+
 func TestSharesRecipientsAccessAndCommentVisibility(t *testing.T) {
 	store, owner, bob, carol, collectionID, dayID, secondDayID := shareFixture(t)
 	ctx := context.Background()

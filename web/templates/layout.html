@@ -279,13 +279,14 @@
 {{define "day-accent"}}<svg class="day-accent" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true"><rect width="1" height="1"{{with .}} fill="{{.}}"{{end}}/></svg>{{end}}
 {{define "day-icon"}}{{if .Day.StyleIcon}}{{.Day.StyleIcon}}{{else if .Day.ArchivedAt}}📦{{else if eq .State "past"}}✓{{else}}⏳{{end}}{{end}}
 {{define "day-badges"}}{{if .Day.Private}}<span class="badge badge-private">{{t "days.field.private"}}</span>{{end}}{{if .Day.ArchivedAt}}<span class="badge badge-archived"><span aria-hidden="true">📦</span> {{t "days.archived"}}</span>{{end}}{{end}}
-{{define "day-when"}}<time datetime="{{.Target.Format "2006-01-02"}}">{{.Target.Format "2006-01-02"}}</time>{{if .Day.Time}} {{.Target.Format "15:04"}}{{end}}{{end}}
+{{define "day-when"}}<time datetime="{{.Target.Format "2006-01-02"}}">{{.Target.Format "2006-01-02"}}</time>{{if .Day.Time}} {{.Target.Format "15:04"}}{{end}}{{if eq .Day.Calendar "lunar"}} · {{lunarDate (.Target.Format "2006-01-02")}}{{end}}{{end}}
 {{define "day-item"}}{{$prefix := ""}}{{if .Day.Private}}{{$prefix = "/private"}}{{end}}<li{{if .Shared}} class="shared-list-item"{{end}}><a class="day-item day-{{.State}}{{if .Shared}} day-shared{{end}}{{if .Day.Private}} day-private{{end}}{{if .Day.ArchivedAt}} day-archived{{end}}" href="{{$prefix}}/days/{{.Day.ID}}">
   {{template "day-accent" .Day.StyleColor}}
   <span class="day-item-icon" aria-hidden="true">{{template "day-icon" .}}</span>
   <span class="day-item-when"><time class="day-item-date" datetime="{{.Target.Format "2006-01-02"}}">{{.Target.Format "2006-01-02"}}</time>{{if .Day.Time}}<span class="day-item-time">{{.Target.Format "15:04"}}</span>{{end}}</span>
   <span class="day-item-main">
     <span class="day-item-title">{{.Day.Title}}</span>
+    {{if eq .Day.Calendar "lunar"}}<span class="day-lunar-date">{{lunarDate (.Target.Format "2006-01-02")}}</span>{{end}}
     {{if ne .Day.Repeat "none"}}<span class="day-item-repeat"><span aria-hidden="true">↻</span> {{t (printf "days.repeat.%s" .Day.Repeat)}}</span>{{end}}
     {{$show := false}}{{if or .Day.ArchivedAt .Shared .Day.Private}}{{$show = true}}{{end}}{{with .Collection}}{{if not .Reserved}}{{$show = true}}{{end}}{{end}}{{range .Tags}}{{if not .Reserved}}{{$show = true}}{{end}}{{end}}
     {{if $show}}<span class="chips chips-small">{{template "day-badges" .}}{{if .Shared}}<span class="badge badge-shared">{{t "sharing.from" .ShareOwner}}</span>{{end}}{{with .Collection}}{{if not .Reserved}}<span class="chip chip-small" title="{{t "days.field.collection"}}"><span aria-hidden="true">📚</span><span class="visually-hidden">{{t "days.field.collection"}}:</span> {{if .Color}}{{template "swatch" .Color}} {{end}}{{.Name}}</span>{{end}}{{end}}{{$first := true}}{{range .Tags}}{{if not .Reserved}}<span class="chip chip-small">{{if $first}}<span class="visually-hidden">{{t "days.field.tags"}}:</span> {{$first = false}}{{end}}{{template "swatch" .Color}} {{.Name}}</span>{{end}}{{end}}</span>{{end}}

@@ -5,6 +5,13 @@ multi-user spaces, collections, tags, attachments, and read-only sharing.
 English and Simplified Chinese are included. No self-registration, external
 database, or frontend build step is needed.
 
+Create and edit days using the date's calendar icon to switch between Gregorian
+and Chinese lunar dates (lunar years 1900-2100). Weekly repeats stay seven days;
+monthly and yearly lunar repeats follow lunar months and years. Monthly repeats
+include leap months; yearly leap-month dates use the regular month when needed.
+Short months clamp day 30 to day 29 without shifting later occurrences. Calendar
+choices are preserved in sharing, export/import, and backups.
+
 Days are normal/public within your account by default, not publicly accessible
 on the internet. Tick **Private day** when creating or editing a day to keep it
 private. The **Vault** icon between search and the theme switch opens a password

@@ -9,26 +9,44 @@
     {{template "csrf-field" .}}
     <p class="hint">{{t "days.unsaved_hint"}}</p>
     <div class="day-form-title-row">
-      <label>{{t "days.field.title"}}
-        <input type="text" name="title" value="{{.Form.Title}}" maxlength="200" required>
-      </label>
-      <label class="chip-check day-form-private" title="{{t "days.field.private_hint"}}"><input type="checkbox" aria-describedby="day-private-hint" name="private" value="1"{{if .Form.Private}} checked{{end}}> {{t "days.field.private"}}</label>
+      <div class="day-form-title-field">
+        <label>{{t "days.field.title"}}
+          <input type="text" name="title" value="{{.Form.Title}}" maxlength="200" required>
+        </label>
+        <label class="day-form-private" title="{{t "days.field.private_hint"}}">
+          <input class="visually-hidden" type="checkbox" aria-label="{{t "days.field.private"}}" aria-describedby="day-private-hint" name="private" value="1"{{if .Form.Private}} checked{{end}}>
+          <svg class="icon privacy-unlocked" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2M12 15v2"/></svg>
+          <svg class="icon privacy-locked" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4M12 15v2"/></svg>
+        </label>
+      </div>
     </div>
-    <p class="hint" id="day-private-hint">{{t "days.field.private_hint"}}</p>
+    <p class="visually-hidden" id="day-private-hint">{{t "days.field.private_hint"}}</p>
     <div class="day-form-schedule-row">
       <fieldset class="day-form-datetime">
         <legend>{{t "days.field.datetime"}}</legend>
-        <div class="day-form-datetime-inputs">
-          <label><span class="visually-hidden">{{t "days.field.date"}}</span>
-            <input type="date" name="date" value="{{.Form.Date}}" min="0001-01-01" max="9999-12-31" required>
-          </label>
-          <label><span class="visually-hidden">{{t "days.field.time"}}</span>
+        <div class="day-form-datetime-inputs" data-datetime-picker data-year="{{t "days.picker.year"}}" data-month="{{t "days.picker.month"}}" data-day="{{t "days.picker.day"}}" data-hour="{{t "days.picker.hour"}}" data-minute="{{t "days.picker.minute"}}" data-clear="{{t "days.picker.clear_time"}}" data-invalid="{{t "days.error.date"}}" data-range-error="{{t "days.error.calendar"}}" data-time-error="{{t "days.error.time"}}" data-lunar-data="{{.LunarData}}" data-lunar-digits="{{t "days.picker.lunar_digits"}}" data-lunar-days="{{t "days.picker.lunar_days"}}" data-lunar-months="{{t "days.picker.lunar_months"}}" data-lunar-year="{{t "days.picker.lunar_year"}}" data-lunar-leap="{{t "days.picker.lunar_leap"}}">
+          <div class="datetime-native">
+            <div class="day-calendar-toolbar">
+              <label class="day-calendar-check" title="{{t "days.calendar.lunar"}}"><input type="checkbox" name="calendar" value="lunar" data-calendar-toggle{{if eq .Form.Calendar "lunar"}} checked{{end}}>
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/><path class="lunar-crescent" d="M13.5 12.3a3.5 3.5 0 1 0 0 6.4a4 4 0 0 1 0-6.4z"/></svg>
+                <span>{{t "days.calendar.lunar"}}</span></label>
+            </div>
+            <div class="datetime-native"><label><span class="visually-hidden">{{t "days.field.date"}}</span>
+              <input type="date" name="date" value="{{.Form.Date}}" min="0001-01-01" max="9999-12-31" required>
+            </label></div>
+            <div class="lunar-date-fields datetime-native" aria-label="{{t "days.calendar.lunar"}}">
+              <label><span>{{t "days.lunar.year"}}</span><input type="number" name="lunar_year" value="{{.Form.LunarYear}}" min="1900" max="2100" step="1" inputmode="numeric"></label>
+              <label><span>{{t "days.lunar.month"}}</span><select name="lunar_month">{{range .LunarMonths}}<option value="{{.Value}}" data-month-label="{{t .Key}}"{{if eq .Value $.Form.LunarMonth}} selected{{end}}>{{if .Leap}}{{t "days.lunar.leap"}} {{end}}{{t .Key}}</option>{{end}}</select></label>
+              <label><span>{{t "days.lunar.day"}}</span><input type="number" name="lunar_day" value="{{.Form.LunarDay}}" min="1" max="30" step="1" inputmode="numeric"></label>
+            </div>
+          </div>
+          <div class="datetime-native"><label><span class="visually-hidden">{{t "days.field.time"}}</span>
             <input type="time" name="time" value="{{.Form.Time}}" aria-describedby="day-time-hint">
-          </label>
+          </label></div>
         </div>
         <p class="hint" id="day-time-hint">{{t "days.field.time_hint"}}</p>
       </fieldset>
-      <label>{{t "days.field.repeat"}}
+      <label class="day-form-repeat"><span class="visually-hidden">{{t "days.field.repeat"}}</span>
         <select name="repeat">
           {{range .Repeats}}<option value="{{.}}"{{if eq (print .) $.Form.Repeat}} selected{{end}}>{{t (printf "days.repeat.%s" .)}}</option>{{end}}
         </select>
@@ -86,6 +104,7 @@
     </fieldset>{{end}}
     <button type="submit" class="btn">{{if .Day.ID}}{{t "days.save"}}{{else}}{{t "days.create"}}{{end}}</button>
   </form>
+  <script src="{{asset "datetime-picker.js"}}" defer></script>
   {{if not .Day.ID}}<script src="{{asset "media-picker.js"}}" defer></script><script src="{{asset "attachments.js"}}" defer></script>{{end}}
 </section>
 {{end}}

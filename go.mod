@@ -3,6 +3,7 @@ module pandadays
 go 1.23.0
 
 require (
+	github.com/6tail/lunar-go v1.4.6
 	golang.org/x/crypto v0.40.0
 	golang.org/x/image v0.25.0
 	modernc.org/sqlite v1.38.2

@@ -443,6 +443,40 @@ Status legend: `[ ]` todo, `[x]` done.
 - **Done when**: picker regressions, full Go tests/vet, JavaScript tests, and 375px/1280px browser checks pass.
 - Verified: tag controls measure 44px at 375px and 1280px, including multiple long selected chips, without horizontal page overflow. Overlay hit-testing and unchanged comment positioning confirm suggestions float above other fields. Tab/Enter, arrow keys, hover selection, creation, Escape/outside dismissal, IME, and validation persistence pass; full Go tests/vet and all 83 JavaScript tests pass.
 
+### [x] T56 Chinese lunar calendar
+- Add a Gregorian / Chinese lunar icon toggle to create/edit forms, preserving the civil day and supporting explicit leap months and lunar years 1900-2100.
+- Keep weekly recurrence at seven days; use lunar months/years for monthly/yearly recurrence, including leap months, regular-month yearly fallback, and short-month clamping without anchor drift.
+- Persist calendar choice through migrations, owner/shared lists and cards, and legacy-compatible CSV export/import; retain timezone, privacy, authorization, and no-JavaScript behavior.
+- **Done when**: conversion/recurrence/storage/sharing/import and form regressions, full Go tests/vet, JavaScript tests, and 375px/1280px browser checks pass.
+- Verified: full Go tests/vet and all 85 JavaScript tests pass. Isolated Chromium checks in English/Chinese at 375px/1280px confirm date-preserving toggles, leap-month selection and year-change fallback, create/edit persistence, clean-form protection, no-JavaScript lunar creation, save blocking during conversion, and network-failure recovery without horizontal overflow. Domain and repository regressions cover known New Year dates, lunar short months and anchor restoration, timezones, supported-year boundaries, owner authorization, shared metadata, and calendar-aware CSV round trips.
+
+### [x] T57 Consistent scrolling date and time pickers
+- Use matching site-themed scrolling lists for Gregorian/lunar dates and 24-hour time, including localized weekdays in date choices.
+- Replace the calendar icon with a labeled Chinese lunar checkbox, unchecked for new days and preserving saved calendar choice on edit.
+- Retain date-preserving conversion, leap months, all-day clearing, keyboard access, no-JavaScript fields, validation, and unsaved-change protection.
+- **Done when**: picker/form regressions, full Go tests/vet, JavaScript tests, and 375px/1280px browser checks pass in both themes.
+- Verified: full Go tests/vet and all 95 JavaScript tests pass. Chromium checks in English/Chinese at 375px/1280px confirm theme-matched selections, localized Gregorian/lunar weekdays, no horizontal overflow, keyboard dismissal and all-day/midnight selection, date-preserving conversion, leap months, create/edit persistence, clean/dirty-form protection, no-JavaScript lunar creation, pending-save blocking, and conversion-failure rollback/retry.
+
+### [x] T58 Editable date/time and compact privacy toggle
+- Keep manual date/time entry available alongside the scrollers, with synchronized values and validation.
+- Use Chinese lunar year/month/day text, accepting Chinese or numeric year/day entry.
+- Replace the privacy checkbox appearance with a borderless unlocked/public and locked/private icon toggle; preserve saved and Vault-route defaults.
+- **Done when**: picker/form regressions, full Go tests/vet, JavaScript tests, and 375px/1280px browser checks pass.
+- Verified: full Go tests/vet and all 99 JavaScript tests pass. Isolated Chromium checks in English/Chinese at 375px/1280px cover manual entry synchronized with scrollers, Chinese lunar labels and leap months, rapid year/day editing, borderless mouse/keyboard privacy toggling, light/dark layouts without overflow, and create/edit persistence. Draft text remains protected from conversion updates and unsaved navigation.
+
+### [x] T59 Inline date/time scroller icons
+- Remove duplicate date/time value rows; keep editable fields with inline calendar/clock buttons opening the existing scrollers.
+- Retain Chinese lunar fields, synchronized values, keyboard access, clearing, validation, and no-JavaScript fallback.
+- **Done when**: picker tests, full Go tests/vet, JavaScript tests, and 375px/1280px browser checks pass.
+- Verified: full Go tests/vet and all 100 JavaScript tests pass. Chromium checks at 375px/1280px in English/Chinese and light/dark themes confirm icon-only triggers aligned inside the editable Gregorian/time fields, no duplicate value row, synchronized manual/scroller entry including Chinese lunar days, keyboard dismissal, and no horizontal overflow.
+
+### [x] T60 Grouped date/time text segments
+- Replace all scrollers and popup icons with one bordered year/month/day/hour/minute control.
+- Format numeric lunar input as Chinese characters, show localized weekdays automatically, and retain explicit leap months and all-day clearing.
+- Convert locally using compact server-generated calendar data; preserve validation, unsaved drafts, native no-JavaScript entry, and create/edit persistence.
+- **Done when**: calendar-data and segmented-entry regressions, full Go tests/vet, JavaScript tests, and 375px/1280px browser checks pass.
+- Verified: full Go tests/vet and all 94 JavaScript tests pass. Calendar-data tests verify the first/last day of every lunar month and year boundaries for 1900–2100. Chromium checks in English/Chinese at 375px/1280px cover offline conversion with no date-edit requests, numeric-to-Chinese formatting, localized weekdays, leap/short-month validation, 24-hour time and all-day persistence, native no-JavaScript creation, unsaved-draft/revert protection, and light/dark layouts without overflow.
+
 ## Dependency Graph
 
 ```mermaid

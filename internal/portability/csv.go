@@ -10,7 +10,7 @@ import (
 
 // Columns is the days.csv header (SPEC §6.1).
 var Columns = []string{"title", "date", "time", "repeat", "collection", "tags", "comment",
-	"archived", "style_color", "style_icon", "style_bg", "attachments", "archive_live", "is_private"}
+	"archived", "style_color", "style_icon", "style_bg", "attachments", "archive_live", "is_private", "calendar"}
 
 const (
 	csvName     = "days.csv"

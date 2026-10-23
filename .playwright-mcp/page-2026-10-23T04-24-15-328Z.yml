@@ -1,0 +1,58 @@
+- generic [active] [ref=f5e1]:
+  - link "跳到主要内容" [ref=f5e2] [cursor=pointer]:
+    - /url: "#main"
+  - banner [ref=f5e3]:
+    - link "PandaDays" [ref=f5e4] [cursor=pointer]:
+      - /url: /
+      - text: 🐼 PandaDays
+    - generic [ref=f5e5]:
+      - generic [ref=f5e6]:
+        - button "切换浅色 / 深色模式" [ref=f5e7] [cursor=pointer]
+        - button "切换为英文" [ref=f5e12] [cursor=pointer]
+      - navigation "主导航" [ref=f5e16]:
+        - link "用户管理" [ref=f5e17] [cursor=pointer]:
+          - /url: /admin/users
+        - link "备份与恢复" [ref=f5e18] [cursor=pointer]:
+          - /url: /admin/backup
+        - link "网站设置" [ref=f5e19] [cursor=pointer]:
+          - /url: /admin/settings
+        - group [ref=f5e20]:
+          - generic "qa-admin" [ref=f5e21] [cursor=pointer]
+  - main [ref=f5e28]:
+    - heading "用户管理" [level=1] [ref=f5e29]
+    - status [ref=f5e30]:
+      - heading "临时密码（仅此次显示）" [level=2] [ref=f5e31]
+      - paragraph [ref=f5e32]:
+        - text: "qa-user:"
+        - code [ref=f5e33]: _GPcFX_7uAH-KEc4
+      - paragraph [ref=f5e34]: 请保存并安全地将密码交给用户。用户登录后必须修改密码，所有旧会话均已撤销。
+    - generic [ref=f5e35]:
+      - search [ref=f5e36]:
+        - generic [ref=f5e37]:
+          - generic [ref=f5e38]: 搜索用户
+          - searchbox "搜索用户" [ref=f5e42]
+      - link "创建用户" [ref=f5e43] [cursor=pointer]:
+        - /url: /admin/users/new
+    - list [ref=f5e46]:
+      - listitem [ref=f5e47]:
+        - 'link "qa-admin 创建时间: 2026-10-23 12:23 CST 已使用 0 个日子 已启用" [ref=f5e48] [cursor=pointer]':
+          - /url: /admin/users/1
+          - strong [ref=f5e50]: qa-admin
+          - generic [ref=f5e51]:
+            - generic [ref=f5e52]: "创建时间:"
+            - time [ref=f5e53]: 2026-10-23 12:23 CST
+          - generic [ref=f5e54]: 已使用 0 个日子
+          - generic [ref=f5e55]: 已启用
+        - group [ref=f5e56]:
+          - generic "用户操作" [ref=f5e57] [cursor=pointer]
+      - listitem [ref=f5e62]:
+        - 'link "qa-user 创建时间: 2026-10-23 12:24 CST 已使用 0 个日子 已启用" [ref=f5e63] [cursor=pointer]':
+          - /url: /admin/users/2
+          - strong [ref=f5e65]: qa-user
+          - generic [ref=f5e66]:
+            - generic [ref=f5e67]: "创建时间:"
+            - time [ref=f5e68]: 2026-10-23 12:24 CST
+          - generic [ref=f5e69]: 已使用 0 个日子
+          - generic [ref=f5e70]: 已启用
+        - group [ref=f5e71]:
+          - generic "用户操作" [ref=f5e72] [cursor=pointer]

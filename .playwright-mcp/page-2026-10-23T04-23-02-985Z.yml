@@ -1,0 +1,26 @@
+- generic [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#main"
+  - banner [ref=e3]:
+    - link "PandaDays" [ref=e4] [cursor=pointer]:
+      - /url: /
+      - text: 🐼 PandaDays
+    - generic [ref=e6]:
+      - button "Toggle light / dark mode" [ref=e7] [cursor=pointer]
+      - link "Switch to Chinese" [ref=e11] [cursor=pointer]:
+        - /url: /login?lang=zh
+  - main [ref=e15]:
+    - generic [ref=e16]:
+      - heading "Log in" [level=1] [ref=e17]
+      - paragraph [ref=e18]: Your days, kept safe.
+      - generic [ref=e19]:
+        - generic [ref=e20]:
+          - text: Username or email
+          - textbox "Username or email" [active] [ref=e21]
+        - generic [ref=e22]:
+          - text: Password
+          - textbox "Password" [ref=e23]
+        - generic [ref=e24]:
+          - checkbox "Keep me signed in" [ref=e25]
+          - text: Keep me signed in
+        - button "Log in" [ref=e26] [cursor=pointer]

@@ -140,7 +140,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 
 func sharedDayForList(d share.SharedDay) days.Day {
 	return days.Day{
-		ID: d.ID, OwnerID: d.OwnerID, Title: d.Title, Date: d.Date, Time: d.Time, Repeat: days.Repeat(d.Repeat),
+		ID: d.ID, OwnerID: d.OwnerID, Title: d.Title, Date: d.Date, Time: d.Time, Repeat: days.Repeat(d.Repeat), Calendar: days.Calendar(d.Calendar),
 		StyleColor: d.StyleColor, StyleIcon: d.StyleIcon, StyleBgAttachmentID: d.StyleBgAttachmentID,
 		ArchivedAt: d.ArchivedAt, ArchiveLive: d.ArchiveLive,
 	}

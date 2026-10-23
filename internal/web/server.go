@@ -146,6 +146,7 @@ var templateFuncs = template.FuncMap{
 	"localtime":     func(time.Time) template.HTML { return "" },
 	"pendingShares": func() int { return 0 },
 	"privatePrefix": func() string { return "" },
+	"lunarDate":     func(string) string { return "" },
 }
 
 // localTime renders t in the viewer's timezone. Without a saved timezone the
@@ -387,6 +388,7 @@ func (s *Server) execute(w http.ResponseWriter, r *http.Request, page, name stri
 		"asset":         func(name string) string { return "/static/" + name + "?v=" + s.assetVersion },
 		"localtime":     localTime(CurrentUser(r.Context())),
 		"pendingShares": func() int { return pending },
+		"lunarDate":     func(date string) string { return s.lunarDateLabel(i18n.LangFrom(r.Context()), date) },
 	})
 
 	var buf bytes.Buffer

@@ -21,6 +21,10 @@ type dayForm struct {
 	Date         string
 	Time         string
 	Repeat       string
+	Calendar     string
+	LunarYear    string
+	LunarMonth   string
+	LunarDay     string
 	CollectionID int64
 	TagIDs       []int64
 	TagNames     []string
@@ -47,6 +51,8 @@ type dayFormPage struct {
 	Library     []media.LibraryItem
 	Picked      map[int64]bool
 	Error       string
+	LunarMonths []lunarMonthOption
+	LunarData   string
 }
 
 type dayPage struct {
@@ -94,6 +100,7 @@ var repeatOptions = []days.Repeat{days.RepeatNone, days.RepeatWeekly, days.Repea
 
 func (s *Server) registerDayRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /days/new", RequireLogin(http.HandlerFunc(s.handleDayNew)))
+	mux.Handle("GET /days/calendar", RequireLogin(http.HandlerFunc(s.handleDayCalendar)))
 	mux.Handle("POST /days", RequireLogin(http.HandlerFunc(s.handleDayCreate)))
 	mux.Handle("GET /days/{id}", RequireLogin(http.HandlerFunc(s.handleDayView)))
 	mux.Handle("GET /days/{id}/edit", RequireLogin(http.HandlerFunc(s.handleDayEditForm)))
@@ -160,6 +167,7 @@ func dayErrorKey(err error) (string, bool) {
 		{days.ErrDateInvalid, "days.error.date"},
 		{days.ErrTimeInvalid, "days.error.time"},
 		{days.ErrRepeatInvalid, "days.error.repeat"},
+		{days.ErrCalendarInvalid, "days.error.calendar"},
 		{days.ErrCommentTooLong, "days.error.comment_too_long"},
 		{days.ErrColorInvalid, "days.error.color"},
 		{days.ErrIconInvalid, "days.error.icon"},
@@ -204,6 +212,10 @@ func parseDayForm(r *http.Request) dayForm {
 		Date:         r.PostForm.Get("date"),
 		Time:         r.PostForm.Get("time"),
 		Repeat:       r.PostForm.Get("repeat"),
+		Calendar:     r.PostForm.Get("calendar"),
+		LunarYear:    r.PostForm.Get("lunar_year"),
+		LunarMonth:   r.PostForm.Get("lunar_month"),
+		LunarDay:     r.PostForm.Get("lunar_day"),
 		CollectionID: parseID(r.PostForm.Get("collection")),
 		Comment:      r.PostForm.Get("comment"),
 		Color:        r.PostForm.Get("color"),
@@ -227,7 +239,14 @@ func parseDayForm(r *http.Request) dayForm {
 
 func (f dayForm) input() days.DayInput {
 	in := days.DayInput{Private: f.Private, Title: f.Title, Date: f.Date, Time: f.Time, Repeat: days.Repeat(f.Repeat),
+		Calendar:     days.Calendar(f.Calendar),
 		CollectionID: f.CollectionID, TagIDs: f.TagIDs, TagNames: append([]string(nil), f.TagNames...), Comment: f.Comment, StyleColor: f.Color, StyleIcon: f.Icon}
+	if in.Calendar == days.CalendarLunar {
+		year, _ := strconv.Atoi(f.LunarYear)
+		month, _ := strconv.Atoi(f.LunarMonth)
+		day, _ := strconv.Atoi(f.LunarDay)
+		in.Date, _ = days.LunarToSolar(days.LunarDate{Year: year, Month: month, Day: day})
+	}
 	for _, name := range strings.Split(f.TagQuery, "#")[1:] {
 		if name = strings.TrimSpace(name); name != "" {
 			in.TagNames = append(in.TagNames, name)
@@ -241,7 +260,8 @@ func (f dayForm) input() days.DayInput {
 
 func formFromDay(d days.Day) dayForm {
 	f := dayForm{Private: d.Private, Title: d.Title, Date: d.Date, Time: d.Time, Repeat: string(d.Repeat), CollectionID: d.CollectionID,
-		TagIDs: d.TagIDs, Comment: d.Comment, Color: d.StyleColor, NoColor: d.StyleColor == "", Icon: d.StyleIcon}
+		Calendar: string(d.Calendar),
+		TagIDs:   d.TagIDs, Comment: d.Comment, Color: d.StyleColor, NoColor: d.StyleColor == "", Icon: d.StyleIcon}
 	if f.NoColor {
 		f.Color = defaultGroupColor
 	}
@@ -283,6 +303,26 @@ func (s *Server) renderDayForm(w http.ResponseWriter, r *http.Request, status in
 		selectedTags[id] = true
 	}
 	page := dayFormPage{pageData: newPageData(r), Day: d, Form: form, Repeats: repeatOptions, Error: errKey}
+	page.LunarData, err = lunarPickerData()
+	if err != nil {
+		s.dayFail(w, r, "load lunar calendar for", err)
+		return
+	}
+	if page.Form.Calendar == "" {
+		page.Form.Calendar = string(days.CalendarGregorian)
+	}
+	if page.Form.LunarYear == "" && page.Form.LunarMonth == "" && page.Form.LunarDay == "" {
+		if lunar, err := days.SolarToLunar(form.Date); err == nil {
+			page.Form.LunarYear = strconv.Itoa(lunar.Year)
+			page.Form.LunarMonth = strconv.Itoa(lunar.Month)
+			page.Form.LunarDay = strconv.Itoa(lunar.Day)
+		}
+	}
+	for month := 1; month <= 12; month++ {
+		page.LunarMonths = append(page.LunarMonths,
+			lunarMonthOption{Value: strconv.Itoa(month), Key: "days.lunar.month." + strconv.Itoa(month)},
+			lunarMonthOption{Value: strconv.Itoa(-month), Key: "days.lunar.month." + strconv.Itoa(month), Leap: true})
+	}
 	for _, g := range cols {
 		page.Collections = append(page.Collections, groupOption{Group: g, Selected: g.ID == form.CollectionID})
 	}
@@ -487,7 +527,7 @@ func (s *Server) handleDayView(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			d = days.Day{
 				ID: sharedDay.ID, OwnerID: sharedDay.OwnerID, Title: sharedDay.Title, Date: sharedDay.Date,
-				Time: sharedDay.Time, Repeat: days.Repeat(sharedDay.Repeat), Comment: sharedDay.Comment,
+				Time: sharedDay.Time, Repeat: days.Repeat(sharedDay.Repeat), Calendar: days.Calendar(sharedDay.Calendar), Comment: sharedDay.Comment,
 				StyleColor: sharedDay.StyleColor, StyleIcon: sharedDay.StyleIcon,
 				StyleBgAttachmentID: sharedDay.StyleBgAttachmentID, ArchivedAt: sharedDay.ArchivedAt, ArchiveLive: sharedDay.ArchiveLive,
 			}

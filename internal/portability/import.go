@@ -123,7 +123,8 @@ func parseRows(data []byte, bare bool, now time.Time) ([]row, []RowError, error)
 		}
 		in, err := days.NormalizeDayInput(days.DayInput{
 			Title: cell("title"), Date: cell("date"), Time: cell("time"), Repeat: days.Repeat(cell("repeat")),
-			Comment: cell("comment"), StyleColor: cell("style_color"), StyleIcon: cell("style_icon"),
+			Calendar: days.Calendar(cell("calendar")),
+			Comment:  cell("comment"), StyleColor: cell("style_color"), StyleIcon: cell("style_icon"),
 		})
 		if err != nil {
 			rowErrs = append(rowErrs, RowError{Line: line, Err: err})
@@ -334,7 +335,7 @@ func makePlan(ctx context.Context, q queryer, ownerID int64, src *source, rows [
 	}
 
 	existing := map[string]bool{}
-	dayRows, err := q.QueryContext(ctx, `SELECT title, date, collection_id, is_private FROM days WHERE owner_id = ?`, ownerID)
+	dayRows, err := q.QueryContext(ctx, `SELECT title, date, collection_id, is_private, calendar FROM days WHERE owner_id = ?`, ownerID)
 	if err != nil {
 		return nil, fmt.Errorf("load existing days: %w", err)
 	}
@@ -342,11 +343,12 @@ func makePlan(ctx context.Context, q queryer, ownerID int64, src *source, rows [
 		var title, date string
 		var coll int64
 		var private bool
-		if err := dayRows.Scan(&title, &date, &coll, &private); err != nil {
+		var calendar days.Calendar
+		if err := dayRows.Scan(&title, &date, &coll, &private, &calendar); err != nil {
 			dayRows.Close()
 			return nil, fmt.Errorf("load existing days: %w", err)
 		}
-		existing[dayKey(title, date, groupRef{id: coll}, private)] = true
+		existing[dayKey(title, date, groupRef{id: coll}, private, calendar)] = true
 	}
 	if err := dayRows.Close(); err != nil {
 		return nil, fmt.Errorf("load existing days: %w", err)
@@ -364,7 +366,7 @@ func makePlan(ctx context.Context, q queryer, ownerID int64, src *source, rows [
 			fail(fmt.Errorf("%w: %w", ErrCollectionName, err))
 			continue
 		}
-		key := dayKey(rw.in.Title, rw.in.Date, coll, rw.private)
+		key := dayKey(rw.in.Title, rw.in.Date, coll, rw.private, rw.in.Calendar)
 		if existing[key] {
 			p.preview.Skipped++
 			continue
@@ -426,8 +428,8 @@ func makePlan(ctx context.Context, q queryer, ownerID int64, src *source, rows [
 	return p, nil
 }
 
-func dayKey(title, date string, coll groupRef, private bool) string {
-	return title + "\x00" + date + "\x00" + coll.key() + "\x00" + strconv.FormatBool(private)
+func dayKey(title, date string, coll groupRef, private bool, calendar days.Calendar) string {
+	return title + "\x00" + date + "\x00" + coll.key() + "\x00" + strconv.FormatBool(private) + "\x00" + string(calendar)
 }
 
 func (s *Service) load(ctx context.Context, ownerID int64, token string, now time.Time) (*source, []row, []RowError, error) {
@@ -688,10 +690,10 @@ func (s *Service) insertDay(ctx context.Context, tx *sql.Tx, x *extractor, owner
 		archived = d.row.archivedAt.Unix()
 	}
 	res, err := tx.ExecContext(ctx, `INSERT INTO days (owner_id, collection_id, title, date, time, repeat, comment,
-		style_color, style_icon, archived_at, archive_live, is_private, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		style_color, style_icon, archived_at, archive_live, is_private, created_at, updated_at, calendar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ownerID, refID(d.collection, collIDs), in.Title, in.Date, nullString(in.Time), string(in.Repeat),
 		nullString(in.Comment), nullString(in.StyleColor), nullString(in.StyleIcon), archived, d.row.archiveLive,
-		d.row.private, now.Unix(), now.Unix())
+		d.row.private, now.Unix(), now.Unix(), in.Calendar)
 	if err != nil {
 		return 0, fmt.Errorf("import day: %w", err)
 	}

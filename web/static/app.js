@@ -395,7 +395,11 @@
   var dayForm = document.querySelector("[data-day-form]");
   if (dayForm) {
     function dayFormValues() {
-      return JSON.stringify(Array.from(new FormData(dayForm).entries()).filter(function (entry) {
+      var entries = Array.from(new FormData(dayForm).entries());
+      var lunar = entries.some(function (entry) { return entry[0] === "calendar" && entry[1] === "lunar"; });
+      return JSON.stringify(entries.filter(function (entry) {
+        if (lunar && entry[0] === "date") return false;
+        if (!lunar && entry[0].startsWith("lunar_")) return false;
         return entry[0] !== "csrf_token" && (typeof entry[1] === "string" || entry[1].name !== "");
       }).map(function (entry) {
         var value = entry[1];
@@ -408,7 +412,8 @@
     window.addEventListener("beforeunload", function (event) {
       // A valid save may leave the page; canceled submissions must remain protected.
       if (uploadNavigation || (daySubmission && !daySubmission.defaultPrevented)) return;
-      if (dayForm.dataset.unsaved !== "true" && dayFormValues() === initialDayValues) return;
+      if (dayForm.dataset.unsaved !== "true" && dayFormValues() === initialDayValues &&
+          !dayForm.querySelector('[data-lunar-draft="true"]:not(:disabled)')) return;
       event.preventDefault();
       event.returnValue = "";
     });

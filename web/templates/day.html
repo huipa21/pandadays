@@ -12,6 +12,7 @@
     {{if .Shared}}<p class="day-state"><span class="badge badge-shared">{{t "sharing.from" .ShareOwner}}</span></p>{{end}}
     {{if .Day.ArchivedAt}}<p class="day-state">{{template "day-badges" .}}</p>{{end}}
     <p class="day-calendar-date"><time datetime="{{.Day.Date}}">{{.Day.Date}}</time>{{with .Day.Time}}<span class="day-calendar-time">{{.}}</span>{{else}}<span class="visually-hidden">{{t "days.all_day"}}</span>{{end}}</p>
+    {{if eq .Day.Calendar "lunar"}}<p class="day-lunar-date">{{lunarDate .Day.Date}}</p>{{end}}
     <div class="day-countdown">
       {{if or .Breakdown .Clock}}<ul class="breakdown">{{range .Breakdown}}<li><strong>{{.Value}}</strong> {{.Unit}}</li>{{end}}{{with .Clock}}<li class="day-clock">{{.}}</li>{{end}}</ul>{{end}}
       <p class="countdown-caption">{{.Direction}}</p>

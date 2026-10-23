@@ -43,6 +43,7 @@ type Day struct {
 	Date         string // YYYY-MM-DD
 	Time         string // HH:MM or empty (all-day)
 	Repeat       Repeat
+	Calendar     Calendar
 	Comment      string
 	StyleColor   string // "#rrggbb" or empty
 	StyleIcon    string
@@ -54,7 +55,9 @@ type Day struct {
 	UpdatedAt           time.Time
 }
 
-func (d Day) Schedule() Schedule { return Schedule{Date: d.Date, Time: d.Time, Repeat: d.Repeat} }
+func (d Day) Schedule() Schedule {
+	return Schedule{Date: d.Date, Time: d.Time, Repeat: d.Repeat, Calendar: d.Calendar}
+}
 
 // CountAt is the instant the day's counter shows: the archive snapshot while
 // archived and paused, otherwise now.
@@ -73,6 +76,7 @@ type DayInput struct {
 	Date         string
 	Time         string
 	Repeat       Repeat
+	Calendar     Calendar
 	CollectionID int64
 	TagIDs       []int64
 	TagNames     []string // resolved or created atomically when saving
@@ -103,6 +107,17 @@ func NormalizeDayInput(in DayInput) (DayInput, error) {
 	in.StyleIcon = strings.TrimSpace(in.StyleIcon)
 	if in.Repeat == "" {
 		in.Repeat = RepeatNone
+	}
+	if in.Calendar == "" {
+		in.Calendar = CalendarGregorian
+	}
+	if in.Calendar != CalendarGregorian && in.Calendar != CalendarLunar {
+		return in, ErrCalendarInvalid
+	}
+	if in.Calendar == CalendarLunar {
+		if _, err := SolarToLunar(in.Date); err != nil {
+			return in, ErrCalendarInvalid
+		}
 	}
 	switch {
 	case in.Title == "":
@@ -176,7 +191,7 @@ func uniqueIDs(ids []int64) []int64 {
 }
 
 const dayColumns = `id, owner_id, collection_id, title, date, COALESCE(time, ''), repeat, COALESCE(comment, ''),
-	COALESCE(style_color, ''), COALESCE(style_icon, ''), COALESCE(style_bg_attachment_id, 0), archived_at, archive_live, created_at, updated_at, is_private`
+	COALESCE(style_color, ''), COALESCE(style_icon, ''), COALESCE(style_bg_attachment_id, 0), archived_at, archive_live, created_at, updated_at, is_private, calendar`
 
 // Get returns ErrNotFound when the day does not exist or belongs to someone else.
 func (s *Days) Get(ctx context.Context, ownerID, id int64) (Day, error) {
@@ -193,7 +208,7 @@ func scanDay(sc scanner) (Day, error) {
 	var archived sql.NullInt64
 	var created, updated int64
 	if err := sc.Scan(&d.ID, &d.OwnerID, &d.CollectionID, &d.Title, &d.Date, &d.Time, &d.Repeat, &d.Comment,
-		&d.StyleColor, &d.StyleIcon, &d.StyleBgAttachmentID, &archived, &d.ArchiveLive, &created, &updated, &d.Private); err != nil {
+		&d.StyleColor, &d.StyleIcon, &d.StyleBgAttachmentID, &archived, &d.ArchiveLive, &created, &updated, &d.Private, &d.Calendar); err != nil {
 		return Day{}, err
 	}
 	if archived.Valid {
@@ -394,9 +409,9 @@ func (s *Days) Create(ctx context.Context, ownerID int64, in DayInput, now time.
 		return Day{}, err
 	}
 	res, err := tx.ExecContext(ctx, `INSERT INTO days (owner_id, collection_id, title, date, time, repeat, comment,
-		style_color, style_icon, created_at, updated_at, is_private) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		style_color, style_icon, created_at, updated_at, is_private, calendar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ownerID, in.CollectionID, in.Title, in.Date, nullString(in.Time), string(in.Repeat), nullString(in.Comment),
-		nullString(in.StyleColor), nullString(in.StyleIcon), now.Unix(), now.Unix(), in.Private)
+		nullString(in.StyleColor), nullString(in.StyleIcon), now.Unix(), now.Unix(), in.Private, in.Calendar)
 	if err != nil {
 		return Day{}, fmt.Errorf("create day: %w", err)
 	}
@@ -435,9 +450,9 @@ func (s *Days) Update(ctx context.Context, ownerID, id int64, in DayInput, now t
 		return Day{}, err
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE days SET collection_id = ?, title = ?, date = ?, time = ?, repeat = ?,
-		comment = ?, style_color = ?, style_icon = ?, updated_at = ?, is_private = ? WHERE owner_id = ? AND id = ?`,
+		comment = ?, style_color = ?, style_icon = ?, updated_at = ?, is_private = ?, calendar = ? WHERE owner_id = ? AND id = ?`,
 		in.CollectionID, in.Title, in.Date, nullString(in.Time), string(in.Repeat), nullString(in.Comment),
-		nullString(in.StyleColor), nullString(in.StyleIcon), now.Unix(), in.Private, ownerID, id); err != nil {
+		nullString(in.StyleColor), nullString(in.StyleIcon), now.Unix(), in.Private, in.Calendar, ownerID, id); err != nil {
 		return Day{}, fmt.Errorf("update day: %w", err)
 	}
 	if err := setDayTags(ctx, tx, id, in.TagIDs); err != nil {

@@ -27,7 +27,7 @@ func TestDaysCreateAppliesDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := Day{ID: d.ID, OwnerID: alice, CollectionID: defCol, TagIDs: []int64{defTag}, Title: "Trip",
-		Date: "2026-05-01", Repeat: RepeatNone, Comment: "note\nmore", CreatedAt: groupNow.Truncate(1e9), UpdatedAt: groupNow.Truncate(1e9)}
+		Date: "2026-05-01", Repeat: RepeatNone, Calendar: CalendarGregorian, Comment: "note\nmore", CreatedAt: groupNow.Truncate(1e9), UpdatedAt: groupNow.Truncate(1e9)}
 	if !reflect.DeepEqual(d, want) {
 		t.Fatalf("created day:\n got %+v\nwant %+v", d, want)
 	}
@@ -84,6 +84,8 @@ func TestDaysValidation(t *testing.T) {
 		{"bad time", func(in *DayInput) { in.Time = "24:00" }, ErrTimeInvalid},
 		{"seconds", func(in *DayInput) { in.Time = "10:00:00" }, ErrTimeInvalid},
 		{"repeat", func(in *DayInput) { in.Repeat = "daily" }, ErrRepeatInvalid},
+		{"calendar", func(in *DayInput) { in.Calendar = "unknown" }, ErrCalendarInvalid},
+		{"lunar range", func(in *DayInput) { in.Calendar = CalendarLunar; in.Date = "1800-01-01" }, ErrCalendarInvalid},
 		{"comment", func(in *DayInput) { in.Comment = strings.Repeat("a", MaxCommentRunes+1) }, ErrCommentTooLong},
 		{"color", func(in *DayInput) { in.StyleColor = "red" }, ErrColorInvalid},
 		{"icon space", func(in *DayInput) { in.StyleIcon = "a b" }, ErrIconInvalid},

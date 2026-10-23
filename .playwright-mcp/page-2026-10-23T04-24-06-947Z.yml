@@ -1,0 +1,42 @@
+- generic [active] [ref=f4e1]:
+  - link "跳到主要内容" [ref=f4e2] [cursor=pointer]:
+    - /url: "#main"
+  - banner [ref=f4e3]:
+    - link "PandaDays" [ref=f4e4] [cursor=pointer]:
+      - /url: /
+      - text: 🐼 PandaDays
+    - generic [ref=f4e5]:
+      - generic [ref=f4e6]:
+        - button "切换浅色 / 深色模式" [ref=f4e7] [cursor=pointer]
+        - button "切换为英文" [ref=f4e12] [cursor=pointer]
+      - navigation "主导航" [ref=f4e16]:
+        - link "用户管理" [ref=f4e17] [cursor=pointer]:
+          - /url: /admin/users
+        - link "备份与恢复" [ref=f4e18] [cursor=pointer]:
+          - /url: /admin/backup
+        - link "网站设置" [ref=f4e19] [cursor=pointer]:
+          - /url: /admin/settings
+        - group [ref=f4e20]:
+          - generic "qa-admin" [ref=f4e21] [cursor=pointer]
+  - main [ref=f4e28]:
+    - link "返回用户列表" [ref=f4e29] [cursor=pointer]:
+      - /url: /admin/users
+    - generic [ref=f4e32]:
+      - heading "创建用户" [level=1] [ref=f4e33]
+      - generic [ref=f4e34]:
+        - generic [ref=f4e35]:
+          - text: 用户名
+          - textbox "用户名" [ref=f4e36]
+        - generic [ref=f4e37]: 长度为 4–32 个字符，仅可使用小写英文字母、数字和连字符。
+        - generic [ref=f4e38]:
+          - text: 显示名称
+          - textbox "显示名称" [ref=f4e39]
+        - group [ref=f4e40]:
+          - generic "更换头像" [ref=f4e41] [cursor=pointer]
+        - generic [ref=f4e48]:
+          - text: 邮箱
+          - textbox "邮箱" [ref=f4e49]
+        - generic [ref=f4e50]:
+          - text: 备注（可选）
+          - textbox "备注（可选）" [ref=f4e51]
+        - button "创建用户" [ref=f4e52] [cursor=pointer]

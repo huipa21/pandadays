@@ -26,9 +26,10 @@ const (
 
 // Schedule uses the stored civil date and optional clock time, not UTC instants.
 type Schedule struct {
-	Date   string // YYYY-MM-DD
-	Time   string // HH:MM, or empty for all-day
-	Repeat Repeat
+	Date     string // YYYY-MM-DD
+	Time     string // HH:MM, or empty for all-day
+	Repeat   Repeat
+	Calendar Calendar
 }
 
 // Message can be rendered with i18n.Bundle.T(lang, Key, Args...).
@@ -82,6 +83,14 @@ func Calculate(s Schedule, now time.Time, loc *time.Location) (Calculation, erro
 	if s.Repeat == "" {
 		s.Repeat = RepeatNone
 	}
+	if s.Calendar != "" && s.Calendar != CalendarGregorian && s.Calendar != CalendarLunar {
+		return Calculation{}, ErrInvalidSchedule
+	}
+	if s.Calendar == CalendarLunar {
+		if _, err := SolarToLunar(s.Date); err != nil {
+			return Calculation{}, fmt.Errorf("%w: %v", ErrInvalidSchedule, err)
+		}
+	}
 	switch s.Repeat {
 	case RepeatNone, RepeatWeekly, RepeatMonthly, RepeatYearly:
 	default:
@@ -100,7 +109,12 @@ func Calculate(s Schedule, now time.Time, loc *time.Location) (Calculation, erro
 	original := localTime(anchor, loc)
 	target := original
 	ordinal := 0
-	if s.Repeat != RepeatNone {
+	if s.Calendar == CalendarLunar && (s.Repeat == RepeatMonthly || s.Repeat == RepeatYearly) {
+		target, ordinal, err = lunarTarget(anchor, s.Repeat, reference, loc)
+		if err != nil {
+			return Calculation{}, err
+		}
+	} else if s.Repeat != RepeatNone {
 		switch s.Repeat {
 		case RepeatWeekly:
 			ordinal = civilDays(anchor, now) / 7
